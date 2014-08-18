@@ -52,6 +52,11 @@ class TaskMetrics extends Serializable {
   var executorRunTime: Long = _
 
   /**
+   * the size of input iterator
+   */
+  var inputIterLen: Long = _
+
+  /**
    * The number of bytes this task transmitted back to the driver as the TaskResult
    */
   var resultSize: Long = _

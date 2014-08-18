@@ -105,7 +105,7 @@ private[ui] class StagePage(parent: JobProgressTab) extends WebUIPage("stage") {
       val taskHeaders: Seq[String] =
         Seq(
           "Index", "ID", "Attempt", "Status", "Locality Level", "Executor",
-          "Launch Time", "Duration", "GC Time", "Accumulators") ++
+          "Launch Time", "Duration", "Input Records Num","GC Time", "Accumulators") ++
         {if (hasInput) Seq("Input") else Nil} ++
         {if (hasShuffleRead) Seq("Shuffle Read")  else Nil} ++
         {if (hasShuffleWrite) Seq("Write Time", "Shuffle Write") else Nil} ++
@@ -244,6 +244,7 @@ private[ui] class StagePage(parent: JobProgressTab) extends WebUIPage("stage") {
         else metrics.map(m => UIUtils.formatDuration(m.executorRunTime)).getOrElse("")
       val gcTime = metrics.map(_.jvmGCTime).getOrElse(0L)
       val serializationTime = metrics.map(_.resultSerializationTime).getOrElse(0L)
+      val inputIterLen = metrics.map(_.inputIterLen)
 
       val maybeInput = metrics.flatMap(_.inputMetrics)
       val inputSortable = maybeInput.map(_.bytesRead.toString).getOrElse("")
@@ -288,6 +289,7 @@ private[ui] class StagePage(parent: JobProgressTab) extends WebUIPage("stage") {
         <td sorttable_customkey={duration.toString}>
           {formatDuration}
         </td>
+        <td>{inputIterLen}</td>
         <td sorttable_customkey={gcTime.toString}>
           {if (gcTime > 0) UIUtils.formatDuration(gcTime) else ""}
         </td>
