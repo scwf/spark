@@ -60,7 +60,7 @@ private[spark] class ResultTask[T, U](
     metrics = Some(context.taskMetrics)
     try {
       val iter = rdd.iterator(partition, context)
-      metrics.inputIterLen = iter.size
+      metrics.get.inputIterLen = iter.size
       func(context, iter)
     } finally {
       context.markTaskCompleted()
