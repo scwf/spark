@@ -289,7 +289,7 @@ private[ui] class StagePage(parent: JobProgressTab) extends WebUIPage("stage") {
         <td sorttable_customkey={duration.toString}>
           {formatDuration}
         </td>
-        <td>{inputIterLen}</td>
+        <td>{inputIterLen.getOrElse(-1)}</td>
         <td sorttable_customkey={gcTime.toString}>
           {if (gcTime > 0) UIUtils.formatDuration(gcTime) else ""}
         </td>
