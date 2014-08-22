@@ -116,6 +116,8 @@ datanucleus_jars="$(echo "$datanucleus_jars" | tr "\n" : | sed s/:$//g)"
 
 hive_files=$("$JAR_CMD" -tf "$ASSEMBLY_JAR" org/apache/hadoop/hive/ql/exec 2>/dev/null)
 
+hive_files=$("$JAR_CMD" -tf "$ASSEMBLY_JAR" org/apache/hadoop/hive/ql/exec 2>/dev/null)
+
 if [ -n "$datanucleus_jars" ]; then
   hive_files=$("$JAR_CMD" -tf "$ASSEMBLY_JAR" org/apache/hadoop/hive/ql/exec 2>/dev/null)
   if [ -n "$hive_files" ]; then
