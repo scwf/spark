@@ -77,9 +77,7 @@ private[hash] object BlockStoreShuffleFetcher extends Logging {
     val blockFetcherItr = blockManager.getMultiple(blocksByAddress, serializer, shuffleMetrics)
     val itr = blockFetcherItr.flatMap(unpackBlock)
 
-    val completionIter = CompletionIterator[T, Iterator[T]](itr, {
-      context.taskMetrics.updateShuffleReadMetrics()
-    })
+    val completionIter = CompletionIterator[T, Iterator[T]](itr, context.taskMetrics)
 
     new InterruptibleIterator[T](context, completionIter)
   }

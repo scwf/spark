@@ -17,6 +17,8 @@
 
 package org.apache.spark.util
 
+import org.apache.spark.executor.TaskMetrics
+
 /**
  * Wrapper around an iterator which calls a completion method after it successfully iterates
  * through all the elements.
@@ -25,7 +27,11 @@ private[spark]
 // scalastyle:off
 abstract class CompletionIterator[ +A, +I <: Iterator[A]](sub: I) extends Iterator[A] {
 // scalastyle:on
-  def next() = sub.next()
+  var _size: Long = 0// use auto will be better?
+  def next() = {
+    _size = _size + 1
+    sub.next()
+  }
   def hasNext = {
     val r = sub.hasNext
     if (!r) {
@@ -38,9 +44,12 @@ abstract class CompletionIterator[ +A, +I <: Iterator[A]](sub: I) extends Iterat
 }
 
 private[spark] object CompletionIterator {
-  def apply[A, I <: Iterator[A]](sub: I, completionFunction: => Unit) : CompletionIterator[A,I] = {
+  def apply[A, I <: Iterator[A]](sub: I, tM: TaskMetrics) : CompletionIterator[A,I] = {
     new CompletionIterator[A,I](sub) {
-      def completion() = completionFunction
+      def completion() = {
+        tM.updateShuffleReadMetrics()
+        tM.inputIterLen = _size
+      }
     }
   }
 }

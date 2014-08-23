@@ -99,6 +99,7 @@ private[spark] class ParallelCollectionRDD[T: ClassTag](
   }
 
   override def compute(s: Partition, context: TaskContext) = {
+    context.taskMetrics.inputIterLen = s.asInstanceOf[ParallelCollectionPartition[T]].values.length
     new InterruptibleIterator(context, s.asInstanceOf[ParallelCollectionPartition[T]].iterator)
   }
 

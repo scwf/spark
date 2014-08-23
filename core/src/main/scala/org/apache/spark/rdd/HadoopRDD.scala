@@ -186,7 +186,7 @@ class HadoopRDD[K, V](
 
   override def compute(theSplit: Partition, context: TaskContext): InterruptibleIterator[(K, V)] = {
     val iter = new NextIterator[(K, V)] {
-
+      var _size: Long = 0;//keyi yong auto jiasu
       val split = theSplit.asInstanceOf[HadoopPartition]
       logInfo("Input split: " + split.inputSplit)
       var reader: RecordReader[K, V] = null
@@ -197,7 +197,10 @@ class HadoopRDD[K, V](
       reader = inputFormat.getRecordReader(split.inputSplit.value, jobConf, Reporter.NULL)
 
       // Register an on-task-completion callback to close the input stream.
-      context.addTaskCompletionListener{ context => closeIfNeeded() }
+      context.addTaskCompletionListener {context =>
+        context.taskMetrics.inputIterLen = size
+        closeIfNeeded()
+      }
       val key: K = reader.createKey()
       val value: V = reader.createValue()
 
@@ -221,6 +224,7 @@ class HadoopRDD[K, V](
           case eof: EOFException =>
             finished = true
         }
+        _size = _size + 1
         (key, value)
       }
 
