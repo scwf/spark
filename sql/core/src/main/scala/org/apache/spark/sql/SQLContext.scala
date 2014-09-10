@@ -69,9 +69,10 @@ class SQLContext(@transient val sparkContext: SparkContext)
   @transient
   protected[sql] val optimizer = Optimizer
   @transient
-  protected[sql] val parser = new catalyst.SqlParser
+  protected[sql] def parser = new catalyst.SqlParser
 
   protected[sql] def parseSql(sql: String): LogicalPlan = parser(sql)
+
   protected[sql] def executeSql(sql: String): this.QueryExecution = executePlan(parseSql(sql))
   protected[sql] def executePlan(plan: LogicalPlan): this.QueryExecution =
     new this.QueryExecution { val logical = plan }
