@@ -130,11 +130,11 @@ class SqlParser extends StandardTokenParsers with PackratParsers {
   protected val WHERE = Keyword("WHERE")
 
   // Use reflection to find the reserved words defined in this class.
-  protected val reservedWords =
-    this.getClass
-      .getMethods
-      .filter(_.getReturnType == classOf[Keyword])
-      .map(_.invoke(this).asInstanceOf[Keyword].str)
+  protected val reservedWords = this.getClass
+    .getMethods
+    .filter(_.getReturnType == classOf[Keyword])
+    .filter(_.toString.contains("org.apache.spark.sql.catalyst.SqlParser.".toCharArray))
+    .map(_.invoke(this).asInstanceOf[Keyword].str)
 
   override val lexical = new SqlLexical(reservedWords)
 
