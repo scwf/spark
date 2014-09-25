@@ -137,7 +137,7 @@ class SqlParser extends StandardTokenParsers with PackratParsers {
       .getMethods
       .filter(_.getReturnType == classOf[Keyword])
       .filter(_.toString.contains("org.apache.spark.sql.catalyst.SqlParser.".toCharArray))
-      .map{ m : Method => println(m.getName); m.invoke(this).asInstanceOf[Keyword].str}
+      .map{ m : Method => m.invoke(this).asInstanceOf[Keyword].str}
 
   override val lexical = new SqlLexical(reservedWords)
 
