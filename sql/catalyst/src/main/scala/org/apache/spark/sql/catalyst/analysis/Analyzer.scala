@@ -80,9 +80,6 @@ class Analyzer(catalog: Catalog, registry: FunctionRegistry, caseSensitive: Bool
         case p if !p.resolved && p.childrenResolved =>
           throw new TreeNodeException(p, "Unresolved plan found")
       } match {
-
-        //As a backstop, use the root node to check that the entire plan tree is resolved.
-
         case p if !p.resolved =>
           throw new TreeNodeException(p, "Unresolved plan in tree")
         case p => p
@@ -206,18 +203,18 @@ class Analyzer(catalog: Catalog, registry: FunctionRegistry, caseSensitive: Bool
    */
   object UnresolvedHavingClauseAttributes extends Rule[LogicalPlan] {
     def apply(plan: LogicalPlan): LogicalPlan = plan transformUp {
-      case filter @ Filter(havingCondition, aggregate @ Aggregate(_, originalAggExprs, _)) 
+      case filter @ Filter(havingCondition, aggregate @ Aggregate(_, originalAggExprs, _))
           if aggregate.resolved && containsAggregate(havingCondition) => {
         val evaluatedCondition = Alias(havingCondition,  "havingCondition")()
         val aggExprsWithHaving = evaluatedCondition +: originalAggExprs
-        
+
         Project(aggregate.output,
           Filter(evaluatedCondition.toAttribute,
             aggregate.copy(aggregateExpressions = aggExprsWithHaving)))
       }
-      
+
     }
-    
+
     protected def containsAggregate(condition: Expression): Boolean =
       condition
         .collect { case ae: AggregateExpression => ae }
