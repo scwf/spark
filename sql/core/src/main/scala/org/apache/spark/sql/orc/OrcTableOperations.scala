@@ -18,12 +18,17 @@
 
 package org.apache.spark.sql.orc
 
+import java.io.IOException
+import java.text.SimpleDateFormat
+import java.util.{Locale, Date}
+import scala.collection.JavaConversions._
+
 import org.apache.spark.sql.execution.{ExistingRdd, LeafNode, UnaryNode, SparkPlan}
 import org.apache.spark.sql.catalyst.expressions._
+import org.apache.spark.sql.parquet.FileSystemHelper
 import org.apache.spark.{TaskContext, SerializableWritable}
 import org.apache.spark.rdd.RDD
 
-import _root_.parquet.hadoop.util.ContextUtil
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.mapreduce.lib.output.{FileOutputFormat, FileOutputCommitter}
@@ -36,10 +41,6 @@ import org.apache.hadoop.hive.serde2.objectinspector._
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils
 import org.apache.hadoop.hive.common.`type`.{HiveDecimal, HiveVarchar}
 
-import java.io.IOException
-import java.text.SimpleDateFormat
-import java.util.{Locale, Date}
-import scala.collection.JavaConversions._
 import org.apache.hadoop.mapred.{SparkHadoopMapRedUtil, Reporter, JobConf}
 
 /**
@@ -98,7 +99,7 @@ case class OrcTableScan(
     val sc = sqlContext.sparkContext
     val job = new Job(sc.hadoopConfiguration)
 
-    val conf: Configuration = ContextUtil.getConfiguration(job)
+    val conf: Configuration = job.getConfiguration
     val fileList = FileSystemHelper.listFiles(relation.path, conf)
 
     // add all paths in the directory but skip "hidden" ones such
@@ -180,10 +181,12 @@ case class OrcTableScan(
 }
 
 /**
- *
- * @param relation
- * @param child
- * @param overwrite
+ * Operator that acts as a sink for queries on RDDs and can be used to
+ * store the output inside a directory of ORC files. This operator
+ * is similar to Hive's INSERT INTO TABLE operation in the sense that
+ * one can choose to either overwrite or append to a directory. Note
+ * that consecutive insertions to the same table must have compatible
+ * (source) schemas.
  */
 private[sql] case class InsertIntoOrcTable(
     relation: OrcRelation,
@@ -266,10 +269,10 @@ private[sql] case class InsertIntoOrcTable(
   // .. then we could use the default one and could use [[MutablePair]]
   // instead of ``Tuple2``
   private def saveAsHadoopFile(
-                                rdd: RDD[Writable],
-                                rowClass: Class[_],
-                                path: String,
-                                @transient conf: Configuration) {
+      rdd: RDD[Writable],
+      rowClass: Class[_],
+      path: String,
+      @transient conf: Configuration) {
     val job = new Job(conf)
     val keyType = classOf[Void]
     job.setOutputKeyClass(keyType)
@@ -287,14 +290,14 @@ private[sql] case class InsertIntoOrcTable(
         1
       } else {
         FileSystemHelper
-          .findMaxTaskId(FileOutputFormat.getOutputPath(job).toString, job.getConfiguration) + 1
+          .findMaxTaskId(FileOutputFormat.getOutputPath(job).toString, job.getConfiguration, "orc") + 1
       }
 
     def getWriter(
-                   outFormat: OrcOutputFormat,
-                   conf: Configuration,
-                   path: Path,
-                   reporter: Reporter) = {
+        outFormat: OrcOutputFormat,
+        conf: Configuration,
+        path: Path,
+        reporter: Reporter) = {
       val fs = path.getFileSystem(conf)
       outFormat.getRecordWriter(fs, conf.asInstanceOf[JobConf], path.toUri.getPath, reporter).
         asInstanceOf[org.apache.hadoop.mapred.RecordWriter[NullWritable, Writable]]
@@ -346,73 +349,4 @@ private[sql] case class InsertIntoOrcTable(
     sc.runJob(rdd, writeShard _)
     workerAndComitter._1.commitJob(jobTaskContext)
   }
-
 }
-
-/**
- *
- */
-private[orc] object FileSystemHelper {
-  /**
-   *
-   * @param pathStr
-   * @param conf
-   * @return
-   */
-  def listFiles(pathStr: String, conf: Configuration): Seq[Path] = {
-    val origPath = new Path(pathStr)
-    val fs = origPath.getFileSystem(conf)
-    if (fs == null) {
-      throw new IllegalArgumentException(
-        s"OrcTableOperations: Path $origPath is incorrectly formatted")
-    }
-    val path = origPath.makeQualified(fs)
-    if (!fs.exists(path) || !fs.getFileStatus(path).isDir) {
-      Seq.empty
-    } else {
-      fs.listStatus(path).map(_.getPath)
-    }
-  }
-
-  /**
-   *
-   * @param origPath
-   * @param conf
-   * @param extension
-   * @return
-   */
-  def listFiles(origPath: Path, conf: Configuration, extension: String): Seq[Path] = {
-    val fs = origPath.getFileSystem(conf)
-    if (fs == null) {
-      throw new IllegalArgumentException(
-        s"OrcTableOperations: Path $origPath is incorrectly formatted")
-    }
-    val path = origPath.makeQualified(fs)
-    if (fs.exists(path) && fs.getFileStatus(path).isDir) {
-      fs.listStatus(path).map(_.getPath).filter(p => p.getName.endsWith(extension))
-    } else {
-      Seq.empty
-    }
-  }
-
-  /**
-   * Finds the maximum taskid in the output file names at the given path.
-   */
-  def findMaxTaskId(pathStr: String, conf: Configuration): Int = {
-    val files = FileSystemHelper.listFiles(pathStr, conf)
-    // filename pattern is part-r-<int>.orc
-    val nameP = new scala.util.matching.Regex( """part-r-(\d{1,}).orc""", "taskid")
-    val hiddenFileP = new scala.util.matching.Regex("_.*")
-    files.map(_.getName).map {
-      case nameP(taskid) => taskid.toInt
-      case hiddenFileP() => 0
-      case other: String => {
-        sys.error("ERROR: attempting to append to set of Orc files and found file" +
-          s"that does not match name pattern: $other")
-        0
-      }
-      case _ => 0
-    }.reduceLeft((a, b) => if (a < b) b else a)
-  }
-}
-

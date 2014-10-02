@@ -84,12 +84,6 @@ private[sql] trait SQLConf {
   /** The compression codec for writing to a Parquetfile */
   private[spark] def parquetCompressionCodec: String = getConf(PARQUET_COMPRESSION, "snappy")
 
-  /** The compression codec for writing to a Orcfile
-   *  Note: only support zlib now since we use ```OrcOutputFormat.getRecordWriter``` ,which is not
-   *  allowed to configure thr compression kind
-   */
-  private[spark] def orcCompressionCodec: String = getConf(ORC_COMPRESSION, "zlib")
-
   /** The number of rows that will be  */
   private[spark] def columnBatchSize: Int = getConf(COLUMN_BATCH_SIZE, "1000").toInt
 

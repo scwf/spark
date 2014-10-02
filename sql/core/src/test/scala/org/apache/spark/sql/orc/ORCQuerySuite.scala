@@ -17,12 +17,12 @@
 
 package org.apache.spark.sql.orc
 
-import org.apache.hadoop.fs.Path
-import org.apache.hadoop.hive.ql.io.orc.CompressionKind
-import org.apache.spark.sql.{SQLConf, SchemaRDD, TestData, QueryTest}
-import org.apache.spark.sql.test.TestSQLContext
 import org.scalatest.{BeforeAndAfterAll, FunSuiteLike}
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
 import org.apache.spark.util.Utils
+import org.apache.spark.sql.{SchemaRDD, TestData, QueryTest}
+import org.apache.spark.sql.test.TestSQLContext
 import org.apache.spark.sql.catalyst.util.getTempFilePath
 import org.apache.spark.sql.test.TestSQLContext._
 
@@ -96,8 +96,6 @@ class OrcQuerySuite extends QueryTest with FunSuiteLike with BeforeAndAfterAll {
   }
 
   test("Compression options for writing to a Orcfile") {
-    val defaultOrcCompressionCodec = TestSQLContext.orcCompressionCodec
-    //TODO: support other compress codec
     val file = getTempFilePath("orcTest")
     val path = file.toString
     val rdd = TestSQLContext.sparkContext.parallelize((1 to 100))
@@ -105,80 +103,7 @@ class OrcQuerySuite extends QueryTest with FunSuiteLike with BeforeAndAfterAll {
 
     // test default compression codec, now only support zlib
     rdd.saveAsOrcFile(path)
-    var actualCodec = OrcFileOperator.readMetaData(new Path(path)).getCompression.name
-    assert(actualCodec == TestSQLContext.orcCompressionCodec.toUpperCase)
-
-    /**
-    orcFile(path).registerTempTable("tmp")
-    checkAnswer(
-      sql("SELECT key, value FROM tmp WHERE value = 'val_5' OR value = 'val_7'"),
-      (5, "val_5") ::
-        (7, "val_7") :: Nil)
-
-    Utils.deleteRecursively(file)
-
-    // test uncompressed parquet file with property value "UNCOMPRESSED"
-    TestSQLContext.setConf(SQLConf.ORC_COMPRESSION, "UNCOMPRESSED")
-
-    rdd.saveAsOrcFile(path)
-    actualCodec = OrcFileOperator.readMetaData(new Path(path)).getCompression.name
-    assert(actualCodec == OrcRelation.shortOrcCompressionCodecNames.getOrElse(
-      TestSQLContext.orcCompressionCodec.toUpperCase, CompressionKind.NONE).name.toUpperCase)
-
-    orcFile(path).registerTempTable("tmp")
-    checkAnswer(
-      sql("SELECT key, value FROM tmp WHERE value = 'val_5' OR value = 'val_7'"),
-      (5, "val_5") ::
-        (7, "val_7") :: Nil)
-
-    Utils.deleteRecursively(file)
-
-    // test uncompressed parquet file with property value "none"
-    TestSQLContext.setConf(SQLConf.ORC_COMPRESSION, "none")
-
-    rdd.saveAsOrcFile(path)
-    actualCodec = OrcFileOperator.readMetaData(new Path(path)).getCompression.name()
-    assert(actualCodec ==TestSQLContext.orcCompressionCodec.toUpperCase)
-
-    orcFile(path).registerTempTable("tmp")
-    checkAnswer(
-      sql("SELECT key, value FROM tmp WHERE value = 'val_5' OR value = 'val_7'"),
-      (5, "val_5") ::
-        (7, "val_7") :: Nil)
-
-    Utils.deleteRecursively(file)
-
-    // test gzip compression codec
-    TestSQLContext.setConf(SQLConf.ORC_COMPRESSION, "zlib")
-
-    rdd.saveAsOrcFile(path)
-    actualCodec = OrcFileOperator.readMetaData(new Path(path)).getCompression.name()
-    assert(actualCodec ==TestSQLContext.orcCompressionCodec.toUpperCase)
-
-    orcFile(path).registerTempTable("tmp")
-    checkAnswer(
-      sql("SELECT key, value FROM tmp WHERE value = 'val_5' OR value = 'val_7'"),
-      (5, "val_5") ::
-        (7, "val_7") :: Nil)
-
-    Utils.deleteRecursively(file)
-
-    // test snappy compression codec
-    TestSQLContext.setConf(SQLConf.ORC_COMPRESSION, "snappy")
-
-    rdd.saveAsOrcFile(path)
-    actualCodec = OrcFileOperator.readMetaData(new Path(path)).getCompression.name()
-    assert(actualCodec ==TestSQLContext.orcCompressionCodec.toUpperCase)
-
-    orcFile(path).registerTempTable("tmp")
-    checkAnswer(
-      sql("SELECT key, value FROM tmp WHERE value = 'val_5' OR value = 'val_7'"),
-      (5, "val_5") ::
-        (7, "val_7") :: Nil)
-
-    Utils.deleteRecursively(file)
-
-    TestSQLContext.setConf(SQLConf.ORC_COMPRESSION, defaultOrcCompressionCodec)
-    */
+    var actualCodec = OrcFileOperator.readMetaData(new Path(path), Some(new Configuration())).getCompression.name
+    assert(actualCodec == "ZLIB")
   }
 }
