@@ -18,6 +18,7 @@
 package org.apache.spark.sql
 
 import org.apache.spark.annotation.{DeveloperApi, Experimental}
+import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.execution.LogicalRDD
@@ -122,7 +123,7 @@ private[sql] trait SchemaRDDLike {
    * @group schema
    */
   @Experimental
-  def saveAsTable(tableName: String): Unit =
+  def saveAsTable(tableName: String): RDD[Row] =
     sqlContext.executePlan(CreateTableAsSelect(None, tableName, logicalPlan)).toRdd
 
   /** Returns the schema as a string in the tree format.
