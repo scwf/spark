@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.orc
+package org.apache.spark.sql.hive.orc
 
 import java.util.Properties
 import java.io.IOException

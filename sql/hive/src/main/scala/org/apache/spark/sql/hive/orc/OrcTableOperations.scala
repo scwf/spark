@@ -16,7 +16,7 @@
  */
 
 
-package org.apache.spark.sql.orc
+package org.apache.spark.sql.hive.orc
 
 import java.io.IOException
 import java.text.SimpleDateFormat
@@ -36,7 +36,7 @@ import org.apache.hadoop.mapreduce.lib.input.FileInputFormat
 import org.apache.hadoop.io.{Writable, NullWritable}
 import org.apache.hadoop.mapreduce.{TaskID, TaskAttemptContext, Job}
 
-import org.apache.hadoop.hive.ql.io.orc.{OrcFile, OrcSerde, OrcInputFormat, OrcOutputFormat}
+import org.apache.hadoop.hive.ql.io.orc.{OrcSerde, OrcInputFormat, OrcOutputFormat}
 import org.apache.hadoop.hive.serde2.objectinspector._
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils
 import org.apache.hadoop.hive.common.`type`.{HiveDecimal, HiveVarchar}

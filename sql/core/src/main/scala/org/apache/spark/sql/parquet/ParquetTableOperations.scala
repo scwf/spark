@@ -527,7 +527,12 @@ private[sql] object FileSystemHelper {
   def findMaxTaskId(pathStr: String, conf: Configuration, extension: String): Int = {
     val files = FileSystemHelper.listFiles(pathStr, conf)
     // filename pattern is part-r-<int>.$extension
-    val nameP = new scala.util.matching.Regex( s"""part-r-(\d{1,}).$extension""", "taskid")
+    val nameP = extension match {
+      case "parquet" => new scala.util.matching.Regex( """part-r-(\d{1,}).parquet""", "taskid")
+      case "orc" =>  new scala.util.matching.Regex( """part-r-(\d{1,}).orc""", "taskid")
+      case _ =>
+        sys.error(s"ERROR: unsupported extension: $extension")
+    }
     val hiddenFileP = new scala.util.matching.Regex("_.*")
     files.map(_.getName).map {
       case nameP(taskid) => taskid.toInt

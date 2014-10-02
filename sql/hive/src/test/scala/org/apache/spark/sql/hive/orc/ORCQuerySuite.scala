@@ -15,38 +15,20 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.orc
+package org.apache.spark.sql.hive.orc
 
+import org.apache.spark.sql.hive.test.TestHive
 import org.scalatest.{BeforeAndAfterAll, FunSuiteLike}
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.spark.util.Utils
-import org.apache.spark.sql.{SchemaRDD, TestData, QueryTest}
+import org.apache.spark.sql.QueryTest
 import org.apache.spark.sql.test.TestSQLContext
 import org.apache.spark.sql.catalyst.util.getTempFilePath
-import org.apache.spark.sql.test.TestSQLContext._
 
 import java.io.File
 
 case class TestRDDEntry(key: Int, value: String)
-
-case class NullReflectData(
-    intField: java.lang.Integer,
-    longField: java.lang.Long,
-    floatField: java.lang.Float,
-    doubleField: java.lang.Double,
-    booleanField: java.lang.Boolean)
-
-case class OptionalReflectData(
-    intField: Option[Int],
-    longField: Option[Long],
-    floatField: Option[Float],
-    doubleField: Option[Double],
-    booleanField: Option[Boolean])
-
-case class Nested(i: Int, s: String)
-
-case class Data(array: Seq[Int], nested: Nested)
 
 case class AllDataTypes(
     stringField: String,
@@ -58,27 +40,9 @@ case class AllDataTypes(
     byteField: Byte,
     booleanField: Boolean)
 
-case class AllDataTypesWithNonPrimitiveType(
-    stringField: String,
-    intField: Int,
-    longField: Long,
-    floatField: Float,
-    doubleField: Double,
-    shortField: Short,
-    byteField: Byte,
-    booleanField: Boolean,
-    array: Seq[Int],
-    arrayContainsNull: Seq[Option[Int]],
-    map: Map[Int, Long],
-    mapValueContainsNull: Map[Int, Option[Long]],
-    data: Data)
-
-case class BinaryData(binaryData: Array[Byte])
-
 class OrcQuerySuite extends QueryTest with FunSuiteLike with BeforeAndAfterAll {
-  TestData // Load test data tables.
-
-  var testRDD: SchemaRDD = null
+  TestHive // Load test data tables.
+  import TestHive._
   test("Read/Write All Types") {
     val tempDir = getTempFilePath("orcTest").getCanonicalPath
     val range = (0 to 255)
@@ -88,7 +52,7 @@ class OrcQuerySuite extends QueryTest with FunSuiteLike with BeforeAndAfterAll {
     data.saveAsOrcFile(tempDir)
 
     checkAnswer(
-      orcFile(tempDir),
+      TestHive.orcFile(tempDir),
       data.toSchemaRDD.collect().toSeq)
 
     Utils.deleteRecursively(new File(tempDir))

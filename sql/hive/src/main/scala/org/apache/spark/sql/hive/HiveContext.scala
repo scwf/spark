@@ -21,6 +21,13 @@ import java.io.{BufferedReader, File, InputStreamReader, PrintStream}
 import java.sql.Timestamp
 import java.util.{ArrayList => JArrayList}
 
+import org.apache.hadoop.conf.Configuration
+import org.apache.spark.annotation.Experimental
+import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.spark.sql.catalyst.planning.PhysicalOperation
+import org.apache.spark.sql.catalyst.plans.logical
+import org.apache.spark.sql.hive.orc.{OrcRelation, OrcTableScan}
+
 import scala.collection.JavaConversions._
 import scala.language.implicitConversions
 import scala.reflect.runtime.universe.{TypeTag, typeTag}
@@ -42,9 +49,7 @@ import org.apache.spark.sql.catalyst.ScalaReflection
 import org.apache.spark.sql.catalyst.analysis.{Analyzer, EliminateAnalysisOperators}
 import org.apache.spark.sql.catalyst.analysis.{OverrideCatalog, OverrideFunctionRegistry}
 import org.apache.spark.sql.catalyst.plans.logical._
-import org.apache.spark.sql.execution.ExtractPythonUdfs
-import org.apache.spark.sql.execution.QueryExecutionException
-import org.apache.spark.sql.execution.{Command => PhysicalCommand}
+import org.apache.spark.sql.execution.{Command => PhysicalCommand, SparkPlan, ExtractPythonUdfs, QueryExecutionException}
 import org.apache.spark.sql.hive.execution.DescribeHiveTableCommand
 
 /**
@@ -118,6 +123,48 @@ class HiveContext(sc: SparkContext) extends SQLContext(sc) {
    */
   def createTable[A <: Product : TypeTag](tableName: String, allowExisting: Boolean = true) {
     catalog.createTable("default", tableName, ScalaReflection.attributesFor[A], allowExisting)
+  }
+
+  /**
+   * Loads a Orc file, returning the result as a [[SchemaRDD]].
+   *
+   * @group userf
+   */
+  def orcFile(path: String): SchemaRDD =
+    new SchemaRDD(this, orc.OrcRelation(path, Some(sparkContext.hadoopConfiguration), this))
+
+  /**
+   * :: Experimental ::
+   * Creates an empty orc file with the schema of class `A`, which can be registered as a table.
+   * This registered table can be used as the target of future `insertInto` operations.
+   *
+   * {{{
+   *   val sqlContext = new SQLContext(...)
+   *   import sqlContext._
+   *
+   *   case class Person(name: String, age: Int)
+   *   createOrcFile[Person]("path/to/file.orc").registerTempTable("people")
+   *   sql("INSERT INTO people SELECT 'michael', 29")
+   * }}}
+   *
+   * @tparam A A case class type that describes the desired schema of the orc file to be
+   *           created.
+   * @param path The path where the directory containing parquet metadata should be created.
+   *             Data inserted into this table will also be stored at this location.
+   * @param allowExisting When false, an exception will be thrown if this directory already exists.
+   * @param conf A Hadoop configuration object that can be used to specify options to the parquet
+   *             output format.
+   *
+   * @group userf
+   */
+  @Experimental
+  def createOrcFile[A <: Product : TypeTag](
+      path: String,
+      allowExisting: Boolean = true,
+      conf: Configuration = new Configuration()): SchemaRDD = {
+    new SchemaRDD(
+      this,
+      OrcRelation.createEmpty(path, ScalaReflection.attributesFor[A], allowExisting, conf, this))
   }
 
   /**
@@ -331,6 +378,7 @@ class HiveContext(sc: SparkContext) extends SQLContext(sc) {
       CommandStrategy(self),
       HiveCommandStrategy(self),
       TakeOrdered,
+      OrcOperations,
       ParquetOperations,
       InMemoryScans,
       ParquetConversion, // Must be before HiveTableScans
