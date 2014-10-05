@@ -52,7 +52,7 @@ class TaskMetrics extends Serializable {
   var executorRunTime: Long = _
 
   /**
-   * the size of input iterator
+   * the size of input iterator, used for monitoring data skew
    */
   var inputIterLen: Long = _
 

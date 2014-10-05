@@ -27,7 +27,7 @@ private[spark]
 // scalastyle:off
 abstract class CompletionIterator[ +A, +I <: Iterator[A]](sub: I) extends Iterator[A] {
 // scalastyle:on
-  var _size: Long = 0// use auto will be better?
+  var _size: Long = 0
   def next() = {
     _size = _size + 1
     sub.next()
