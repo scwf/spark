@@ -49,7 +49,7 @@ private[thriftserver] object HiveShim {
 
   def setServerUserName(sparkServiceUGI: UserGroupInformation, sparkCliService:SparkSQLCLIService) = {
     val serverUserName = ShimLoader.getHadoopShims.getShortUserName(sparkServiceUGI)
-    setSuperField(sparkCliService, "serverUserName", serverUserName)// is this alright?
+    setSuperField(sparkCliService, "serverUserName", serverUserName)
   }
 
   def getCommandProcessor(cmd: Array[String], conf: HiveConf) =  {

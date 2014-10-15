@@ -239,6 +239,18 @@
         <enabled>false</enabled>
       </snapshots>
     </repository>
+    <repository>
+      <!-- This is temporarily included to fix issues with Hive 0.13.1 -->
+      <id>spark-staging1</id>
+      <name>Spring Staging Repository1</name>
+      <url>https://oss.sonatype.org/content/repositories/orgspark-project-1079</url>
+      <releases>
+        <enabled>true</enabled>
+      </releases>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
+    </repository>
   </repositories>
   <pluginRepositories>
     <pluginRepository>
@@ -1296,6 +1308,9 @@
       <activation>
         <activeByDefault>false</activeByDefault>
       </activation>
+      <modules>
+        <module>sql/hive-thriftserver</module>
+      </modules>
       <properties>
         <hive.version>0.13.1</hive.version>
         <hive.version.short>0.13.1</hive.version.short>
