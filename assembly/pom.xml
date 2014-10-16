@@ -211,6 +211,16 @@
       </dependencies>
     </profile>
     <profile>
+      <id>hive-0.13.1</id>
+      <dependencies>
+        <dependency>
+          <groupId>org.apache.spark</groupId>
+          <artifactId>spark-hive-thriftserver_${scala.binary.version}</artifactId>
+          <version>${project.version}</version>
+        </dependency>
+      </dependencies>
+    </profile>
+    <profile>
       <id>spark-ganglia-lgpl</id>
       <dependencies>
         <dependency>

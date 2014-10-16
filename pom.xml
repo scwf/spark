@@ -150,6 +150,18 @@
 
   <repositories>
     <repository>
+      <!-- This is temporarily included to fix issues with Hive 0.13.1 -->
+      <id>spark-staging1</id>
+      <name>Spring Staging Repository1</name>
+        <url>https://oss.sonatype.org/content/repositories/orgspark-project-1079</url>
+      <releases>
+        <enabled>true</enabled>
+      </releases>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
+    </repository>
+    <repository>
       <id>central</id>
       <!-- This should be at top, it makes maven try the central repo first and then others and hence faster dep resolution -->
       <name>Maven Repository</name>
@@ -232,18 +244,6 @@
       <id>spark-staging</id>
       <name>Spring Staging Repository</name>
       <url>https://oss.sonatype.org/content/repositories/orgspark-project-1085</url>
-      <releases>
-        <enabled>true</enabled>
-      </releases>
-      <snapshots>
-        <enabled>false</enabled>
-      </snapshots>
-    </repository>
-    <repository>
-      <!-- This is temporarily included to fix issues with Hive 0.13.1 -->
-      <id>spark-staging1</id>
-      <name>Spring Staging Repository1</name>
-      <url>https://oss.sonatype.org/content/repositories/orgspark-project-1079</url>
       <releases>
         <enabled>true</enabled>
       </releases>
