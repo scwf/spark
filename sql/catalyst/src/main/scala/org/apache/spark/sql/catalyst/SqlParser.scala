@@ -112,8 +112,7 @@ class SqlParser extends AbstractSparkSQLParser {
       .getClass
       .getMethods
       .filter(_.getReturnType == classOf[Keyword])
-      .filter(_.toString.contains("org.apache.spark.sql.catalyst.SqlParser.".toCharArray))
-      .map{ m : Method => m.invoke(this).asInstanceOf[Keyword].str}
+      .map{_.invoke(this).asInstanceOf[Keyword].str}
   override val lexical = new SqlLexical(reservedWords)
   println(reservedWords)
 
