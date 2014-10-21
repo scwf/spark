@@ -94,6 +94,7 @@
     <module>streaming</module>
     <module>sql/catalyst</module>
     <module>sql/core</module>
+    <module>sql/hbase</module>
     <module>sql/hive</module>
     <module>repl</module>
     <module>assembly</module>
@@ -124,8 +125,8 @@
     <hadoop.version>1.0.4</hadoop.version>
     <protobuf.version>2.4.1</protobuf.version>
     <yarn.version>${hadoop.version}</yarn.version>
-    <hbase.version>0.94.6</hbase.version>
     <flume.version>1.4.0</flume.version>
+    <hbase.version>0.98.5-hadoop2</hbase.version>
     <zookeeper.version>3.4.5</zookeeper.version>
     <hive.version>0.12.0-protobuf-2.5</hive.version>
     <parquet.version>1.4.3</parquet.version>
@@ -855,13 +856,13 @@
                 <goal>testCompile</goal>
               </goals>
             </execution>
-            <execution>
-              <id>attach-scaladocs</id>
-              <phase>verify</phase>
-              <goals>
-                <goal>doc-jar</goal>
-              </goals>
-            </execution>
+            <!--<execution>-->
+              <!--<id>attach-scaladocs</id>-->
+              <!--<phase>verify</phase>-->
+              <!--<goals>-->
+                <!--<goal>doc-jar</goal>-->
+              <!--</goals>-->
+            <!--</execution>-->
           </executions>
           <configuration>
             <scalaVersion>${scala.version}</scalaVersion>
@@ -902,6 +903,7 @@
           <configuration>
             <source>${java.version}</source>
             <target>${java.version}</target>
+            <debug>true</debug>
             <encoding>UTF-8</encoding>
             <maxmem>1024m</maxmem>
             <fork>true</fork>

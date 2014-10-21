@@ -17,6 +17,8 @@
 
 package org.apache.spark.sql.catalyst
 
+import java.lang.reflect.Method
+
 import scala.language.implicitConversions
 
 import org.apache.spark.sql.catalyst.analysis._
@@ -110,9 +112,9 @@ class SqlParser extends AbstractSparkSQLParser {
       .getClass
       .getMethods
       .filter(_.getReturnType == classOf[Keyword])
-      .map(_.invoke(this).asInstanceOf[Keyword].str)
-
+      .map{_.invoke(this).asInstanceOf[Keyword].str}
   override val lexical = new SqlLexical(reservedWords)
+  println(reservedWords)
 
   protected def assignAliases(exprs: Seq[Expression]): Seq[NamedExpression] = {
     exprs.zipWithIndex.map {
