@@ -123,7 +123,7 @@ private[sql] trait SchemaRDDLike {
    * @group schema
    */
   @Experimental
-  def saveAsTable(tableName: String): RDD[Row] =
+  def saveAsTable(tableName: String): Unit =
     sqlContext.executePlan(CreateTableAsSelect(None, tableName, logicalPlan)).toRdd
 
   /** Returns the schema as a string in the tree format.

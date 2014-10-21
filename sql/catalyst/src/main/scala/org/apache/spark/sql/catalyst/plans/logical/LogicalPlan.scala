@@ -54,12 +54,6 @@ abstract class LogicalPlan extends QueryPlan[LogicalPlan] with Logging {
   }
 
   /**
-   * Returns the set of attributes that this node takes as
-   * input from its children.
-   */
-  lazy val inputSet: AttributeSet = AttributeSet(children.flatMap(_.output))
-
-  /**
    * Returns true if this expression and all its children have been resolved to a specific schema
    * and false if it still contains any unresolved placeholders. Implementations of LogicalPlan
    * can override this (e.g.
@@ -67,6 +61,8 @@ abstract class LogicalPlan extends QueryPlan[LogicalPlan] with Logging {
    * should return `false`).
    */
   lazy val resolved: Boolean = !expressions.exists(!_.resolved) && childrenResolved
+
+  override protected def statePrefix = if (!resolved) "'" else super.statePrefix
 
   /**
    * Returns true if all its children of this query plan have been resolved.
@@ -144,21 +140,12 @@ abstract class LogicalPlan extends QueryPlan[LogicalPlan] with Logging {
     // struct fields.
     val options = input.flatMap { option =>
       // If the first part of the desired name matches a qualifier for this possible match, drop it.
-      val remainingParts = {
-        if (option==null) {
-          throw new IllegalStateException(
-            "Null member of input attributes found when resolving %s from inputs %s"
-              .format(name, input.mkString("[",",","]")))
-        }
-//        assert(option != null)
-        assert(option.qualifiers != null)
-        assert(parts != null)
+      val remainingParts =
         if (option.qualifiers.find(resolver(_, parts.head)).nonEmpty && parts.size > 1) {
           parts.drop(1)
         } else {
           parts
         }
-      }
 
       if (resolver(option.name, remainingParts.head)) {
         // Preserve the case of the user's attribute reference.
