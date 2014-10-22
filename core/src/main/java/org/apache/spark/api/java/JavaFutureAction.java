@@ -15,25 +15,19 @@
  * limitations under the License.
  */
 
-package org.apache.spark.graphx
+package org.apache.spark.api.java;
 
-import org.apache.spark.SparkConf
-import org.apache.spark.SparkContext
 
-/**
- * Provides a method to run tests against a {@link SparkContext} variable that is correctly stopped
- * after each test.
-*/
-trait LocalSparkContext {
-  /** Runs `f` on a new SparkContext and ensures that it is stopped afterwards. */
-  def withSpark[T](f: SparkContext => T) = {
-    val conf = new SparkConf()
-    GraphXUtils.registerKryoClasses(conf)
-    val sc = new SparkContext("local", "test", conf)
-    try {
-      f(sc)
-    } finally {
-      sc.stop()
-    }
-  }
+import java.util.List;
+import java.util.concurrent.Future;
+
+public interface JavaFutureAction<T> extends Future<T> {
+
+  /**
+   * Returns the job IDs run by the underlying async operation.
+   *
+   * This returns the current snapshot of the job list. Certain operations may run multiple
+   * jobs, so multiple calls to this method may return different lists.
+   */
+  List<Integer> jobIds();
 }
