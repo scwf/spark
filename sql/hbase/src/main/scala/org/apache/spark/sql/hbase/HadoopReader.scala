@@ -27,6 +27,7 @@ import org.apache.hadoop.mapred.TextInputFormat
 import org.apache.hadoop.hbase.util.Bytes
 import org.apache.hadoop.hbase.client.Put
 import org.apache.hadoop.hbase.io.ImmutableBytesWritable
+import org.apache.hadoop.hbase.KeyValue
 
 /**
  * Helper class for scanning files stored in Hadoop - e.g., to read text file when bulk loading.
@@ -61,16 +62,18 @@ class HadoopReader(
     // Todo: use mapPartitions more better, now just simply code
     // Only take the value (skip the key) because Hbase works only with values.
     rdd.map { value =>
-      // Todo: need to info from HbaseRelation here
+      // Todo: needs info which field is rowkey and value from HbaseRelation here
       val fields = value._2.toString.split(splitRegex)
       val rowKey = Bytes.toBytes(fields(0))
       val rowKeyWritable = new ImmutableBytesWritable(rowKey)
       val family = Bytes.toBytes("cf")
       val qualifier = Bytes.toBytes("count")
       val hbaseValue = Bytes.toBytes(count)
-      val put = new Put(rowKey)
-      put.add(family, qualifier, hbaseValue)
-      (rowKeyWritable, put)
+      val keyValue = new KeyValue(rowKey, family, qualifier, hbaseValue)
+      // we should use Put?, which is better? keyvalue is for one column in column family, right?
+//    val put = new Put(rowKey)
+//    put.add(family, qualifier, hbaseValue)
+      (rowKeyWritable, keyValue)
     }
   }
 

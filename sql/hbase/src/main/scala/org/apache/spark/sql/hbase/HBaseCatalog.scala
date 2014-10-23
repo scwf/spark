@@ -34,6 +34,7 @@ import scala.collection.mutable.{HashMap, SynchronizedMap}
  * @param sqlName the name of the column
  * @param dataType the data type of the column
  */
+// todo: need a id here
 case class Column(sqlName: String, dataType: DataType) {
   override def toString: String = {
     sqlName + "," + dataType.typeName

@@ -38,6 +38,7 @@ import scala.collection.immutable.TreeMap
  *
  * Created by stephen.boesch@huawei.com on 9/8/14
  */
+// Todo: we need name, alias here
 private[hbase] case class HBaseRelation(
                                          @transient var configuration: Configuration,
                                          @transient var hbaseContext: HBaseSQLContext,
@@ -60,6 +61,7 @@ private[hbase] case class HBaseRelation(
     def close = handle.close
   }
 
+  // need this in hbase?
   def isPartitioned = true
 
   def tableName = getTableName
