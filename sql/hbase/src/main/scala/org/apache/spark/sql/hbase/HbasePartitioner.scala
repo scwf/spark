@@ -33,9 +33,7 @@ import org.apache.hadoop.hbase.io.ImmutableBytesWritable
 import org.apache.hadoop.hbase.client.HTable
 
 class HBasePartitioner [K : Ordering : ClassTag, V](
-     @transient partitions: Int,
-     @transient rdd: RDD[_ <: Product2[K,V]],
-     conf: Configuration)(splitKeys: Array[K])
+    @transient rdd: RDD[_ <: Product2[K,V]])(splitKeys: Array[K])
   extends Partitioner {
 
   // We allow partitions = 0, which happens when sorting an empty RDD under the default settings.
