@@ -17,16 +17,16 @@
 package org.apache.spark.sql.hbase
 
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.hbase.{HColumnDescriptor, TableName, HTableDescriptor}
 import org.apache.hadoop.hbase.client.HBaseAdmin
-import org.apache.spark.sql.catalyst.types.{FloatType, BooleanType, IntegerType, StringType}
+import org.apache.hadoop.hbase.{HBaseConfiguration, HColumnDescriptor, HTableDescriptor, TableName}
 import org.apache.spark._
-import org.scalatest.{Ignore, BeforeAndAfterAll, FunSuite}
+import org.apache.spark.sql.catalyst.types.{BooleanType, FloatType, IntegerType, StringType}
+import org.scalatest.{BeforeAndAfterAll, FunSuite, Ignore}
 
 /**
  * Created by mengbo on 10/2/14.
  */
-@Ignore
+//@Ignore
 class CatalogTest extends FunSuite with BeforeAndAfterAll with Logging {
   var sparkConf: SparkConf = _
   var sparkContext: SparkContext = _
@@ -39,6 +39,7 @@ class CatalogTest extends FunSuite with BeforeAndAfterAll with Logging {
     sparkContext = new SparkContext(sparkConf)
     hbaseContext = new HBaseSQLContext(sparkContext)
     catalog = new HBaseCatalog(hbaseContext)
+    configuration = HBaseConfiguration.create()
   }
 
   test("Create Table") {
@@ -49,11 +50,13 @@ class CatalogTest extends FunSuite with BeforeAndAfterAll with Logging {
     val family1 = "family1"
     val family2 = "family2"
 
-    val admin = new HBaseAdmin(configuration)
-    val desc = new HTableDescriptor(TableName.valueOf(hbaseTableName))
-    desc.addFamily(new HColumnDescriptor(family1))
-    desc.addFamily(new HColumnDescriptor(family2))
-    admin.createTable(desc)
+    if (!catalog.checkHBaseTableExists(hbaseTableName)) {
+      val admin = new HBaseAdmin(configuration)
+      val desc = new HTableDescriptor(TableName.valueOf(hbaseTableName))
+      desc.addFamily(new HColumnDescriptor(family1))
+      desc.addFamily(new HColumnDescriptor(family2))
+      admin.createTable(desc)
+    }
 
     var allColumns = List[KeyColumn]()
     allColumns = allColumns :+ KeyColumn("column2", IntegerType)
@@ -73,10 +76,7 @@ class CatalogTest extends FunSuite with BeforeAndAfterAll with Logging {
     nonKeyColumns = nonKeyColumns :+ nonKeyColumn3
     nonKeyColumns = nonKeyColumns :+ nonKeyColumn4
 
-//    val catalogTable = HBaseRelation(tableName, namespace, hbaseTableName, allColumns,
-//      keyColumns, nonKeyColumns)
-//
-//    catalog.createTable(catalogTable)
+    catalog.createTable(tableName, namespace, hbaseTableName, allColumns, keyColumns, nonKeyColumns)
   }
 
   test("Get Table") {
@@ -101,14 +101,12 @@ class CatalogTest extends FunSuite with BeforeAndAfterAll with Logging {
     assert(result.nonKeyColumns(0).dataType === BooleanType)
     assert(result.nonKeyColumns(1).dataType === FloatType)
 
-    //    val relation = catalog.lookupRelation(None, tableName)
-    //    val hbRelation = relation.asInstanceOf[HBaseRelation]
-    //    assert(hbRelation.colFamilies == Set("family1", "family2"))
-    //    assert(hbRelation.partitionKeys == Seq("column1", "column2"))
-    //    val rkColumns = new Columns(Seq(Column("column1", null, "column1", StringType, 1),
-    //      Column("column1", null, "column1", IntegerType, 2)))
-    //    assert(hbRelation.catalogTable.rowKeyColumns.equals(rkColumns))
-    //    assert(relation.childrenResolved)
+    val relation = catalog.lookupRelation(None, tableName)
+    val hbRelation = relation.asInstanceOf[HBaseRelation]
+    assert(hbRelation.nonKeyColumns.map(_.family) == List("family1", "family2"))
+    val keyColumns = Seq(KeyColumn("column1", StringType), KeyColumn("column2", IntegerType))
+    assert(hbRelation.keyColumns.equals(keyColumns))
+    assert(relation.childrenResolved)
   }
 
   test("Delete Table") {
