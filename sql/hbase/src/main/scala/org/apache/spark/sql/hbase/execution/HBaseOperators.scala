@@ -18,10 +18,15 @@
 package org.apache.spark.sql.hbase.execution
 
 import org.apache.spark.annotation.DeveloperApi
-import org.apache.spark.rdd.RDD
+import org.apache.spark.rdd.{ShuffledRDD, RDD}
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.execution.{LeafNode, UnaryNode, SparkPlan}
-import org.apache.spark.sql.hbase.{HBaseSQLReaderRDD, HBaseSQLContext, HBaseRelation}
+import org.apache.hadoop.mapred.JobConf
+import org.apache.hadoop.hbase.io.ImmutableBytesWritable
+import org.apache.hadoop.hbase.client.Put
+import org.apache.spark.SerializableWritable
+import org.apache.spark.sql.hbase._
+import org.apache.spark.sql.hbase.HBaseRelation
 
 /**
  * :: DeveloperApi ::
@@ -66,4 +71,39 @@ case class InsertIntoHBaseTable(
   }
 
   override def output = child.output
+}
+
+@DeveloperApi
+case class BulkLoadIntoTable(relation: HBaseRelation, path: String)(
+  @transient hbContext: HBaseSQLContext) extends LeafNode {
+
+  val jobConf = new JobConf(hbContext.sc.hadoopConfiguration)
+
+  val hadoopReader = new HadoopReader(hbContext.sparkContext, jobConf)
+
+  // TODO: get from raltion (or config)
+  val splitKeys = ???
+
+  override def execute() = {
+    implicit val ordering = HBasePartitioner.orderingRowKey
+      .asInstanceOf[Ordering[ImmutableBytesWritable]]
+    val rdd = hadoopReader.makeBulkLoadRDD
+    val partitioner = new HBasePartitioner(rdd)(splitKeys)
+    val shuffled =
+      new ShuffledRDD[ImmutableBytesWritable, Put, Put](rdd, partitioner).setKeyOrdering(ordering)
+
+    val jobConfSer = new SerializableWritable(jobConf)
+    saveAsHFile(shuffled, jobConfSer)
+    // bulk load is like a command, so return null is ok here
+    null
+  }
+
+  def saveAsHFile(
+      rdd: RDD[(ImmutableBytesWritable, Put)],
+      jobConf: SerializableWritable[JobConf]) {
+    ???
+  }
+
+  override def output = Nil
+
 }

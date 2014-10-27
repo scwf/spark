@@ -20,7 +20,7 @@ import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.{SqlLexical, SqlParser}
 import org.apache.spark.sql.catalyst.SparkSQLParser
-import org.apache.spark.sql.hbase.logical.{DropTablePlan, CreateHBaseTablePlan}
+import org.apache.spark.sql.hbase.logical.{CreateHBaseTablePlan, DropTablePlan}
 
 class HBaseSQLParser extends SqlParser {
   protected val BULK = Keyword("BULK")
