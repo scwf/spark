@@ -1,8 +1,8 @@
 package org.apache.spark.sql.hbase.logical
 
-import org.apache.spark.sql.catalyst.plans.logical.{LeafNode, LogicalPlan, Command}
-import org.apache.spark.sql.hbase.HBaseRelation
-
+import org.apache.spark.sql.catalyst.plans.logical.{UnaryNode, LeafNode, LogicalPlan, Command}
+//import org.apache.spark.sql.hbase.HBaseRelation
+/*
 case class CreateHBaseTablePlan(tableName: String,
                                 nameSpace: String,
                                 hbaseTable: String,
@@ -20,8 +20,13 @@ case class BulkLoadIntoTable(
   // TODO:need resolved here?
 
 }
+*/
+case class LoadDataIntoTable(path: String,
+                             child: LogicalPlan,
+                             isLocal: Boolean) extends UnaryNode {
 
-case class LoadDataIntoTable(path: String, table: String, isLocal: Boolean) extends LeafNode {
-  override def output = Seq.empty
+  override def output = Nil
+
+  override def toString = s"LogicalPlan: LoadDataIntoTable(LOAD $path INTO $child)"
 }
 
