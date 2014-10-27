@@ -17,15 +17,12 @@
 
 package org.apache.spark.sql.hbase
 
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.hbase.client.HTable
-import org.apache.hadoop.hbase.filter.{Filter => HFilter}
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.planning.{PhysicalOperation, QueryPlanner}
-import org.apache.spark.sql.catalyst.plans.logical
-import org.apache.spark.sql.catalyst.plans.logical.{Filter, Join, LogicalPlan}
+import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoTable, LogicalPlan}
 import org.apache.spark.sql.execution._
-import org.apache.spark.sql.{SQLContext, SchemaRDD}
+import org.apache.spark.sql.SQLContext
+import org.apache.spark.sql.hbase.execution._
 
 /**
  * HBaseStrategies
@@ -91,16 +88,16 @@ private[hbase] trait HBaseStrategies extends QueryPlanner[SparkPlan] {
 
   object HBaseOperations extends Strategy {
     def apply(plan: LogicalPlan): Seq[SparkPlan] = plan match {
-      case CreateHBaseTablePlan(
+      case logical.CreateHBaseTablePlan(
       tableName, nameSpace, hbaseTableName,
       colsSeq, keyCols, nonKeyCols) =>
         Seq(CreateHBaseTableCommand(
           tableName, nameSpace, hbaseTableName,
           colsSeq, keyCols, nonKeyCols)
           (hbaseSQLContext))
-      case logical.InsertIntoTable(table: HBaseRelation, partition, child, _) =>
+      case InsertIntoTable(table: HBaseRelation, partition, child, _) =>
         new InsertIntoHBaseTable(table, planLater(child))(hbaseSQLContext) :: Nil
-      case DropTablePlan(tableName) => Seq(DropHbaseTableCommand(tableName)(hbaseSQLContext))
+      case logical.DropTablePlan(tableName) => Seq(DropHbaseTableCommand(tableName)(hbaseSQLContext))
       case _ => Nil
     }
   }
