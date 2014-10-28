@@ -27,7 +27,6 @@ import org.apache.spark.SparkEnv
 import org.apache.spark.Partitioner
 import org.apache.spark.util.{Utils, CollectionsUtils}
 import org.apache.spark.serializer.JavaSerializer
-import org.apache.hadoop.hbase.io.ImmutableBytesWritable
 import org.apache.hadoop.hbase.client.HTable
 
 class HBasePartitioner [K : Ordering : ClassTag, V](
@@ -121,24 +120,24 @@ class HBasePartitioner [K : Ordering : ClassTag, V](
 
 //Todo： test this
 object HBasePartitioner {
-  implicit def orderingRowKey[ImmutableBytesWritable]: Ordering[ImmutableBytesWritable] =
-    OrderingRowKey.asInstanceOf[Ordering[ImmutableBytesWritable]]
+  implicit def orderingRowKey[SparkImmutableBytesWritable]: Ordering[SparkImmutableBytesWritable] =
+    OrderingRowKey.asInstanceOf[Ordering[SparkImmutableBytesWritable]]
 
   /**
    * Return the start keys of all of the regions in this table,
-   * as a list of ImmutableBytesWritable.
+   * as a list of SparkImmutableBytesWritable.
    * Todo: should move to hbase relation after code clean
    */
   def getRegionStartKeys(table: HTable) = {
     val byteKeys: Array[Array[Byte]] = table.getStartKeys
-    val ret = ArrayBuffer[ImmutableBytesWritable]()
+    val ret = ArrayBuffer[SparkImmutableBytesWritable]()
     for (byteKey <- byteKeys) {
-      ret += new ImmutableBytesWritable(byteKey)
+      ret += new SparkImmutableBytesWritable(byteKey)
     }
     ret
   }
 }
 
-object OrderingRowKey extends Ordering[ImmutableBytesWritable] {
-  def compare(a: ImmutableBytesWritable, b: ImmutableBytesWritable) = a.compareTo(b)
+object OrderingRowKey extends Ordering[SparkImmutableBytesWritable] {
+  def compare(a: SparkImmutableBytesWritable, b: SparkImmutableBytesWritable) = a.compareTo(b)
 }

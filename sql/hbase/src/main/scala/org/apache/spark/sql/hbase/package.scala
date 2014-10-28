@@ -16,6 +16,8 @@
  */
 package org.apache.spark.sql
 
+import org.apache.hadoop.hbase.io.ImmutableBytesWritable
+
 package object hbase {
   type HBaseRawType = Array[Byte]
 }

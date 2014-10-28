@@ -21,6 +21,7 @@ import java.sql.Timestamp
 
 import org.apache.spark.sql.catalyst.plans.logical
 import org.apache.spark.sql.test._
+import org.apache.spark.sql.catalyst.plans.logical.LocalRelation
 
 /* Implicits */
 import org.apache.spark.sql.test.TestSQLContext._
@@ -56,11 +57,11 @@ object TestData {
 
   // TODO: There is no way to express null primitives as case classes currently...
   val testData3 =
-    logical.LocalRelation('a.int, 'b.int).loadData(
+    LocalRelation('a.int, 'b.int).loadData(
       (1, null) ::
       (2, 2) :: Nil)
 
-  val emptyTableData = logical.LocalRelation('a.int, 'b.int)
+  val emptyTableData = LocalRelation('a.int, 'b.int)
 
   case class UpperCaseData(N: Int, L: String)
   val upperCaseData =
