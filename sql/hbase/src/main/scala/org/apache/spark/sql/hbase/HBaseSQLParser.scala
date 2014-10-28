@@ -23,7 +23,6 @@ import org.apache.spark.sql.catalyst.SparkSQLParser
 import org.apache.spark.sql.hbase.logical.{DropTablePlan, CreateHBaseTablePlan}
 
 class HBaseSQLParser extends SqlParser {
-  protected val BULK = Keyword("BULK")
   protected val CREATE = Keyword("CREATE")
   protected val DROP = Keyword("DROP")
   protected val ALTER = Keyword("ALTER")
