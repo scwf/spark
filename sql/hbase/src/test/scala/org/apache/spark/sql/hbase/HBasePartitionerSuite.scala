@@ -19,7 +19,7 @@ package org.apache.spark.sql.hbase
 
 import org.scalatest.FunSuite
 import org.apache.spark.{SparkConf, LocalSparkContext, SparkContext, Logging}
-
+import org.apache.spark.SparkContext._
 class HBasePartitionerSuite extends FunSuite with LocalSparkContext with Logging {
 
   val conf = new SparkConf(loadDefaults = false)
