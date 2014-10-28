@@ -29,13 +29,6 @@ case class CreateHBaseTablePlan(tableName: String,
 
 case class DropTablePlan(tableName: String) extends Command
 
-
-case class BulkLoadIntoTable(table: HBaseRelation, path: String) extends LeafNode  {
-  override def output = Seq.empty
-  // TODO:need resolved here?
-
-}
-
 case class LoadDataIntoTable(path: String, table: String, isLocal: Boolean) extends LeafNode {
   override def output = Seq.empty
 }
