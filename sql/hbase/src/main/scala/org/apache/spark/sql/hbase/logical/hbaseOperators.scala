@@ -29,12 +29,6 @@ case class CreateHBaseTablePlan(tableName: String,
 
 case class DropTablePlan(tableName: String) extends Command
 
-case class BulkLoadIntoTable(table: HBaseRelation, path: String) extends LeafNode  {
-  override def output = Seq.empty
-  // TODO:need resolved here?
-
-}
-
 /**
  * Logical plan for Bulkload
  * @param path input data file path
