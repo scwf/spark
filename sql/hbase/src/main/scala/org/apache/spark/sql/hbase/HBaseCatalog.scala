@@ -150,8 +150,8 @@ private[hbase] class HBaseCatalog(@transient hbaseContext: HBaseSQLContext)
       put.add(ColumnFamily, QualHbaseName, Bytes.toBytes(result.toString))
       */
 
-      val hbaseRelation = HBaseRelation(configuration, hbaseContext, connection,
-        tableName, hbaseNamespace, hbaseTableName, allColumns)
+      val hbaseRelation = HBaseRelation(Some(configuration), tableName
+        , hbaseNamespace, hbaseTableName, allColumns)
 
       val bufout = new ByteArrayOutputStream()
       val obout = new ObjectOutputStream(bufout)
@@ -238,7 +238,7 @@ private[hbase] class HBaseCatalog(@transient hbaseContext: HBaseSQLContext)
         val relation = objectInput.readObject().asInstanceOf[HBaseRelation]: HBaseRelation
 
         val hbaseRelation = HBaseRelation(
-          configuration, hbaseContext, connection,
+          Some(configuration),
           relation.tableName, relation.hbaseNamespace, relation.hbaseTableName,
           relation.allColumns)
         relationMapCache.put(processTableName(tableName), hbaseRelation)
