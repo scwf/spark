@@ -43,10 +43,11 @@ sealed abstract class AbstractColumn {
   }
 }
 
-case class KeyColumn(sqlName: String, dataType: DataType) extends AbstractColumn
+case class KeyColumn(val sqlName: String, val dataType: DataType, val order: Int)
+  extends AbstractColumn
 
-case class NonKeyColumn(sqlName: String, dataType: DataType, family: String, qualifier: String)
-  extends AbstractColumn {
+case class NonKeyColumn(val sqlName: String, val dataType: DataType,
+                        val family: String, val qualifier: String) extends AbstractColumn {
   @transient lazy val familyRaw = Bytes.toBytes(family)
   @transient lazy val qualifierRaw = Bytes.toBytes(qualifier)
 
@@ -71,8 +72,7 @@ private[hbase] class HBaseCatalog(@transient hbaseContext: HBaseSQLContext)
   }
 
   def createTable(tableName: String, hbaseNamespace: String, hbaseTableName: String,
-                  allColumns: Seq[KeyColumn], keyColumns: Seq[KeyColumn],
-                  nonKeyColumns: Seq[NonKeyColumn]): Unit = {
+                  allColumns: Seq[AbstractColumn]): Unit = {
     if (checkLogicalTableExist(tableName)) {
       throw new Exception(s"The logical table: $tableName already exists")
     }
@@ -81,6 +81,8 @@ private[hbase] class HBaseCatalog(@transient hbaseContext: HBaseSQLContext)
       throw new Exception(s"The HBase table $hbaseTableName doesn't exist")
     }
 
+    val nonKeyColumns = allColumns.filter(_.isInstanceOf[NonKeyColumn])
+      .asInstanceOf[Seq[NonKeyColumn]]
     nonKeyColumns.foreach {
       case NonKeyColumn(_, _, family, _) =>
         if (!checkFamilyExists(hbaseTableName, family)) {
@@ -149,18 +151,19 @@ private[hbase] class HBaseCatalog(@transient hbaseContext: HBaseSQLContext)
       put.add(ColumnFamily, QualHbaseName, Bytes.toBytes(result.toString))
       */
 
-      val hbaseRelation = HBaseRelation(configuration, hbaseContext, connection,
-        tableName, hbaseNamespace, hbaseTableName, allColumns, keyColumns, nonKeyColumns)
+      val hbaseRelation = HBaseRelation(Some(configuration), tableName
+        , hbaseNamespace, hbaseTableName, allColumns)
 
-      val bufout = new ByteArrayOutputStream()
-      val obout = new ObjectOutputStream(bufout)
-      obout.writeObject(hbaseRelation)
+      val byteArrayOutputStream = new ByteArrayOutputStream()
+      val objectOutputStream = new ObjectOutputStream(byteArrayOutputStream)
+      objectOutputStream.writeObject(hbaseRelation)
 
-      put.add(ColumnFamily, QualData, bufout.toByteArray)
+      put.add(ColumnFamily, QualData, byteArrayOutputStream.toByteArray)
 
       // write to the metadata table
       table.put(put)
       table.flushCommits()
+      table.close()
 
       relationMapCache.put(processTableName(tableName), hbaseRelation)
     }
@@ -173,6 +176,7 @@ private[hbase] class HBaseCatalog(@transient hbaseContext: HBaseSQLContext)
 
       val get = new Get(Bytes.toBytes(tableName))
       val values = table.get(get)
+      table.close()
       if (values == null) {
         result = None
       } else {
@@ -232,14 +236,14 @@ private[hbase] class HBaseCatalog(@transient hbaseContext: HBaseSQLContext)
         }
         */
         val value = values.getValue(ColumnFamily, QualData)
-        val bufferInput = new ByteArrayInputStream(value)
-        val objectInput = new ObjectInputStream(bufferInput)
-        val relation = objectInput.readObject().asInstanceOf[HBaseRelation]: HBaseRelation
+        val byteArrayInputStream = new ByteArrayInputStream(value)
+        val objectInputStream = new ObjectInputStream(byteArrayInputStream)
+        val relation = objectInputStream.readObject().asInstanceOf[HBaseRelation]: HBaseRelation
 
         val hbaseRelation = HBaseRelation(
-          configuration, hbaseContext, connection,
+          Some(configuration),
           relation.tableName, relation.hbaseNamespace, relation.hbaseTableName,
-          relation.allColumns, relation.keyColumns, relation.nonKeyColumns)
+          relation.allColumns)
         relationMapCache.put(processTableName(tableName), hbaseRelation)
         result = Some(hbaseRelation)
       }
@@ -266,7 +270,6 @@ private[hbase] class HBaseCatalog(@transient hbaseContext: HBaseSQLContext)
 
     val delete = new Delete((Bytes.toBytes(tableName)))
     table.delete(delete)
-
     table.close()
 
     relationMapCache.remove(processTableName(tableName))

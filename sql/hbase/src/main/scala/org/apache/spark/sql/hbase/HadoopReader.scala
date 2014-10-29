@@ -65,7 +65,7 @@ class HadoopReader(
     // Todo: needs info which field is rowkey and value from HbaseRelation here
       val fields = value._2.toString.split(splitRegex)
       val rowKey = Bytes.toBytes(fields(0))
-      val rowKeyWritable = new ImmutableBytesWritable(rowKey)
+      val rowKeyWritable = new SparkImmutableBytesWritable(rowKey)
       val family = Bytes.toBytes("cf")
       val qualifier = Bytes.toBytes("count")
       val hbaseValue = Bytes.toBytes(fields(1))

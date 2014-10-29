@@ -122,20 +122,6 @@ class HBasePartitioner [K : Ordering : ClassTag, V](
 object HBasePartitioner {
   implicit def orderingRowKey[SparkImmutableBytesWritable]: Ordering[SparkImmutableBytesWritable] =
     OrderingRowKey.asInstanceOf[Ordering[SparkImmutableBytesWritable]]
-
-  /**
-   * Return the start keys of all of the regions in this table,
-   * as a list of SparkImmutableBytesWritable.
-   * Todo: should move to hbase relation after code clean
-   */
-  def getRegionStartKeys(table: HTable) = {
-    val byteKeys: Array[Array[Byte]] = table.getStartKeys
-    val ret = ArrayBuffer[SparkImmutableBytesWritable]()
-    for (byteKey <- byteKeys) {
-      ret += new SparkImmutableBytesWritable(byteKey)
-    }
-    ret
-  }
 }
 
 object OrderingRowKey extends Ordering[SparkImmutableBytesWritable] {

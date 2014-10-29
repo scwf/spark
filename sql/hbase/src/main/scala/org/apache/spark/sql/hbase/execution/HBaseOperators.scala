@@ -16,13 +16,22 @@
  */
 
 package org.apache.spark.sql.hbase.execution
+import java.util.Date
+import java.text.SimpleDateFormat
+
+import org.apache.hadoop.mapreduce.Job
+import org.apache.hadoop.hbase.mapreduce.HFileOutputFormat
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat
+import org.apache.hadoop.fs.Path
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.hbase.{CompatibilitySingletonFactory, HadoopShims}
 
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.rdd.{ShuffledRDD, RDD}
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.execution.{LeafNode, UnaryNode, SparkPlan}
-import org.apache.hadoop.mapred.JobConf
-import org.apache.hadoop.hbase.io.ImmutableBytesWritable
+import org.apache.spark.SparkContext._
+import org.apache.hadoop.mapred.{Reporter, JobConf}
 import org.apache.hadoop.hbase.client.Put
 import org.apache.spark.SerializableWritable
 import org.apache.spark.sql.hbase._
@@ -81,26 +90,53 @@ case class BulkLoadIntoTable(path: String, relation: HBaseRelation, isLocal: Boo
 
   val hadoopReader = new HadoopReader(hbContext.sparkContext, jobConf)
 
-  // TODO: get from raltion (or config)
-  val splitKeys = ???
+  // atmp path for storing HFile
+  val tmpPath = "/bulkload/test"
 
   override def execute() = {
-    implicit val ordering = HBasePartitioner.orderingRowKey
-      .asInstanceOf[Ordering[ImmutableBytesWritable]]
+    val ordering = HBasePartitioner.orderingRowKey
+      .asInstanceOf[Ordering[SparkImmutableBytesWritable]]
+    val splitKeys = relation.getRegionStartKeys()
     val rdd = hadoopReader.makeBulkLoadRDD
     val partitioner = new HBasePartitioner(rdd)(splitKeys)
     val shuffled =
-      new ShuffledRDD[ImmutableBytesWritable, Put, Put](rdd, partitioner).setKeyOrdering(ordering)
+      new ShuffledRDD[SparkImmutableBytesWritable, Put, Put](rdd, partitioner).setKeyOrdering(ordering)
 
-    val jobConfSer = new SerializableWritable(jobConf)
-    saveAsHFile(shuffled, jobConfSer)
-    // bulk load is like a command, so return null is ok here
+    jobConf.setOutputKeyClass(classOf[SparkImmutableBytesWritable])
+    jobConf.setOutputValueClass(classOf[Put])
+    jobConf.set("mapred.output.format.class", classOf[HFileOutputFormat].getName)
+    jobConf.set("mapred.output.dir", tmpPath)
+    shuffled.saveAsHadoopDataset(jobConf)
+
     null
   }
 
   def saveAsHFile(
-      rdd: RDD[(ImmutableBytesWritable, Put)],
-      jobConf: SerializableWritable[JobConf]) {
+      rdd: RDD[(SparkImmutableBytesWritable, Put)],
+      jobConf: SerializableWritable[JobConf],
+      path: String) {
+    val conf = jobConf.value
+    val job = new Job(conf)
+    job.setOutputKeyClass(classOf[SparkImmutableBytesWritable])
+    job.setOutputValueClass(classOf[Put])
+    job.setOutputFormatClass(classOf[HFileOutputFormat])
+    FileOutputFormat.setOutputPath(job, new Path(path))
+
+    val wrappedConf = new SerializableWritable(job.getConfiguration)
+    val formatter = new SimpleDateFormat("yyyyMMddHHmm")
+    val jobtrackerID = formatter.format(new Date())
+    val stageId = sqlContext.sparkContext.newRddId()
+
+
+    def getWriter(
+        outFormat: HFileOutputFormat,
+        conf: Configuration,
+        path: Path,
+        reporter: Reporter) = {
+      val hadoopShim = CompatibilitySingletonFactory.getInstance(classOf[HadoopShims])
+      val context = hadoopShim.createTestTaskAttemptContext(job, "attempt_200707121733_0001_m_000000_0")
+      outFormat.getRecordWriter(context)
+    }
     ???
   }
 
