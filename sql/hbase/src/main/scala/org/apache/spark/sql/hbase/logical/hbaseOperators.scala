@@ -16,7 +16,7 @@
  */
 package org.apache.spark.sql.hbase.logical
 
-import org.apache.spark.sql.catalyst.plans.logical.{LeafNode, Command}
+import org.apache.spark.sql.catalyst.plans.logical.{UnaryNode, LeafNode, LogicalPlan, Command}
 import org.apache.spark.sql.hbase.HBaseRelation
 
 case class CreateHBaseTablePlan(tableName: String,
@@ -29,13 +29,17 @@ case class CreateHBaseTablePlan(tableName: String,
 
 case class DropTablePlan(tableName: String) extends Command
 
+/**
+ * Logical plan for Bulkload
+ * @param path input data file path
+ * @param child target relation
+ * @param isLocal using HDFS or local file
+ */
+case class LoadDataIntoTable(path: String,
+                             child: LogicalPlan,
+                             isLocal: Boolean) extends UnaryNode {
 
-case class BulkLoadIntoTable(table: HBaseRelation, path: String) extends LeafNode  {
-  override def output = Seq.empty
-  // TODO:need resolved here?
+  override def output = Nil
 
-}
-
-case class LoadDataIntoTable(path: String, table: String, isLocal: Boolean) extends LeafNode {
-  override def output = Seq.empty
+  override def toString = s"LogicalPlan: LoadDataIntoTable(LOAD $path INTO $child)"
 }

@@ -21,7 +21,6 @@ import org.scalatest.FunSuite
 import org.apache.spark.{SparkConf, LocalSparkContext, SparkContext, Logging}
 import org.apache.hadoop.hbase.util.Bytes
 import org.apache.spark.rdd.ShuffledRDD
-
 class HBasePartitionerSuite extends FunSuite with LocalSparkContext with Logging {
 
   val conf = new SparkConf(loadDefaults = false)
