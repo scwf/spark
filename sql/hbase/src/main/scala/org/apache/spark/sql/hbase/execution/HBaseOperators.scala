@@ -98,7 +98,7 @@ case class BulkLoadIntoTable(path: String, relation: HBaseRelation, isLocal: Boo
       .asInstanceOf[Ordering[SparkImmutableBytesWritable]]
     val splitKeys = relation.getRegionStartKeys()
     val rdd = hadoopReader.makeBulkLoadRDD
-    val partitioner = new HBasePartitioner(rdd)(splitKeys)
+    val partitioner = new HBasePartitioner(rdd)(splitKeys.toArray)
     val shuffled =
       new ShuffledRDD[SparkImmutableBytesWritable, Put, Put](rdd, partitioner).setKeyOrdering(ordering)
 

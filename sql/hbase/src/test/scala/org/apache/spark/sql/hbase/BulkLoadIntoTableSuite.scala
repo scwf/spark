@@ -18,12 +18,13 @@
 package org.apache.spark.sql.hbase
 
 import org.scalatest.FunSuite
-import org.apache.spark.{SparkContext, Logging, LocalSparkContext}
-import org.apache.spark.rdd.ShuffledRDD
 import org.apache.hadoop.hbase.client.Put
 import org.apache.hadoop.hbase.mapreduce.HFileOutputFormat
 import org.apache.hadoop.mapred.JobConf
 import org.apache.hadoop.hbase.util.Bytes
+import org.apache.spark.{SparkContext, Logging, LocalSparkContext}
+import org.apache.spark.rdd.ShuffledRDD
+import org.apache.spark.SparkContext._
 
 class BulkLoadIntoTableSuite extends FunSuite with LocalSparkContext with Logging{
 
@@ -39,7 +40,7 @@ class BulkLoadIntoTableSuite extends FunSuite with LocalSparkContext with Loggin
       new SparkImmutableBytesWritable(Bytes.toBytes(r))
     }
     val rdd = hadoopReader.makeBulkLoadRDD
-    val partitioner = new HBasePartitioner(rdd)(splitKeys)
+    val partitioner = new HBasePartitioner(rdd)(splitKeys.toArray)
     val shuffled =
       new ShuffledRDD[SparkImmutableBytesWritable, Put, Put](rdd, partitioner).setKeyOrdering(ordering)
 
