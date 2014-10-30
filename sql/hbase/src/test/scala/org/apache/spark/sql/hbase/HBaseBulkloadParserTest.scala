@@ -24,9 +24,7 @@ import org.scalatest.{FunSuite, Matchers}
 
 /**
  * Test Suite for HBase bulkload feature
- * Created by jackylk on 2014/10/25.
  */
-
 class HBaseBulkloadParserTest extends FunSuite with Matchers {
 
   // Test if we can parse 'LOAD DATA LOCAL INPATH './usr/file.csv' INTO TABLE tb'
