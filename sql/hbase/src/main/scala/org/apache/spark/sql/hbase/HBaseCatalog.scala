@@ -43,10 +43,11 @@ sealed abstract class AbstractColumn {
   }
 }
 
-case class KeyColumn(sqlName: String, dataType: DataType, order: Int) extends AbstractColumn
+case class KeyColumn(val sqlName: String, val dataType: DataType, val order: Int)
+  extends AbstractColumn
 
-case class NonKeyColumn(sqlName: String, dataType: DataType, family: String, qualifier: String)
-  extends AbstractColumn {
+case class NonKeyColumn(val sqlName: String, val dataType: DataType,
+                        val family: String, val qualifier: String) extends AbstractColumn {
   @transient lazy val familyRaw = Bytes.toBytes(family)
   @transient lazy val qualifierRaw = Bytes.toBytes(qualifier)
 
@@ -150,8 +151,9 @@ private[hbase] class HBaseCatalog(@transient hbaseContext: HBaseSQLContext)
       put.add(ColumnFamily, QualHbaseName, Bytes.toBytes(result.toString))
       */
 
-      val hbaseRelation = HBaseRelation(Some(configuration), tableName
+      val hbaseRelation = HBaseRelation(tableName
         , hbaseNamespace, hbaseTableName, allColumns)
+      hbaseRelation.configuration = configuration
 
       val byteArrayOutputStream = new ByteArrayOutputStream()
       val objectOutputStream = new ObjectOutputStream(byteArrayOutputStream)
@@ -237,13 +239,9 @@ private[hbase] class HBaseCatalog(@transient hbaseContext: HBaseSQLContext)
         val value = values.getValue(ColumnFamily, QualData)
         val byteArrayInputStream = new ByteArrayInputStream(value)
         val objectInputStream = new ObjectInputStream(byteArrayInputStream)
-        val relation = objectInputStream.readObject().asInstanceOf[HBaseRelation]: HBaseRelation
-
-        val hbaseRelation = HBaseRelation(
-          Some(configuration),
-          relation.tableName, relation.hbaseNamespace, relation.hbaseTableName,
-          relation.allColumns)
-        relationMapCache.put(processTableName(tableName), hbaseRelation)
+        val hbaseRelation : HBaseRelation
+                = objectInputStream.readObject().asInstanceOf[HBaseRelation]
+        hbaseRelation.configuration = configuration
         result = Some(hbaseRelation)
       }
     }
