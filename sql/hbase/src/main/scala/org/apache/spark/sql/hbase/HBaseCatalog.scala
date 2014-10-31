@@ -61,7 +61,6 @@ private[hbase] class HBaseCatalog(@transient hbaseContext: HBaseSQLContext)
   lazy val configuration = HBaseConfiguration.create()
   lazy val relationMapCache = new HashMap[String, HBaseRelation]
     with SynchronizedMap[String, HBaseRelation]
-  lazy val connection = HConnectionManager.createConnection(configuration)
 
   private def processTableName(tableName: String): String = {
     if (!caseSensitive) {
@@ -239,8 +238,8 @@ private[hbase] class HBaseCatalog(@transient hbaseContext: HBaseSQLContext)
         val value = values.getValue(ColumnFamily, QualData)
         val byteArrayInputStream = new ByteArrayInputStream(value)
         val objectInputStream = new ObjectInputStream(byteArrayInputStream)
-        val hbaseRelation : HBaseRelation
-                = objectInputStream.readObject().asInstanceOf[HBaseRelation]
+        val hbaseRelation: HBaseRelation
+        = objectInputStream.readObject().asInstanceOf[HBaseRelation]
         hbaseRelation.configuration = configuration
         result = Some(hbaseRelation)
       }
@@ -272,18 +271,20 @@ private[hbase] class HBaseCatalog(@transient hbaseContext: HBaseSQLContext)
     relationMapCache.remove(processTableName(tableName))
   }
 
-  def createMetadataTable(admin: HBaseAdmin) = {
+  private def createMetadataTable(admin: HBaseAdmin) = {
     val descriptor = new HTableDescriptor(TableName.valueOf(MetaData))
     val columnDescriptor = new HColumnDescriptor(ColumnFamily)
     descriptor.addFamily(columnDescriptor)
     admin.createTable(descriptor)
   }
 
+  // TODO: Change to private when release
   def checkHBaseTableExists(hbaseTableName: String): Boolean = {
     val admin = new HBaseAdmin(configuration)
     admin.tableExists(hbaseTableName)
   }
 
+  // TODO: Change to private when release
   def checkLogicalTableExist(tableName: String): Boolean = {
     val admin = new HBaseAdmin(configuration)
     if (!checkHBaseTableExists(MetaData)) {
@@ -298,7 +299,7 @@ private[hbase] class HBaseCatalog(@transient hbaseContext: HBaseSQLContext)
     result.size() > 0
   }
 
-  def checkFamilyExists(hbaseTableName: String, family: String): Boolean = {
+  private def checkFamilyExists(hbaseTableName: String, family: String): Boolean = {
     val admin = new HBaseAdmin(configuration)
     val tableDescriptor = admin.getTableDescriptor(TableName.valueOf(hbaseTableName))
     tableDescriptor.hasFamily(Bytes.toBytes(family))
