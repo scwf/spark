@@ -38,18 +38,24 @@ sealed abstract class AbstractColumn {
   val sqlName: String
   val dataType: DataType
 
+  def isKeyColum(): Boolean
+
   override def toString: String = {
     s"$sqlName , $dataType.typeName"
   }
 }
 
 case class KeyColumn(val sqlName: String, val dataType: DataType, val order: Int)
-  extends AbstractColumn
+  extends AbstractColumn {
+  override def isKeyColum() = true
+}
 
 case class NonKeyColumn(val sqlName: String, val dataType: DataType,
                         val family: String, val qualifier: String) extends AbstractColumn {
   @transient lazy val familyRaw = Bytes.toBytes(family)
   @transient lazy val qualifierRaw = Bytes.toBytes(qualifier)
+
+  override def isKeyColum() = false
 
   override def toString = {
     s"$sqlName , $dataType.typeName , $family:$qualifier"
