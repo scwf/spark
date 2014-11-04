@@ -17,15 +17,12 @@
 
 package org.apache.spark.sql.hbase
 
-import java.io.{ByteArrayInputStream, ByteArrayOutputStream, DataInputStream, DataOutputStream}
+import java.io.DataOutputStream
 
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.hbase._
 import org.apache.spark.SparkContext
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution._
-import org.apache.spark.sql.hbase.HBaseCatalog._
 
 /**
  * An instance of the Spark SQL execution engine that integrates with data stored in Hive.
@@ -37,11 +34,14 @@ class HBaseSQLContext(@transient val sc: SparkContext)
 
   override protected[sql] lazy val catalog: HBaseCatalog = new HBaseCatalog(this)
 
+  // TODO: suggest to have our own planner that extends SparkPlanner,
+  // so we can reuse SparkPlanner's strategies
   @transient val hBasePlanner = new SparkPlanner with HBaseStrategies {
 
     val hbaseSQLContext = self
     SparkPlan.currentContext.set(self)
 
+    // TODO: suggest to append our strategies to parent's strategies using ::
     override val strategies: Seq[Strategy] = Seq(
       CommandStrategy(self),
       TakeOrdered,
@@ -72,6 +72,7 @@ class HBaseSQLContext(@transient val sc: SparkContext)
   protected[sql] abstract class QueryExecution extends super.QueryExecution {
   }
 
+  // TODO: can we use SparkSQLParser directly instead of HBaseSparkSQLParser?
   @transient
   override val fallback = new HBaseSQLParser
   override protected[sql] val sqlParser = {

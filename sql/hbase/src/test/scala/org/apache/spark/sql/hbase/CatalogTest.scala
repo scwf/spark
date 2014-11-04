@@ -18,10 +18,11 @@ package org.apache.spark.sql.hbase
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.hbase.client.HBaseAdmin
+import org.apache.hadoop.hbase.util.Bytes
 import org.apache.hadoop.hbase.{HBaseConfiguration, HColumnDescriptor, HTableDescriptor, TableName}
 import org.apache.spark._
 import org.apache.spark.sql.catalyst.types.{BooleanType, FloatType, IntegerType, StringType}
-import org.scalatest.{BeforeAndAfterAll, FunSuite, Ignore}
+import org.scalatest.{BeforeAndAfterAll, FunSuite}
 
 /**
  * Created by mengbo on 10/2/14.
@@ -42,6 +43,38 @@ class CatalogTest extends FunSuite with BeforeAndAfterAll with Logging {
     configuration = HBaseConfiguration.create()
   }
 
+  test("Bytes Utility") {
+    val util = new BytesUtils()
+
+    val v1: Boolean = true
+    assert(util.toBytes(v1) === Bytes.toBytes(v1))
+    assert(util.toBoolean(util.toBytes(v1)) === v1)
+
+    val v2: Double = 12.34d
+    assert(util.toBytes(v2) === Bytes.toBytes(v2))
+    assert(util.toDouble(util.toBytes(v2)) === v2)
+
+    val v3 = 12.34f
+    assert(util.toBytes(v3) === Bytes.toBytes(v3))
+    assert(util.toFloat(util.toBytes(v3)) === v3)
+
+    val v4 = 12
+    assert(util.toBytes(v4) === Bytes.toBytes(v4))
+    assert(util.toInt(util.toBytes(v4)) === v4)
+
+    val v5 = 1234l
+    assert(util.toBytes(v5) === Bytes.toBytes(v5))
+    assert(util.toLong(util.toBytes(v5)) === v5)
+
+    val v6 = 12.asInstanceOf[Short]
+    assert(util.toBytes(v6) === Bytes.toBytes(v6))
+    assert(util.toShort(util.toBytes(v6)) === v6)
+
+    val v7 = "abc"
+    assert(util.toBytes(v7) === Bytes.toBytes(v7))
+    assert(util.toString(util.toBytes(v7)) === v7)
+  }
+
   test("Create Table") {
     // prepare the test data
     val namespace = "testNamespace"
@@ -58,25 +91,13 @@ class CatalogTest extends FunSuite with BeforeAndAfterAll with Logging {
       admin.createTable(desc)
     }
 
-    var allColumns = List[KeyColumn]()
-    allColumns = allColumns :+ KeyColumn("column2", IntegerType)
-    allColumns = allColumns :+ KeyColumn("column1", StringType)
-    allColumns = allColumns :+ KeyColumn("column4", FloatType)
-    allColumns = allColumns :+ KeyColumn("column3", BooleanType)
+    var allColumns = List[AbstractColumn]()
+    allColumns = allColumns :+ KeyColumn("column2", IntegerType, 1)
+    allColumns = allColumns :+ KeyColumn("column1", StringType, 0)
+    allColumns = allColumns :+ NonKeyColumn("column4", FloatType, family2, "qualifier2")
+    allColumns = allColumns :+ NonKeyColumn("column3", BooleanType, family1, "qualifier1")
 
-    val keyColumn1 = KeyColumn("column1", StringType)
-    val keyColumn2 = KeyColumn("column2", IntegerType)
-    var keyColumns = List[KeyColumn]()
-    keyColumns = keyColumns :+ keyColumn1
-    keyColumns = keyColumns :+ keyColumn2
-
-    val nonKeyColumn3 = NonKeyColumn("column3", BooleanType, family1, "qualifier1")
-    val nonKeyColumn4 = NonKeyColumn("column4", FloatType, family2, "qualifier2")
-    var nonKeyColumns = List[NonKeyColumn]()
-    nonKeyColumns = nonKeyColumns :+ nonKeyColumn3
-    nonKeyColumns = nonKeyColumns :+ nonKeyColumn4
-
-    catalog.createTable(tableName, namespace, hbaseTableName, allColumns, keyColumns, nonKeyColumns)
+    catalog.createTable(tableName, namespace, hbaseTableName, allColumns)
   }
 
   test("Get Table") {
@@ -98,13 +119,13 @@ class CatalogTest extends FunSuite with BeforeAndAfterAll with Logging {
     // check the data type
     assert(result.keyColumns(0).dataType === StringType)
     assert(result.keyColumns(1).dataType === IntegerType)
-    assert(result.nonKeyColumns(0).dataType === BooleanType)
-    assert(result.nonKeyColumns(1).dataType === FloatType)
+    assert(result.nonKeyColumns(0).dataType === FloatType)
+    assert(result.nonKeyColumns(1).dataType === BooleanType)
 
     val relation = catalog.lookupRelation(None, tableName)
     val hbRelation = relation.asInstanceOf[HBaseRelation]
-    assert(hbRelation.nonKeyColumns.map(_.family) == List("family1", "family2"))
-    val keyColumns = Seq(KeyColumn("column1", StringType), KeyColumn("column2", IntegerType))
+    assert(hbRelation.nonKeyColumns.map(_.family) == List("family2", "family1"))
+    val keyColumns = Seq(KeyColumn("column1", StringType, 0), KeyColumn("column2", IntegerType, 1))
     assert(hbRelation.keyColumns.equals(keyColumns))
     assert(relation.childrenResolved)
   }
