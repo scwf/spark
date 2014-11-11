@@ -136,7 +136,8 @@ case class InsertIntoHBaseTable(
 }
 
 @DeveloperApi
-case class BulkLoadIntoTable(path: String, relation: HBaseRelation, isLocal: Boolean)(
+case class BulkLoadIntoTable(path: String, relation: HBaseRelation,
+                             isLocal: Boolean, delimiter: Option[String])(
   @transient hbContext: HBaseSQLContext) extends LeafNode {
 
   val conf = hbContext.sc.hadoopConfiguration
@@ -216,6 +217,7 @@ case class BulkLoadIntoTable(path: String, relation: HBaseRelation, isLocal: Boo
   }
 
   override def execute() = {
+    hbContext.sc.getConf.set("spark.sql.hbase.bulkload.textfile.splitRegex", delimiter.get)
     val splitKeys = relation.getRegionStartKeys().toArray
     makeBulkLoadRDD(splitKeys)
     val hbaseConf = HBaseConfiguration.create
