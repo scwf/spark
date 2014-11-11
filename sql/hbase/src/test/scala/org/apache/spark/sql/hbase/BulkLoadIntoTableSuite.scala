@@ -70,7 +70,6 @@ class BulkLoadIntoTableSuite extends FunSuite with BeforeAndAfterAll with Loggin
     assert(r.tableName.equals("tb"))
   }
 
-<<<<<<< HEAD
   test("bulkload parser test, using delimiter") {
 
     val parser = new HBaseSQLParser()
