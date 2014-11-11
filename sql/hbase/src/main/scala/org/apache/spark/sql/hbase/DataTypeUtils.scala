@@ -26,16 +26,31 @@ import org.apache.spark.sql.catalyst.types._
  */
 object DataTypeUtils {
   //  TODO: more data types support?
+  def bytesToData (src: HBaseRawType,
+                  dt: DataType,
+                  bu: BytesUtils): Any = {
+    dt match {
+      case StringType => bu.toString(src)
+      case IntegerType => bu.toInt(src)
+      case BooleanType => bu.toBoolean(src)
+      case ByteType => src(0)
+      case DoubleType => bu.toDouble(src)
+      case FloatType => bu.toFloat(src)
+      case LongType => bu.toLong(src)
+      case ShortType => bu.toShort(src)
+      case _ => throw new Exception("Unsupported HBase SQL Data Type")
+    }
+  }
   def setRowColumnFromHBaseRawType(row: MutableRow,
                                    index: Int,
                                    src: HBaseRawType,
                                    dt: DataType,
-                                   bu: BytesUtils): Any = {
+                                   bu: BytesUtils): Unit = {
     dt match {
       case StringType => row.setString(index, bu.toString(src))
       case IntegerType => row.setInt(index, bu.toInt(src))
       case BooleanType => row.setBoolean(index, bu.toBoolean(src))
-      case ByteType => row.setByte(index, src(0))
+      case ByteType => row.setByte(index, bu.toByte(src))
       case DoubleType => row.setDouble(index, bu.toDouble(src))
       case FloatType => row.setFloat(index, bu.toFloat(src))
       case LongType => row.setLong(index, bu.toLong(src))

@@ -18,7 +18,6 @@ package org.apache.spark.sql.hbase
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.hbase.client.HBaseAdmin
-import org.apache.hadoop.hbase.util.Bytes
 import org.apache.hadoop.hbase.{HBaseConfiguration, HColumnDescriptor, HTableDescriptor, TableName}
 import org.apache.spark._
 import org.apache.spark.sql.catalyst.types.{BooleanType, FloatType, IntegerType, StringType}
@@ -43,36 +42,41 @@ class CatalogTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
     configuration = HBaseConfiguration.create()
   }
 
+  def compare(a: Array[Byte], b: Array[Byte]): Int = {
+    val length = a.length
+    var result: Int = 0
+    for (i <- 0 to length - 1) {
+      val diff: Int = b(i) - a(i)
+      if (diff != 0) {
+        result = diff
+      }
+    }
+    result
+  }
+
   test("Bytes Utility") {
-    val util = new BytesUtils()
+    assert((new BytesUtils).toBoolean((new BytesUtils).toBytes(true)) === true)
+    assert((new BytesUtils).toBoolean((new BytesUtils).toBytes(false)) === false)
 
-    val v1: Boolean = true
-    assert(util.toBytes(v1) === Bytes.toBytes(v1))
-    assert(util.toBoolean(util.toBytes(v1)) === v1)
+    assert((new BytesUtils).toDouble((new BytesUtils).toBytes(12.34d)) === 12.34d)
+    assert((new BytesUtils).toDouble((new BytesUtils).toBytes(-12.34d)) === -12.34d)
 
-    val v2: Double = 12.34d
-    assert(util.toBytes(v2) === Bytes.toBytes(v2))
-    assert(util.toDouble(util.toBytes(v2)) === v2)
+    assert((new BytesUtils).toFloat((new BytesUtils).toBytes(12.34f)) === 12.34f)
+    assert((new BytesUtils).toFloat((new BytesUtils).toBytes(-12.34f)) === -12.34f)
 
-    val v3 = 12.34f
-    assert(util.toBytes(v3) === Bytes.toBytes(v3))
-    assert(util.toFloat(util.toBytes(v3)) === v3)
+    assert((new BytesUtils).toInt((new BytesUtils).toBytes(12)) === 12)
+    assert((new BytesUtils).toInt((new BytesUtils).toBytes(-12)) === -12)
 
-    val v4 = 12
-    assert(util.toBytes(v4) === Bytes.toBytes(v4))
-    assert(util.toInt(util.toBytes(v4)) === v4)
+    assert((new BytesUtils).toLong((new BytesUtils).toBytes(1234l)) === 1234l)
+    assert((new BytesUtils).toLong((new BytesUtils).toBytes(-1234l)) === -1234l)
 
-    val v5 = 1234l
-    assert(util.toBytes(v5) === Bytes.toBytes(v5))
-    assert(util.toLong(util.toBytes(v5)) === v5)
+    assert((new BytesUtils).toShort((new BytesUtils).toBytes(12.asInstanceOf[Short])) === 12)
+    assert((new BytesUtils).toShort((new BytesUtils).toBytes(-12.asInstanceOf[Short])) === -12)
 
-    val v6 = 12.asInstanceOf[Short]
-    assert(util.toBytes(v6) === Bytes.toBytes(v6))
-    assert(util.toShort(util.toBytes(v6)) === v6)
+    assert((new BytesUtils).toString((new BytesUtils).toBytes("abc")) === "abc")
 
-    val v7 = "abc"
-    assert(util.toBytes(v7) === Bytes.toBytes(v7))
-    assert(util.toString(util.toBytes(v7)) === v7)
+    assert((new BytesUtils).toByte((new BytesUtils).toBytes(5.asInstanceOf[Byte])) === 5)
+    assert((new BytesUtils).toByte((new BytesUtils).toBytes(-5.asInstanceOf[Byte])) === -5)
   }
 
   test("Create Table") {

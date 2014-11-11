@@ -70,6 +70,7 @@ class BulkLoadIntoTableSuite extends FunSuite with BeforeAndAfterAll with Loggin
     assert(r.tableName.equals("tb"))
   }
 
+<<<<<<< HEAD
   test("bulkload parser test, using delimiter") {
 
     val parser = new HBaseSQLParser()
@@ -88,7 +89,7 @@ class BulkLoadIntoTableSuite extends FunSuite with BeforeAndAfterAll with Loggin
     assert(l.delimiter.get.equals("|"))
   }
 
-  test("write data to HFile") {
+  ignore("write data to HFile") {
     val colums = Seq(new KeyColumn("k1", IntegerType, 0), new NonKeyColumn("v1", IntegerType, "cf1", "c1"))
     val hbaseRelation = HBaseRelation("testtablename", "hbasenamespace", "hbasetablename", colums)
     val bulkLoad = BulkLoadIntoTable("./sql/hbase/src/test/resources/test.csv", hbaseRelation, true, Option(","))(hbc)
