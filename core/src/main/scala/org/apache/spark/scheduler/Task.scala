@@ -17,13 +17,16 @@
 
 package org.apache.spark.scheduler
 
-import java.io.{ByteArrayOutputStream, DataInputStream, DataOutputStream}
+import java.io.{ByteArrayOutputStream, DataInputStream, DataOutputStream,
+                ObjectOutputStream, ObjectInputStream}
 import java.nio.ByteBuffer
+import java.util.concurrent.ConcurrentHashMap
 
 import scala.collection.mutable.HashMap
 
 import org.apache.spark.TaskContext
-import org.apache.spark.executor.TaskMetrics
+import org.apache.spark.ExtResource
+import org.apache.spark.executor.{TaskMetrics, Executor}
 import org.apache.spark.serializer.SerializerInstance
 import org.apache.spark.util.ByteBufferInputStream
 import org.apache.spark.util.Utils
@@ -45,7 +48,12 @@ import org.apache.spark.util.Utils
 private[spark] abstract class Task[T](val stageId: Int, var partitionId: Int) extends Serializable {
 
   final def run(attemptId: Long): T = {
-    context = new TaskContext(stageId, partitionId, attemptId, runningLocally = false)
+    //sma : debug
+    println(s"++++ Task instance : $this")
+    val rs = this.resources.getOrElse(new ConcurrentHashMap[String, Pair[ExtResource[_], Long]]()).size
+    println(s"++++ # resources in task is $rs")
+    context = new TaskContext(stageId, partitionId, attemptId,
+      false, this.resources, this.executorId, this.slaveHostname)
     context.taskMetrics.hostname = Utils.localHostName()
     taskThread = Thread.currentThread()
     if (_killed) {
@@ -72,6 +80,10 @@ private[spark] abstract class Task[T](val stageId: Int, var partitionId: Int) ex
   // A flag to indicate whether the task is killed. This is used in case context is not yet
   // initialized when kill() is invoked.
   @volatile @transient private var _killed = false
+
+  @transient var resources : Option[ConcurrentHashMap[String, Pair[ExtResource[_], Long]]] = None
+  @transient var executorId : Option[String] = None
+  @transient var slaveHostname : Option[String] = None
 
   /**
    * Whether the task has been killed.
@@ -110,11 +122,12 @@ private[spark] object Task {
       task: Task[_],
       currentFiles: HashMap[String, Long],
       currentJars: HashMap[String, Long],
+      currentExtResources: HashMap[ExtResource[_], Long],
       serializer: SerializerInstance)
     : ByteBuffer = {
 
     val out = new ByteArrayOutputStream(4096)
-    val dataOut = new DataOutputStream(out)
+    val dataOut = new ObjectOutputStream(out)
 
     // Write currentFiles
     dataOut.writeInt(currentFiles.size)
@@ -127,6 +140,14 @@ private[spark] object Task {
     dataOut.writeInt(currentJars.size)
     for ((name, timestamp) <- currentJars) {
       dataOut.writeUTF(name)
+      dataOut.writeLong(timestamp)
+    }
+
+    // Write currentExtResources
+    // If the init/term closures are big, serde per task won't be efficient
+    dataOut.writeInt(currentExtResources.size)
+    for ((resource, timestamp) <- currentExtResources) {
+      dataOut.writeObject(resource)
       dataOut.writeLong(timestamp)
     }
 
@@ -145,10 +166,11 @@ private[spark] object Task {
    * @return (taskFiles, taskJars, taskBytes)
    */
   def deserializeWithDependencies(serializedTask: ByteBuffer)
-    : (HashMap[String, Long], HashMap[String, Long], ByteBuffer) = {
+    : (HashMap[String, Long], HashMap[String, Long], 
+       HashMap[ExtResource[_], Long], ByteBuffer) = {
 
     val in = new ByteBufferInputStream(serializedTask)
-    val dataIn = new DataInputStream(in)
+    val dataIn = new ObjectInputStream(in)
 
     // Read task's files
     val taskFiles = new HashMap[String, Long]()
@@ -164,8 +186,17 @@ private[spark] object Task {
       taskJars(dataIn.readUTF()) = dataIn.readLong()
     }
 
+    // Read task's external resources
+    // If the init/term closures are big, serde per task won't be efficient
+    val taskResources = new HashMap[ExtResource[_], Long]()
+    val numResources = dataIn.readInt()
+    for (i <- 0 until numResources) {
+      val ob = dataIn.readObject()
+      taskResources(dataIn.readObject().asInstanceOf[ExtResource[_]]) = dataIn.readLong()
+    }
+
     // Create a sub-buffer for the rest of the data, which is the serialized Task object
     val subBuffer = serializedTask.slice()  // ByteBufferInputStream will have read just up to task
-    (taskFiles, taskJars, subBuffer)
+    (taskFiles, taskJars, taskResources, subBuffer)
   }
 }

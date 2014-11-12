@@ -15,30 +15,26 @@
  * limitations under the License.
  */
 
-package org.apache.spark
+package org.apache.spark.rdd
 
-import org.scalatest.BeforeAndAfterAll
-import org.scalatest.Suite
+import org.apache.spark._
+import org.apache.spark.annotation.DeveloperApi
+import org.apache.spark.scheduler.TaskLocation
+import scala.collection.mutable.ArrayBuffer
 
-/** Shares a local `SparkContext` between all tests in a suite and closes it at the end */
-trait SharedSparkContext extends BeforeAndAfterAll { self: Suite =>
 
-  @transient private var _sc: SparkContext = _
 
-  def sc: SparkContext = _sc
+class ExtResourceListRDD(
+    sc: SparkContext)
+  extends AdminRDD[ExtResourceInfo](sc) {
+  override def compute(split: Partition, context: TaskContext): Iterator[ExtResourceInfo] =
+    context.getExtResourceUsageInfo
+}
 
-  var conf = new SparkConf(false)
-
-  override def beforeAll() {
-//    _sc = new SparkContext("spark://127.0.0.1:7077", "test", conf)
-//    _sc = new SparkContext("local-cluster[3, 1, 512]", "test", conf)
-    _sc = new SparkContext("local", "test", conf)
-    super.beforeAll()
-  }
-
-  override def afterAll() {
-    LocalSparkContext.stop(_sc)
-    _sc = null
-    super.afterAll()
-  }
+class ExtResourceCleanupRDD(
+    sc: SparkContext,
+    resourceName: Option[String] = None)
+  extends AdminRDD[String](sc) {
+  override def compute(split: Partition, context: TaskContext): Iterator[String]=
+    context.cleanupResources(resourceName)
 }

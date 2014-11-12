@@ -17,7 +17,9 @@
 
 package org.apache.spark
 
-import scala.collection.mutable.ArrayBuffer
+import java.util.concurrent.ConcurrentHashMap
+import scala.collection.JavaConversions.mapAsScalaMap
+import scala.collection.mutable.{ArrayBuffer, HashMap}
 
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.executor.TaskMetrics
@@ -40,8 +42,10 @@ class TaskContext(
     val partitionId: Int,
     val attemptId: Long,
     val runningLocally: Boolean = false,
-    private[spark] val taskMetrics: TaskMetrics = TaskMetrics.empty)
-  extends Serializable {
+    val resources: Option[ConcurrentHashMap[String, Pair[ExtResource[_], Long]]] = None,
+    val executorId: Option[String] = None,
+    val slaveHostname: Option[String] = None,
+    private[spark] val taskMetrics: TaskMetrics = TaskMetrics.empty)extends Serializable {
 
   @deprecated("use partitionId", "0.8.1")
   def splitId = partitionId
@@ -110,5 +114,51 @@ class TaskContext(
   /** Marks the task for interruption, i.e. cancellation. */
   private[spark] def markInterrupted(): Unit = {
     interrupted = true
+  }
+
+  def getExtResourceUsageInfo() : Iterator[ExtResourceInfo] = {
+    synchronized {
+      //sma : debug
+//      println("++++ sma : getExtResourceUsageInfo")
+//      if(!resources.isDefined) println("++++ !resources.isDefined")
+//      if(!slaveHostname.isDefined) println("++++ slaveHostname.isDefined")
+//      if(!executorId.isDefined) println("++++ executorId.isDefined")
+
+      if (resources.isDefined && slaveHostname.isDefined
+        && executorId.isDefined){
+//      if (resources.isDefined){
+        val res = resources.get.size
+        println(s"++++ sma : resources size : $res")
+        val smap = mapAsScalaMap(resources.get)
+        smap.map(r=>r._2._1.getResourceInfo(slaveHostname.get,
+                    executorId.get, r._2._2)).toIterator
+      }
+      else{
+      //sma : debug
+        println(s"++++ sma : resources or slaveHostname or executorId is not defined")
+        ArrayBuffer[ExtResourceInfo]().toIterator
+      }
+    }
+  }
+
+  def cleanupResources(resourceName: Option[String]) : Iterator[String] = {
+    synchronized {
+      if (!resources.isDefined)
+        ArrayBuffer[String]("No external resources available to tasks for Executor %s at %s"
+          .format(executorId, slaveHostname)).toIterator
+      else if (resources.get.isEmpty) {
+        ArrayBuffer[String]("No external resources registered for Executor %s at %s"
+          .format(executorId, slaveHostname)).toIterator
+      } else if (resourceName.isDefined) {
+        if (resources.get.contains(resourceName.get))
+          ArrayBuffer[String](resources.get.get(resourceName.get)
+            ._1.cleanup(slaveHostname.get, executorId.get)).toIterator
+        else
+          ArrayBuffer[String]("No external resources %s registered for Executor %s at %s"
+           .format(resourceName.get, executorId.get, slaveHostname.get)).toIterator
+      } else {
+        resources.get.map(_._2._1.cleanup(slaveHostname.get, executorId.get)).toIterator
+      }
+    }
   }
 }
