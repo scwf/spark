@@ -19,28 +19,5 @@ package org.apache.spark
 
 import scala.collection.mutable.{HashMap, Stack}
 
-
 class ExternalResourceManager {
-  // resource name -> resource class name
-  val resourceNameByClass = new HashMap[String, String]
-
-  // resources, a Map of resource name -> resource stack
-  val resources = new HashMap[String, Stack[ExternalResource]]
-
-  def addResources(resourceName: String, className: String): Unit = {
-    resourceNameByClass(resourceName) = className
-    resources(resourceName) = new Stack[ExternalResource]
-  }
-
-  // ask for a resource
-  def askResource(name: String): ExternalResource = synchronized {
-    assert(resources.get(name) != None, s"resources stack for $name is None")
-    resources.get(name).get.pop()
-  }
-
-  // return resource
-  def retResource(name: String, resource: ExternalResource): Unit = synchronized {
-    assert(resources.get(name) != None, s"resources stack for $name is None")
-    resources.get(name).get.push(resource)
-  }
 }

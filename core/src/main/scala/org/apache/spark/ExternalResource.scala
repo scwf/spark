@@ -17,13 +17,13 @@
 
 package org.apache.spark
 
-abstract class ExternalResource[T] extends Serializable with Logging{
-  // initialize a resource T
-  def initialize: Unit
+case class ExternalResource[T](
+    name: String,
+    shared: Boolean = false,
+    params: Seq[_],
+    init: (Int, Seq[_]) => T = null,  // Initialization function
+    term: (Int, T, Seq[_]) => Unit = null,  // Termination function
+    partitionAffined: Boolean = false, // partition speficication preferred
+    expiration: Int = -1) extends Serializable  {
 
-  // stop the resource
-  def stop: Unit
-
-  // return this resource
-  def getResource: T
 }
