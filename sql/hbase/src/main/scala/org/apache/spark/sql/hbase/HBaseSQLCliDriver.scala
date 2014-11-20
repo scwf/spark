@@ -123,8 +123,9 @@ object HBaseSQLCLIDriver {
 
   private def processCmd(line: String) = {
     val cmd = line.trim.toLowerCase
-    if (cmd.startsWith("quit") || cmd.startsWith("exit"))
+    if (cmd.startsWith("quit") || cmd.startsWith("exit")) {
       System.exit(0)
+    }
 
     //TODO: add support for bash command startwith !\
   }
