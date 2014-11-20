@@ -425,7 +425,9 @@ private[parquet] object ParquetTypesConverter extends Logging {
    * @param configuration The Hadoop configuration to use.
    * @return The `ParquetMetadata` containing among other things the schema.
    */
-  def readMetaData(origPath: Path, configuration: Option[Configuration]): ParquetMetadata = {
+  def readMetaData(
+      origPath: Path,
+      configuration: Option[Configuration]): Option[ParquetMetadata] = {
     if (origPath == null) {
       throw new IllegalArgumentException("Unable to read Parquet metadata: path is null")
     }
@@ -455,8 +457,6 @@ private[parquet] object ParquetTypesConverter extends Logging {
       // empty, thus normally the "_metadata" file is expected to be fairly small).
       .orElse(children.find(_.getPath.getName == ParquetFileWriter.PARQUET_METADATA_FILE))
       .map(ParquetFileReader.readFooter(conf, _))
-      .getOrElse(
-        throw new IllegalArgumentException(s"Could not find Parquet metadata at path $path"))
   }
 
   /**
@@ -473,15 +473,16 @@ private[parquet] object ParquetTypesConverter extends Logging {
       origPath: Path,
       conf: Option[Configuration],
       isBinaryAsString: Boolean): Seq[Attribute] = {
-    val keyValueMetadata: java.util.Map[String, String] =
-      readMetaData(origPath, conf)
-        .getFileMetaData
-        .getKeyValueMetaData
+    val meta = readMetaData(origPath, conf).get
+    if (meta == null) {
+      return Seq.empty
+    }
+
+    val keyValueMetadata: java.util.Map[String, String] = meta.getFileMetaData.getKeyValueMetaData
     if (keyValueMetadata.get(RowReadSupport.SPARK_METADATA_KEY) != null) {
       convertFromString(keyValueMetadata.get(RowReadSupport.SPARK_METADATA_KEY))
     } else {
-      val attributes = convertToAttributes(
-        readMetaData(origPath, conf).getFileMetaData.getSchema, isBinaryAsString)
+      val attributes = convertToAttributes(meta.getFileMetaData.getSchema, isBinaryAsString)
       log.info(s"Falling back to schema conversion from Parquet types; result: $attributes")
       attributes
     }

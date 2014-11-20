@@ -56,8 +56,8 @@ private[sql] case class ParquetRelation(
   def parquetSchema: MessageType =
     ParquetTypesConverter
       .readMetaData(new Path(path), conf)
-      .getFileMetaData
-      .getSchema
+      .map(_.getFileMetaData.getSchema)
+      .getOrElse(null)
 
   /** Attributes */
   override val output =
