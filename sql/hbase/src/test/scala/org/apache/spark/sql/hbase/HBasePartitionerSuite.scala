@@ -21,7 +21,6 @@ import org.apache.hadoop.hbase.{HColumnDescriptor, TableName, HTableDescriptor}
 import org.apache.hadoop.hbase.client.HBaseAdmin
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.types._
-import org.apache.spark.sql.parquet.{OrFilter, AndFilter, ComparisonFilter, ParquetFilters}
 import org.scalatest.FunSuite
 import org.apache.hadoop.hbase.util.Bytes
 import org.apache.spark.rdd.ShuffledRDD

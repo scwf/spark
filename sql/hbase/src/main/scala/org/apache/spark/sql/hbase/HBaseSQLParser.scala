@@ -31,7 +31,7 @@ class HBaseSQLParser extends SqlParser {
   protected val COLS = Keyword("COLS")
   protected val CREATE = Keyword("CREATE")
   protected val DATA = Keyword("DATA")
-  protected val DOUBLE = Keyword("DOUBLE")
+//  protected val DOUBLE = Keyword("DOUBLE")
   protected val DROP = Keyword("DROP")
   protected val EXISTS = Keyword("EXISTS")
   protected val FIELDS = Keyword("FIELDS")

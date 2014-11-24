@@ -17,15 +17,12 @@
 package org.apache.spark.sql.hbase.catalyst.types
 
 import java.sql.Timestamp
-
-import org.apache.spark.sql.catalyst.types._
-import org.apache.spark.util.Utils
-
 import scala.collection.immutable.HashMap
 import scala.language.implicitConversions
 import scala.math.PartialOrdering
-import scala.reflect.ClassTag
-import scala.reflect.runtime.universe.{TypeTag, runtimeMirror, typeTag}
+import scala.reflect.runtime.universe.typeTag
+
+import org.apache.spark.sql.catalyst.types._
 
 class Range[T](val start: Option[T], // None for open ends
                val startInclusive: Boolean,
@@ -68,7 +65,8 @@ class RangeType[T] extends PartiallyOrderingDataType {
     case s: Short => new Range[Short](Some(s), true, Some(s), true, ShortType)
     case s: String => new Range[String](Some(s), true, Some(s), true, StringType)
     case b: Boolean => new Range[Boolean](Some(b), true, Some(b), true, BooleanType)
-    case d: BigDecimal => new Range[BigDecimal](Some(d), true, Some(d), true, DecimalType)
+    // todo: fix bigdecimal issue, now this will leads to comile error
+    //case d: BigDecimal => new Range[BigDecimal](Some(d), true, Some(d), true, DecimalType)
     case t: Timestamp => new Range[Timestamp](Some(t), true, Some(t), true, TimestampType)
     case _ => s
   }
@@ -197,6 +195,6 @@ object RangeType {
     HashMap(IntegerType -> IntegerRangeType, LongType -> LongRangeType,
       DoubleType -> DoubleRangeType, FloatType -> FloatRangeType,
       ByteType -> ByteRangeType, ShortType -> ShortRangeType,
-      BooleanType -> BooleanRangeType, DecimalType -> DecimalRangeType,
+      BooleanType -> BooleanRangeType, //DecimalType -> DecimalRangeType,
       TimestampType -> TimestampRangeType)
 }

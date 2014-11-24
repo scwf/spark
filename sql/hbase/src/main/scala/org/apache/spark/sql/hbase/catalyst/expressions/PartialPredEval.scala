@@ -85,7 +85,7 @@ object PartialPredicateOperations {
             }
           }
         }
-        case InSet(value, hset, child) => {
+        case InSet(value, hset) => {
           val evaluatedValue = value.partialEval(input)
           if (evaluatedValue == null) {
             null

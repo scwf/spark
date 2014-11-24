@@ -117,4 +117,3 @@ if "%DONT_PRINT_CLASSPATH%"=="1" goto exit
 echo %CLASSPATH%
 
 :exit
->>>>>>> master
