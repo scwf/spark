@@ -40,29 +40,137 @@ class JobProgressListener(conf: SparkConf) extends SparkListener with Logging {
 
   import JobProgressListener._
 
-  // How many stages to remember
-  val retainedStages = conf.getInt("spark.ui.retainedStages", DEFAULT_RETAINED_STAGES)
+  // Define a handful of type aliases so that data structures' types can serve as documentation.
+  // These type aliases are public because they're used in the types of public fields:
 
-  // Map from stageId to StageInfo
-  val activeStages = new HashMap[Int, StageInfo]
+  type JobId = Int
+  type StageId = Int
+  type StageAttemptId = Int
+  type PoolName = String
+  type ExecutorId = String
 
-  // Map from (stageId, attemptId) to StageUIData
-  val stageIdToData = new HashMap[(Int, Int), StageUIData]
+  // Define all of our state:
 
+  // Jobs:
+  val activeJobs = new HashMap[JobId, JobUIData]
+  val completedJobs = ListBuffer[JobUIData]()
+  val failedJobs = ListBuffer[JobUIData]()
+  val jobIdToData = new HashMap[JobId, JobUIData]
+
+  // Stages:
+  val activeStages = new HashMap[StageId, StageInfo]
   val completedStages = ListBuffer[StageInfo]()
   val failedStages = ListBuffer[StageInfo]()
+  val stageIdToData = new HashMap[(StageId, StageAttemptId), StageUIData]
+  val stageIdToInfo = new HashMap[StageId, StageInfo]
+  val poolToActiveStages = HashMap[PoolName, HashMap[StageId, StageInfo]]()
+  // Total of completed and failed stages that have ever been run.  These may be greater than
+  // `completedStages.size` and `failedStages.size` if we have run more stages or jobs than
+  // JobProgressListener's retention limits.
+  var numCompletedStages = 0
+  var numFailedStages = 0
 
-  // Map from pool name to a hash map (map from stage id to StageInfo).
-  val poolToActiveStages = HashMap[String, HashMap[Int, StageInfo]]()
-
-  val executorIdToBlockManagerId = HashMap[String, BlockManagerId]()
+  // Misc:
+  val executorIdToBlockManagerId = HashMap[ExecutorId, BlockManagerId]()
+  def blockManagerIds = executorIdToBlockManagerId.values.toSeq
 
   var schedulingMode: Option[SchedulingMode] = None
 
-  def blockManagerIds = executorIdToBlockManagerId.values.toSeq
+  // To limit the total memory usage of JobProgressListener, we only track information for a fixed
+  // number of non-active jobs and stages (there is no limit for active jobs and stages):
+
+  val retainedStages = conf.getInt("spark.ui.retainedStages", DEFAULT_RETAINED_STAGES)
+  val retainedJobs = conf.getInt("spark.ui.retainedJobs", DEFAULT_RETAINED_JOBS)
+
+  // We can test for memory leaks by ensuring that collections that track non-active jobs and
+  // stages do not grow without bound and that collections for active jobs/stages eventually become
+  // empty once Spark is idle.  Let's partition our collections into ones that should be empty
+  // once Spark is idle and ones that should have a hard- or soft-limited sizes.
+  // These methods are used by unit tests, but they're defined here so that people don't forget to
+  // update the tests when adding new collections.  Some collections have multiple levels of
+  // nesting, etc, so this lets us customize our notion of "size" for each structure:
+
+  // These collections should all be empty once Spark is idle (no active stages / jobs):
+  private[spark] def getSizesOfActiveStateTrackingCollections: Map[String, Int] = {
+    Map(
+      "activeStages" -> activeStages.size,
+      "activeJobs" -> activeJobs.size,
+      "poolToActiveStages" -> poolToActiveStages.values.map(_.size).sum
+    )
+  }
+
+  // These collections should stop growing once we have run at least `spark.ui.retainedStages`
+  // stages and `spark.ui.retainedJobs` jobs:
+  private[spark] def getSizesOfHardSizeLimitedCollections: Map[String, Int] = {
+    Map(
+      "completedJobs" -> completedJobs.size,
+      "failedJobs" -> failedJobs.size,
+      "completedStages" -> completedStages.size,
+      "failedStages" -> failedStages.size
+    )
+  }
+  
+  // These collections may grow arbitrarily, but once Spark becomes idle they should shrink back to
+  // some bound based on the `spark.ui.retainedStages` and `spark.ui.retainedJobs` settings:
+  private[spark] def getSizesOfSoftSizeLimitedCollections: Map[String, Int] = {
+    Map(
+      "jobIdToData" -> jobIdToData.size,
+      "stageIdToData" -> stageIdToData.size,
+      "stageIdToStageInfo" -> stageIdToInfo.size
+    )
+  }
+
+  /** If stages is too large, remove and garbage collect old stages */
+  private def trimStagesIfNecessary(stages: ListBuffer[StageInfo]) = synchronized {
+    if (stages.size > retainedStages) {
+      val toRemove = math.max(retainedStages / 10, 1)
+      stages.take(toRemove).foreach { s =>
+        stageIdToData.remove((s.stageId, s.attemptId))
+        stageIdToInfo.remove(s.stageId)
+      }
+      stages.trimStart(toRemove)
+    }
+  }
+
+  /** If jobs is too large, remove and garbage collect old jobs */
+  private def trimJobsIfNecessary(jobs: ListBuffer[JobUIData]) = synchronized {
+    if (jobs.size > retainedJobs) {
+      val toRemove = math.max(retainedJobs / 10, 1)
+      jobs.take(toRemove).foreach { job =>
+        jobIdToData.remove(job.jobId)
+      }
+      jobs.trimStart(toRemove)
+    }
+  }
+
+  override def onJobStart(jobStart: SparkListenerJobStart) = synchronized {
+    val jobGroup = Option(jobStart.properties).map(_.getProperty(SparkContext.SPARK_JOB_GROUP_ID))
+    val jobData: JobUIData =
+      new JobUIData(jobStart.jobId, jobStart.stageIds, jobGroup, JobExecutionStatus.RUNNING)
+    jobIdToData(jobStart.jobId) = jobData
+    activeJobs(jobStart.jobId) = jobData
+  }
+
+  override def onJobEnd(jobEnd: SparkListenerJobEnd) = synchronized {
+    val jobData = activeJobs.remove(jobEnd.jobId).getOrElse {
+      logWarning(s"Job completed for unknown job ${jobEnd.jobId}")
+      new JobUIData(jobId = jobEnd.jobId)
+    }
+    jobEnd.jobResult match {
+      case JobSucceeded =>
+        completedJobs += jobData
+        trimJobsIfNecessary(completedJobs)
+        jobData.status = JobExecutionStatus.SUCCEEDED
+      case JobFailed(exception) =>
+        failedJobs += jobData
+        trimJobsIfNecessary(failedJobs)
+        jobData.status = JobExecutionStatus.FAILED
+    }
+  }
 
   override def onStageCompleted(stageCompleted: SparkListenerStageCompleted) = synchronized {
     val stage = stageCompleted.stageInfo
+    stageIdToInfo(stage.stageId) = stage
     val stageData = stageIdToData.getOrElseUpdate((stage.stageId, stage.attemptId), {
       logWarning("Stage completed for unknown stage " + stage.stageId)
       new StageUIData
@@ -78,19 +186,12 @@ class JobProgressListener(conf: SparkConf) extends SparkListener with Logging {
     activeStages.remove(stage.stageId)
     if (stage.failureReason.isEmpty) {
       completedStages += stage
-      trimIfNecessary(completedStages)
+      numCompletedStages += 1
+      trimStagesIfNecessary(completedStages)
     } else {
       failedStages += stage
-      trimIfNecessary(failedStages)
-    }
-  }
-
-  /** If stages is too large, remove and garbage collect old stages */
-  private def trimIfNecessary(stages: ListBuffer[StageInfo]) = synchronized {
-    if (stages.size > retainedStages) {
-      val toRemove = math.max(retainedStages / 10, 1)
-      stages.take(toRemove).foreach { s => stageIdToData.remove((s.stageId, s.attemptId)) }
-      stages.trimStart(toRemove)
+      numFailedStages += 1
+      trimStagesIfNecessary(failedStages)
     }
   }
 
@@ -103,6 +204,7 @@ class JobProgressListener(conf: SparkConf) extends SparkListener with Logging {
       p => p.getProperty("spark.scheduler.pool", DEFAULT_POOL_NAME)
     }.getOrElse(DEFAULT_POOL_NAME)
 
+    stageIdToInfo(stage.stageId) = stage
     val stageData = stageIdToData.getOrElseUpdate((stage.stageId, stage.attemptId), new StageUIData)
     stageData.schedulingPool = poolName
 
@@ -214,6 +316,12 @@ class JobProgressListener(conf: SparkConf) extends SparkListener with Logging {
     stageData.inputBytes += inputBytesDelta
     execSummary.inputBytes += inputBytesDelta
 
+    val outputBytesDelta =
+      (taskMetrics.outputMetrics.map(_.bytesWritten).getOrElse(0L)
+        - oldMetrics.flatMap(_.outputMetrics).map(_.bytesWritten).getOrElse(0L))
+    stageData.outputBytes += outputBytesDelta
+    execSummary.outputBytes += outputBytesDelta
+
     val diskSpillDelta =
       taskMetrics.diskBytesSpilled - oldMetrics.map(_.diskBytesSpilled).getOrElse(0L)
     stageData.diskBytesSpilled += diskSpillDelta
@@ -277,4 +385,5 @@ class JobProgressListener(conf: SparkConf) extends SparkListener with Logging {
 private object JobProgressListener {
   val DEFAULT_POOL_NAME = "default"
   val DEFAULT_RETAINED_STAGES = 1000
+  val DEFAULT_RETAINED_JOBS = 1000
 }

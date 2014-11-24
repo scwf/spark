@@ -31,7 +31,7 @@ from pyspark.broadcast import Broadcast, _broadcastRegistry
 from pyspark.files import SparkFiles
 from pyspark.serializers import write_with_length, write_int, read_long, \
     write_long, read_int, SpecialLengths, UTF8Deserializer, PickleSerializer, \
-    CompressedSerializer
+    SizeLimitedStream, LargeObjectSerializer
 from pyspark import shuffle
 
 pickleSer = PickleSerializer()
@@ -57,7 +57,7 @@ def main(infile, outfile):
         boot_time = time.time()
         split_index = read_int(infile)
         if split_index == -1:  # for unit tests
-            return
+            exit(-1)
 
         # initialize global state
         shuffle.MemoryBytesSpilled = 0
@@ -78,11 +78,13 @@ def main(infile, outfile):
 
         # fetch names and values of broadcast variables
         num_broadcast_variables = read_int(infile)
-        ser = CompressedSerializer(pickleSer)
+        bser = LargeObjectSerializer()
         for _ in range(num_broadcast_variables):
             bid = read_long(infile)
             if bid >= 0:
-                value = ser._read_with_length(infile)
+                size = read_long(infile)
+                s = SizeLimitedStream(infile, size)
+                value = list((bser.load_stream(s)))[0]  # read out all the bytes
                 _broadcastRegistry[bid] = Broadcast(bid, value)
             else:
                 bid = - bid - 1
@@ -111,7 +113,6 @@ def main(infile, outfile):
         try:
             write_int(SpecialLengths.PYTHON_EXCEPTION_THROWN, outfile)
             write_with_length(traceback.format_exc(), outfile)
-            outfile.flush()
         except IOError:
             # JVM close the socket
             pass
@@ -130,6 +131,14 @@ def main(infile, outfile):
     write_int(len(_accumulatorRegistry), outfile)
     for (aid, accum) in _accumulatorRegistry.items():
         pickleSer._write_with_length((aid, accum._value), outfile)
+
+    # check end of stream
+    if read_int(infile) == SpecialLengths.END_OF_STREAM:
+        write_int(SpecialLengths.END_OF_STREAM, outfile)
+    else:
+        # write a different value to tell JVM to not reuse this worker
+        write_int(SpecialLengths.END_OF_DATA_SECTION, outfile)
+        exit(-1)
 
 
 if __name__ == '__main__':
