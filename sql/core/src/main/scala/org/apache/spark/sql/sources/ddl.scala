@@ -18,12 +18,12 @@
 package org.apache.spark.sql.sources
 
 import org.apache.spark.Logging
-import org.apache.spark.sql.SQLContext
+import org.apache.spark.sql._
 import org.apache.spark.sql.execution.RunnableCommand
 import org.apache.spark.util.Utils
 
 import scala.language.implicitConversions
-import scala.util.parsing.combinator.lexical.StdLexical
+import scala.Some
 import scala.util.parsing.combinator.syntactical.StandardTokenParsers
 import scala.util.parsing.combinator.PackratParsers
 
@@ -49,6 +49,15 @@ private[sql] class DDLParser extends StandardTokenParsers with PackratParsers wi
   protected implicit def asParser(k: Keyword): Parser[String] =
     lexical.allCaseVersions(k.str).map(x => x : Parser[String]).reduce(_ | _)
 
+  protected val STRING = Keyword("STRING")
+  protected val SHORT = Keyword("SHORT")
+  protected val DOUBLE = Keyword("DOUBLE")
+  protected val BOOLEAN = Keyword("BOOLEAN")
+  protected val BYTE = Keyword("BYTE")
+  protected val FLOAT = Keyword("FLOAT")
+  protected val INT = Keyword("INT")
+  protected val INTEGER = Keyword("INTEGER")
+  protected val LONG = Keyword("LONG")
   protected val CREATE = Keyword("CREATE")
   protected val TEMPORARY = Keyword("TEMPORARY")
   protected val TABLE = Keyword("TABLE")
@@ -72,10 +81,23 @@ private[sql] class DDLParser extends StandardTokenParsers with PackratParsers wi
    * OPTIONS (path "../hive/src/test/resources/data/files/episodes.avro")
    */
   protected lazy val createTable: Parser[LogicalPlan] =
-    CREATE ~ TEMPORARY ~ TABLE ~> ident ~ (USING ~> className) ~ (OPTIONS ~> options) ^^ {
-      case tableName ~ provider ~ opts =>
-        CreateTableUsing(tableName, provider, opts)
+  (  CREATE ~ TEMPORARY ~ TABLE ~> ident ~ (USING ~> className) ~ (OPTIONS ~> options) ^^ {
+      case tableName ~provider ~ opts =>
+        CreateTableUsing(tableName, Seq.empty, provider, opts)
     }
+  |
+    CREATE ~ TEMPORARY ~ TABLE ~> ident ~
+      ("(" ~> tableCols <~ ",") ~ (USING ~> className) ~ (OPTIONS ~> options) ^^ {
+      case tableName ~tableColumns ~ provider ~ opts =>
+      CreateTableUsing(tableName, tableColumns, provider, opts)
+    }
+  )
+  protected lazy val tableCol: Parser[(String, String)] =
+    ident ~ (STRING | BYTE | SHORT | INT | INTEGER | LONG | FLOAT | DOUBLE | BOOLEAN) ^^ {
+      case e1 ~ e2 => (e1, e2)
+    }
+
+  protected lazy val tableCols: Parser[Seq[(String, String)]] = repsep(tableCol, ",")
 
   protected lazy val options: Parser[Map[String, String]] =
     "(" ~> repsep(pair, ",") <~ ")" ^^ { case s: Seq[(String, String)] => s.toMap }
@@ -87,6 +109,7 @@ private[sql] class DDLParser extends StandardTokenParsers with PackratParsers wi
 
 private[sql] case class CreateTableUsing(
     tableName: String,
+    tableCols: Seq[(String, String)],
     provider: String,
     options: Map[String, String]) extends RunnableCommand {
 
@@ -100,9 +123,32 @@ private[sql] case class CreateTableUsing(
         }
     }
     val dataSource = clazz.newInstance().asInstanceOf[org.apache.spark.sql.sources.RelationProvider]
-    val relation = dataSource.createRelation(sqlContext, options)
+    val relation = dataSource.createRelation(sqlContext, options, toSchema(tableCols))
 
     sqlContext.baseRelationToSchemaRDD(relation).registerTempTable(tableName)
     Seq.empty
+  }
+
+  def toSchema(tableColumns: Seq[(String, String)]): Option[StructType] = {
+    val fields: Seq[StructField] = tableColumns.map { tableColumn =>
+      val columnName = tableColumn._1
+      val columnType = tableColumn._2
+      // todo: support more complex data type
+      columnType.toLowerCase match {
+        case "string" => StructField(columnName, StringType)
+        case "byte" => StructField(columnName, ByteType)
+        case "short" => StructField(columnName, ShortType)
+        case "int" => StructField(columnName, IntegerType)
+        case "integer" => StructField(columnName, IntegerType)
+        case "long" => StructField(columnName, LongType)
+        case "double" => StructField(columnName, DoubleType)
+        case "float" => StructField(columnName, FloatType)
+        case "boolean" => StructField(columnName, BooleanType)
+      }
+    }
+    if (fields.isEmpty) {
+      return None
+    }
+    Some(StructType(fields))
   }
 }

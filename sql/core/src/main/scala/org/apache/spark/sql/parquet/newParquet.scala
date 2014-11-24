@@ -17,12 +17,13 @@
 package org.apache.spark.sql.parquet
 
 import java.util.{List => JList}
+import scala.Some
+import scala.collection.JavaConversions._
 
 import org.apache.hadoop.fs.{FileStatus, FileSystem, Path}
 import org.apache.hadoop.conf.{Configurable, Configuration}
 import org.apache.hadoop.io.Writable
 import org.apache.hadoop.mapreduce.{JobContext, InputSplit, Job}
-
 import parquet.hadoop.ParquetInputFormat
 import parquet.hadoop.util.ContextUtil
 
@@ -30,12 +31,18 @@ import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.{Partition => SparkPartition, Logging}
 import org.apache.spark.rdd.{NewHadoopPartition, RDD}
 
-import org.apache.spark.sql.{SQLConf, Row, SQLContext}
-import org.apache.spark.sql.catalyst.expressions.{SpecificMutableRow, And, Expression, Attribute}
-import org.apache.spark.sql.catalyst.types.{IntegerType, StructField, StructType}
+import org.apache.spark.sql.catalyst.expressions.{Row, SpecificMutableRow, Expression, Attribute}
+import org.apache.spark.sql.catalyst.types.{IntegerType, StructType}
 import org.apache.spark.sql.sources._
-
-import scala.collection.JavaConversions._
+import org.apache.spark.sql.catalyst.types.StructField
+import org.apache.spark.sql.sources.GreaterThan
+import org.apache.spark.sql.sources.GreaterThanOrEqual
+import org.apache.spark.sql.catalyst.expressions.And
+import org.apache.spark.sql.sources.LessThanOrEqual
+import org.apache.spark.sql.sources.EqualTo
+import org.apache.spark.sql.sources.In
+import org.apache.spark.sql.sources.LessThan
+import org.apache.spark.sql.{SQLConf, SQLContext}
 
 /**
  * Allows creation of parquet based tables using the syntax
@@ -47,11 +54,12 @@ class DefaultSource extends RelationProvider {
   /** Returns a new base relation with the given parameters. */
   override def createRelation(
       sqlContext: SQLContext,
-      parameters: Map[String, String]): BaseRelation = {
+      parameters: Map[String, String],
+      schema: Option[StructType]): BaseRelation = {
     val path =
       parameters.getOrElse("path", sys.error("'path' must be specifed for parquet tables."))
 
-    ParquetRelation2(path)(sqlContext)
+    ParquetRelation2(path, schema)(sqlContext)
   }
 }
 
@@ -81,7 +89,9 @@ private[parquet] case class Partition(partitionValues: Map[String, Any], files: 
  * discovery.
  */
 @DeveloperApi
-case class ParquetRelation2(path: String)(@transient val sqlContext: SQLContext)
+case class ParquetRelation2(
+    path: String,
+    _schema: Option[StructType])(@transient val sqlContext: SQLContext)
   extends CatalystScan with Logging {
 
   def sparkContext = sqlContext.sparkContext
@@ -132,12 +142,13 @@ case class ParquetRelation2(path: String)(@transient val sqlContext: SQLContext)
 
   override val sizeInBytes = partitions.flatMap(_.files).map(_.getLen).sum
 
-  val dataSchema = StructType.fromAttributes( // TODO: Parquet code should not deal with attributes.
-    ParquetTypesConverter.readSchemaFromFile(
-      partitions.head.files.head.getPath,
-      Some(sparkContext.hadoopConfiguration),
-      sqlContext.isParquetBinaryAsString))
-
+  val dataSchema = _schema.getOrElse(
+    StructType.fromAttributes( // TODO: Parquet code should not deal with attributes.
+      ParquetTypesConverter.readSchemaFromFile(
+        partitions.head.files.head.getPath,
+        Some(sparkContext.hadoopConfiguration),
+        sqlContext.isParquetBinaryAsString))
+  )
   val dataIncludesKey =
     partitionKeys.headOption.map(dataSchema.fieldNames.contains(_)).getOrElse(true)
 

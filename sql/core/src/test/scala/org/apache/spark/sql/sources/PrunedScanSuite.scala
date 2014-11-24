@@ -22,18 +22,23 @@ import org.apache.spark.sql._
 class PrunedScanSource extends RelationProvider {
   override def createRelation(
       sqlContext: SQLContext,
-      parameters: Map[String, String]): BaseRelation = {
-    SimplePrunedScan(parameters("from").toInt, parameters("to").toInt)(sqlContext)
+      parameters: Map[String, String],
+      schema: Option[StructType]): BaseRelation = {
+    SimplePrunedScan(parameters("from").toInt, parameters("to").toInt, schema)(sqlContext)
   }
 }
 
-case class SimplePrunedScan(from: Int, to: Int)(@transient val sqlContext: SQLContext)
+case class SimplePrunedScan(
+    from: Int,
+    to: Int,
+    _schema: Option[StructType])(@transient val sqlContext: SQLContext)
   extends PrunedScan {
 
-  override def schema =
+  override def schema = _schema.getOrElse(
     StructType(
       StructField("a", IntegerType, nullable = false) ::
       StructField("b", IntegerType, nullable = false) :: Nil)
+  )
 
   override def buildScan(requiredColumns: Array[String]) = {
     val rowBuilders = requiredColumns.map {

@@ -24,18 +24,26 @@ import org.apache.spark.sql._
 class FilteredScanSource extends RelationProvider {
   override def createRelation(
       sqlContext: SQLContext,
-      parameters: Map[String, String]): BaseRelation = {
-    SimpleFilteredScan(parameters("from").toInt, parameters("to").toInt)(sqlContext)
+      parameters: Map[String, String],
+      schema: Option[StructType]): BaseRelation = {
+    SimpleFilteredScan(
+      parameters("from").toInt,
+      parameters("to").toInt,
+      schema: Option[StructType])(sqlContext)
   }
 }
 
-case class SimpleFilteredScan(from: Int, to: Int)(@transient val sqlContext: SQLContext)
+case class SimpleFilteredScan(
+    from: Int,
+    to: Int,
+    _schema: Option[StructType])(@transient val sqlContext: SQLContext)
   extends PrunedFilteredScan {
 
-  override def schema =
+  override def schema = _schema.getOrElse(
     StructType(
       StructField("a", IntegerType, nullable = false) ::
       StructField("b", IntegerType, nullable = false) :: Nil)
+  )
 
   override def buildScan(requiredColumns: Array[String], filters: Array[Filter]) = {
     val rowBuilders = requiredColumns.map {

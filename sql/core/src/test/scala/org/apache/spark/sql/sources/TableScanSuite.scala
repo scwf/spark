@@ -24,17 +24,21 @@ class DefaultSource extends SimpleScanSource
 class SimpleScanSource extends RelationProvider {
   override def createRelation(
       sqlContext: SQLContext,
-      parameters: Map[String, String]): BaseRelation = {
-    SimpleScan(parameters("from").toInt, parameters("to").toInt)(sqlContext)
+      parameters: Map[String, String],
+      schema: Option[StructType]): BaseRelation = {
+    SimpleScan(parameters("from").toInt, parameters("to").toInt, schema)(sqlContext)
   }
 }
 
-case class SimpleScan(from: Int, to: Int)(@transient val sqlContext: SQLContext)
+case class SimpleScan(
+    from: Int,
+    to: Int,
+    _schema: Option[StructType])(@transient val sqlContext: SQLContext)
   extends TableScan {
 
-  override def schema =
+  override def schema = _schema.getOrElse(
     StructType(StructField("i", IntegerType, nullable = false) :: Nil)
-
+  )
   override def buildScan() = sqlContext.sparkContext.parallelize(from to to).map(Row(_))
 }
 
