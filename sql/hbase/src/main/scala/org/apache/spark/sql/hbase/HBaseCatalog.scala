@@ -21,6 +21,7 @@ import java.io._
 import org.apache.hadoop.hbase.client._
 import org.apache.hadoop.hbase.util.Bytes
 import org.apache.hadoop.hbase.{HBaseConfiguration, HColumnDescriptor, HTableDescriptor, TableName}
+import org.apache.log4j.Logger
 import org.apache.spark.Logging
 import org.apache.spark.sql.catalyst.analysis.SimpleCatalog
 import org.apache.spark.sql.catalyst.expressions.Row
@@ -28,12 +29,12 @@ import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.types._
 import org.apache.spark.sql.hbase.HBaseCatalog._
 
-import scala.collection.mutable.{ArrayBuffer, ListBuffer, HashMap, SynchronizedMap}
+import scala.collection.mutable.{ArrayBuffer, HashMap, ListBuffer, SynchronizedMap}
 
 /**
  * Column represent the sql column
- * @param sqlName the name of the column
- * @param dataType the data type of the column
+ * sqlName the name of the column
+ * dataType the data type of the column
  */
 sealed abstract class AbstractColumn {
   val sqlName: String
@@ -67,11 +68,14 @@ case class NonKeyColumn(
 private[hbase] class HBaseCatalog(@transient hbaseContext: HBaseSQLContext)
   extends SimpleCatalog(false) with Logging with Serializable {
 
+  lazy val logger = Logger.getLogger(getClass.getName)
   lazy val configuration = hbaseContext.optConfiguration
     .getOrElse(HBaseConfiguration.create())
 
   lazy val relationMapCache = new HashMap[String, HBaseRelation]
     with SynchronizedMap[String, HBaseRelation]
+
+  lazy val admin = new HBaseAdmin(configuration)
 
   private def processTableName(tableName: String): String = {
     if (!caseSensitive) {
@@ -95,9 +99,14 @@ private[hbase] class HBaseCatalog(@transient hbaseContext: HBaseSQLContext)
     HBaseKVHelper.encodingRawKeyColumns(buffer, rawKeyCol)
   }
 
+  // Use a single HBaseAdmin throughout this instance instad of creating a new one in
+  // each method
+  var hBaseAdmin = new HBaseAdmin(configuration)
+  logger.debug(s"HBaseAdmin.configuration zkPort="
+    + s"${hBaseAdmin.getConfiguration.get("hbase.zookeeper.property.clientPort")}")
+
   private def createHBaseUserTable(tableName: String,
                                    allColumns: Seq[AbstractColumn]): Unit = {
-    val hBaseAdmin = new HBaseAdmin(configuration)
     val tableDescriptor = new HTableDescriptor(TableName.valueOf(tableName))
     allColumns.map(x =>
       if (x.isInstanceOf[NonKeyColumn]) {
@@ -110,7 +119,7 @@ private[hbase] class HBaseCatalog(@transient hbaseContext: HBaseSQLContext)
 //        new GenericRow(Array(4096.0, "SF", 512: Short))
 //      ).map(makeRowKey(_, Seq(DoubleType, StringType, ShortType)))
 //    hBaseAdmin.createTable(tableDescriptor, splitKeys);
-    hBaseAdmin.createTable(tableDescriptor, null);
+    admin.createTable(tableDescriptor, null);
   }
 
   def createTable(tableName: String, hbaseNamespace: String, hbaseTableName: String,
@@ -133,12 +142,11 @@ private[hbase] class HBaseCatalog(@transient hbaseContext: HBaseSQLContext)
         }
     }
 
-    val admin = new HBaseAdmin(configuration)
     val avail = admin.isTableAvailable(MetaData)
 
     if (!avail) {
       // create table
-      createMetadataTable(admin)
+      createMetadataTable()
     }
 
     val table = new HTable(configuration, MetaData)
@@ -192,8 +200,8 @@ private[hbase] class HBaseCatalog(@transient hbaseContext: HBaseSQLContext)
       put.add(ColumnFamily, QualHbaseName, Bytes.toBytes(result.toString))
       */
 
-      val hbaseRelation = HBaseRelation(tableName, hbaseNamespace, hbaseTableName, allColumns)
-      hbaseRelation.configuration = configuration
+      val hbaseRelation = HBaseRelation(tableName, hbaseNamespace, hbaseTableName, allColumns,
+        Some(configuration))
 
       writeObjectToTable(hbaseRelation)
 
@@ -207,8 +215,7 @@ private[hbase] class HBaseCatalog(@transient hbaseContext: HBaseSQLContext)
       val relation = result.get
       val allColumns = relation.allColumns.filter(!_.sqlName.equals(columnName))
       val hbaseRelation = HBaseRelation(relation.tableName,
-        relation.hbaseNamespace, relation.hbaseTableName, allColumns)
-      hbaseRelation.configuration = configuration
+        relation.hbaseNamespace, relation.hbaseTableName, allColumns, Some(configuration))
 
       writeObjectToTable(hbaseRelation)
 
@@ -222,8 +229,7 @@ private[hbase] class HBaseCatalog(@transient hbaseContext: HBaseSQLContext)
       val relation = result.get
       val allColumns = relation.allColumns :+ column
       val hbaseRelation = HBaseRelation(relation.tableName,
-        relation.hbaseNamespace, relation.hbaseTableName, allColumns)
-      hbaseRelation.configuration = configuration
+        relation.hbaseNamespace, relation.hbaseTableName, allColumns, Some(configuration))
 
       writeObjectToTable(hbaseRelation)
 
@@ -327,7 +333,6 @@ private[hbase] class HBaseCatalog(@transient hbaseContext: HBaseSQLContext)
     val objectInputStream = new ObjectInputStream(byteArrayInputStream)
     val hbaseRelation: HBaseRelation
     = objectInputStream.readObject().asInstanceOf[HBaseRelation]
-    hbaseRelation.configuration = configuration
     hbaseRelation
   }
 
@@ -368,7 +373,7 @@ private[hbase] class HBaseCatalog(@transient hbaseContext: HBaseSQLContext)
     relationMapCache.remove(processTableName(tableName))
   }
 
-  def createMetadataTable(admin: HBaseAdmin) = {
+  def createMetadataTable() = {
     val descriptor = new HTableDescriptor(TableName.valueOf(MetaData))
     val columnDescriptor = new HColumnDescriptor(ColumnFamily)
     descriptor.addFamily(columnDescriptor)
@@ -376,15 +381,13 @@ private[hbase] class HBaseCatalog(@transient hbaseContext: HBaseSQLContext)
   }
 
   private[hbase] def checkHBaseTableExists(hbaseTableName: String): Boolean = {
-    val admin = new HBaseAdmin(configuration)
     admin.tableExists(hbaseTableName)
   }
 
   private[hbase] def checkLogicalTableExist(tableName: String): Boolean = {
-    val admin = new HBaseAdmin(configuration)
     if (!admin.tableExists(MetaData)) {
       // create table
-      createMetadataTable(admin)
+      createMetadataTable()
     }
 
     val table = new HTable(configuration, MetaData)
@@ -395,7 +398,6 @@ private[hbase] class HBaseCatalog(@transient hbaseContext: HBaseSQLContext)
   }
 
   private[hbase] def checkFamilyExists(hbaseTableName: String, family: String): Boolean = {
-    val admin = new HBaseAdmin(configuration)
     val tableDescriptor = admin.getTableDescriptor(TableName.valueOf(hbaseTableName))
     tableDescriptor.hasFamily(Bytes.toBytes(family))
   }

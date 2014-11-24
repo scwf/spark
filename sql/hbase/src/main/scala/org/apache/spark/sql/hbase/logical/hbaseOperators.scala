@@ -16,7 +16,7 @@
  */
 package org.apache.spark.sql.hbase.logical
 
-import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, UnaryNode, Command}
+import org.apache.spark.sql.catalyst.plans.logical.{Command, LogicalPlan, UnaryNode}
 
 case class CreateHBaseTablePlan(tableName: String,
                                 nameSpace: String,
@@ -53,14 +53,20 @@ case class BulkLoadPlan(path: String, child: LogicalPlan,
   override def toString = s"LogicalPlan: LoadDataIntoTable(LOAD $path INTO $child)"
 }
 
-
 case class InsertValueIntoTable(
-                            table: LogicalPlan,
+                            child: LogicalPlan,
                             partition: Map[String, Option[String]],
                             valueSeq: Seq[String])
-  extends LogicalPlan {
+  extends UnaryNode {
 
-  override def children = Nil
   override def output = null
 
+  override def toString = s"LogicalPlan: InsertValueIntoTable($valueSeq INTO $child)"
+
 }
+
+/**
+ * Logical plan for DESCRIBE
+ * @param tableName table to describe
+ */
+case class DescribePlan(tableName: String) extends Command
