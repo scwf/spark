@@ -55,60 +55,75 @@ class TableScanSuite extends DataSourceTest {
         |  to '10'
         |)
       """.stripMargin)
+
+    sql(
+      """
+        |CREATE TEMPORARY TABLE oneToTen_with_schema(i int)
+        |USING org.apache.spark.sql.sources.SimpleScanSource
+        |OPTIONS (
+        |  from '1',
+        |  to '10'
+        |)
+      """.stripMargin)
   }
 
-  sqlTest(
-    "SELECT * FROM oneToTen",
-    (1 to 10).map(Row(_)).toSeq)
-
-  sqlTest(
-    "SELECT i FROM oneToTen",
-    (1 to 10).map(Row(_)).toSeq)
-
-  sqlTest(
-    "SELECT i FROM oneToTen WHERE i < 5",
-    (1 to 4).map(Row(_)).toSeq)
-
-  sqlTest(
-    "SELECT i * 2 FROM oneToTen",
-    (1 to 10).map(i => Row(i * 2)).toSeq)
-
-  sqlTest(
-    "SELECT a.i, b.i FROM oneToTen a JOIN oneToTen b ON a.i = b.i + 1",
-    (2 to 10).map(i => Row(i, i - 1)).toSeq)
-
-
-  test("Caching")  {
-    // Cached Query Execution
-    cacheTable("oneToTen")
-    assertCached(sql("SELECT * FROM oneToTen"))
-    checkAnswer(
-      sql("SELECT * FROM oneToTen"),
+  Seq("oneToTen", "oneToTen_with_schema").foreach { table =>
+    sqlTest(
+      s"SELECT * FROM $table",
       (1 to 10).map(Row(_)).toSeq)
 
-    assertCached(sql("SELECT i FROM oneToTen"))
-    checkAnswer(
-      sql("SELECT i FROM oneToTen"),
+    sqlTest(
+      s"SELECT i FROM $table",
       (1 to 10).map(Row(_)).toSeq)
 
-    assertCached(sql("SELECT i FROM oneToTen WHERE i < 5"))
-    checkAnswer(
-      sql("SELECT i FROM oneToTen WHERE i < 5"),
+    sqlTest(
+      s"SELECT i FROM $table WHERE i < 5",
       (1 to 4).map(Row(_)).toSeq)
 
-    assertCached(sql("SELECT i * 2 FROM oneToTen"))
-    checkAnswer(
-      sql("SELECT i * 2 FROM oneToTen"),
+    sqlTest(
+      s"SELECT i * 2 FROM $table",
       (1 to 10).map(i => Row(i * 2)).toSeq)
 
-    assertCached(sql("SELECT a.i, b.i FROM oneToTen a JOIN oneToTen b ON a.i = b.i + 1"), 2)
-    checkAnswer(
-      sql("SELECT a.i, b.i FROM oneToTen a JOIN oneToTen b ON a.i = b.i + 1"),
+    sqlTest(
+      s"SELECT a.i, b.i FROM $table a JOIN $table b ON a.i = b.i + 1",
       (2 to 10).map(i => Row(i, i - 1)).toSeq)
+  }
 
-    // Verify uncaching
-    uncacheTable("oneToTen")
-    assertCached(sql("SELECT * FROM oneToTen"), 0)
+
+  Seq("oneToTen", "oneToTen_with_schema").foreach { table =>
+
+    test(s"Caching $table") {
+      // Cached Query Execution
+      cacheTable(s"$table")
+      assertCached(sql(s"SELECT * FROM $table"))
+      checkAnswer(
+        sql(s"SELECT * FROM $table"),
+        (1 to 10).map(Row(_)).toSeq)
+
+      assertCached(sql(s"SELECT i FROM $table"))
+      checkAnswer(
+        sql(s"SELECT i FROM $table"),
+        (1 to 10).map(Row(_)).toSeq)
+
+      assertCached(sql(s"SELECT i FROM $table WHERE i < 5"))
+      checkAnswer(
+        sql(s"SELECT i FROM $table WHERE i < 5"),
+        (1 to 4).map(Row(_)).toSeq)
+
+      assertCached(sql(s"SELECT i * 2 FROM $table"))
+      checkAnswer(
+        sql(s"SELECT i * 2 FROM $table"),
+        (1 to 10).map(i => Row(i * 2)).toSeq)
+
+      assertCached(sql(s"SELECT a.i, b.i FROM $table a JOIN $table b ON a.i = b.i + 1"), 2)
+      checkAnswer(
+        sql(s"SELECT a.i, b.i FROM $table a JOIN $table b ON a.i = b.i + 1"),
+        (2 to 10).map(i => Row(i, i - 1)).toSeq)
+
+      // Verify uncaching
+      uncacheTable(s"$table")
+      assertCached(sql(s"SELECT * FROM $table"), 0)
+    }
   }
 
   test("defaultSource") {

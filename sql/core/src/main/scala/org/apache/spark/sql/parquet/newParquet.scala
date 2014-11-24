@@ -17,8 +17,6 @@
 package org.apache.spark.sql.parquet
 
 import java.util.{List => JList}
-import scala.Some
-import scala.collection.JavaConversions._
 
 import org.apache.hadoop.fs.{FileStatus, FileSystem, Path}
 import org.apache.hadoop.conf.{Configurable, Configuration}
@@ -30,19 +28,13 @@ import parquet.hadoop.util.ContextUtil
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.{Partition => SparkPartition, Logging}
 import org.apache.spark.rdd.{NewHadoopPartition, RDD}
-
-import org.apache.spark.sql.catalyst.expressions.{Row, SpecificMutableRow, Expression, Attribute}
-import org.apache.spark.sql.catalyst.types.{IntegerType, StructType}
+import org.apache.spark.sql.catalyst.expressions.{Row, And, SpecificMutableRow, Expression, Attribute}
+import org.apache.spark.sql.catalyst.types.{StructField, IntegerType, StructType}
 import org.apache.spark.sql.sources._
-import org.apache.spark.sql.catalyst.types.StructField
-import org.apache.spark.sql.sources.GreaterThan
-import org.apache.spark.sql.sources.GreaterThanOrEqual
-import org.apache.spark.sql.catalyst.expressions.And
-import org.apache.spark.sql.sources.LessThanOrEqual
-import org.apache.spark.sql.sources.EqualTo
-import org.apache.spark.sql.sources.In
-import org.apache.spark.sql.sources.LessThan
 import org.apache.spark.sql.{SQLConf, SQLContext}
+
+import scala.collection.JavaConversions._
+
 
 /**
  * Allows creation of parquet based tables using the syntax

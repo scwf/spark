@@ -64,54 +64,66 @@ class PrunedScanSuite extends DataSourceTest {
         |  to '10'
         |)
       """.stripMargin)
+
+    sql(
+      """
+        |CREATE TEMPORARY TABLE oneToTenPruned_with_schema(a int, b int)
+        |USING org.apache.spark.sql.sources.PrunedScanSource
+        |OPTIONS (
+        |  from '1',
+        |  to '10'
+        |)
+      """.stripMargin)
   }
 
-  sqlTest(
-    "SELECT * FROM oneToTenPruned",
-    (1 to 10).map(i => Row(i, i * 2)).toSeq)
+  Seq("oneToTenPruned", "oneToTenPruned_with_schema").foreach { table =>
+    sqlTest(
+      s"SELECT * FROM $table",
+      (1 to 10).map(i => Row(i, i * 2)).toSeq)
 
-  sqlTest(
-    "SELECT a, b FROM oneToTenPruned",
-    (1 to 10).map(i => Row(i, i * 2)).toSeq)
+    sqlTest(
+      s"SELECT a, b FROM $table",
+      (1 to 10).map(i => Row(i, i * 2)).toSeq)
 
-  sqlTest(
-    "SELECT b, a FROM oneToTenPruned",
-    (1 to 10).map(i => Row(i * 2, i)).toSeq)
+    sqlTest(
+      s"SELECT b, a FROM $table",
+      (1 to 10).map(i => Row(i * 2, i)).toSeq)
 
-  sqlTest(
-    "SELECT a FROM oneToTenPruned",
-    (1 to 10).map(i => Row(i)).toSeq)
+    sqlTest(
+      s"SELECT a FROM $table",
+      (1 to 10).map(i => Row(i)).toSeq)
 
-  sqlTest(
-    "SELECT a, a FROM oneToTenPruned",
-    (1 to 10).map(i => Row(i, i)).toSeq)
+    sqlTest(
+      s"SELECT a, a FROM $table",
+      (1 to 10).map(i => Row(i, i)).toSeq)
 
-  sqlTest(
-    "SELECT b FROM oneToTenPruned",
-    (1 to 10).map(i => Row(i * 2)).toSeq)
+    sqlTest(
+      s"SELECT b FROM $table",
+      (1 to 10).map(i => Row(i * 2)).toSeq)
 
-  sqlTest(
-    "SELECT a * 2 FROM oneToTenPruned",
-    (1 to 10).map(i => Row(i * 2)).toSeq)
+    sqlTest(
+      s"SELECT a * 2 FROM $table",
+      (1 to 10).map(i => Row(i * 2)).toSeq)
 
-  sqlTest(
-    "SELECT A AS b FROM oneToTenPruned",
-    (1 to 10).map(i => Row(i)).toSeq)
+    sqlTest(
+      s"SELECT A AS b FROM $table",
+      (1 to 10).map(i => Row(i)).toSeq)
 
-  sqlTest(
-    "SELECT x.b, y.a FROM oneToTenPruned x JOIN oneToTenPruned y ON x.a = y.b",
-    (1 to 5).map(i => Row(i * 4, i)).toSeq)
+    sqlTest(
+      s"SELECT x.b, y.a FROM $table x JOIN $table y ON x.a = y.b",
+      (1 to 5).map(i => Row(i * 4, i)).toSeq)
 
-  sqlTest(
-    "SELECT x.a, y.b FROM oneToTenPruned x JOIN oneToTenPruned y ON x.a = y.b",
-    (2 to 10 by 2).map(i => Row(i, i)).toSeq)
+    sqlTest(
+      s"SELECT x.a, y.b FROM $table x JOIN $table y ON x.a = y.b",
+      (2 to 10 by 2).map(i => Row(i, i)).toSeq)
 
-  testPruning("SELECT * FROM oneToTenPruned", "a", "b")
-  testPruning("SELECT a, b FROM oneToTenPruned", "a", "b")
-  testPruning("SELECT b, a FROM oneToTenPruned", "b", "a")
-  testPruning("SELECT b, b FROM oneToTenPruned", "b")
-  testPruning("SELECT a FROM oneToTenPruned", "a")
-  testPruning("SELECT b FROM oneToTenPruned", "b")
+    testPruning(s"SELECT * FROM $table", "a", "b")
+    testPruning(s"SELECT a, b FROM $table", "a", "b")
+    testPruning(s"SELECT b, a FROM $table", "b", "a")
+    testPruning(s"SELECT b, b FROM $table", "b")
+    testPruning(s"SELECT a FROM $table", "a")
+    testPruning(s"SELECT b FROM $table", "b")
+  }
 
   def testPruning(sqlString: String, expectedColumns: String*): Unit = {
     test(s"Columns output ${expectedColumns.mkString(",")}: $sqlString") {
