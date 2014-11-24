@@ -17,7 +17,6 @@
 
 package org.apache.spark.sql.catalyst
 
-
 import scala.language.implicitConversions
 
 import org.apache.spark.sql.catalyst.analysis._
