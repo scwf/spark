@@ -14,19 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.spark.sql.hbase
+package org.apache.spark.sql.hbase.catalyst.types
 
-import org.apache.spark.Partition
+import org.apache.spark.sql.catalyst.types._
 
-private[hbase] class HBasePartition(
-    idx: Int,
-    val lowerBound: Option[HBaseRawType] = None,
-    val upperBound: Option[HBaseRawType] = None,
-    val server: Option[String] = None) extends Partition {
+import scala.math.PartialOrdering
+import scala.reflect.runtime.universe.TypeTag
 
-  override def index: Int = idx
-
-  override def hashCode(): Int = idx
-
-
+abstract class PartiallyOrderingDataType extends DataType {
+  private[sql] type JvmType
+  def toPartiallyOrderingDataType(s: Any, dt: NativeType): Any
+  @transient private[sql] val tag: TypeTag[JvmType]
+  private[sql] val partialOrdering: PartialOrdering[JvmType]
 }

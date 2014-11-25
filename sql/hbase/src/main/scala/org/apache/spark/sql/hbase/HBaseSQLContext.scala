@@ -17,8 +17,7 @@
 
 package org.apache.spark.sql.hbase
 
-import java.io.DataOutputStream
-
+import org.apache.hadoop.conf.Configuration
 import org.apache.spark.SparkContext
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
@@ -28,10 +27,12 @@ import org.apache.spark.sql.execution._
  * An instance of the Spark SQL execution engine that integrates with data stored in Hive.
  * Configuration for Hive is read from hive-site.xml on the classpath.
  */
-class HBaseSQLContext(@transient val sc: SparkContext)
+class HBaseSQLContext(@transient val sc: SparkContext,
+                      val optConfiguration : Option[Configuration] = None)
   extends SQLContext(sc) with Serializable {
   self =>
 
+  // TODO: do we need a analyzer?
   override protected[sql] lazy val catalog: HBaseCatalog = new HBaseCatalog(this)
 
   // TODO: suggest to have our own planner that extends SparkPlanner,
@@ -44,6 +45,7 @@ class HBaseSQLContext(@transient val sc: SparkContext)
     // TODO: suggest to append our strategies to parent's strategies using ::
     override val strategies: Seq[Strategy] = Seq(
       CommandStrategy(self),
+      HBaseOperations,
       TakeOrdered,
       InMemoryScans,
       HBaseTableScans,
@@ -52,8 +54,7 @@ class HBaseSQLContext(@transient val sc: SparkContext)
       HashJoin,
       BasicOperators,
       CartesianProduct,
-      BroadcastNestedLoopJoin,
-      HBaseOperations
+      BroadcastNestedLoopJoin
     )
   }
 
@@ -64,9 +65,7 @@ class HBaseSQLContext(@transient val sc: SparkContext)
   override private[spark] val dialect: String = "hbaseql"
 
   override protected[sql] def executePlan(plan: LogicalPlan): this.QueryExecution =
-    new this.QueryExecution {
-      val logical = plan
-    }
+    new this.QueryExecution { val logical = plan }
 
   /** Extends QueryExecution with HBase specific features. */
   protected[sql] abstract class QueryExecution extends super.QueryExecution {

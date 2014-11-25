@@ -1,3 +1,5 @@
+package org.apache.spark.sql.hbase
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,19 +16,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.spark.sql.hbase
 
-import org.apache.spark.Partition
+/**
+ * HBaseStartupShutdownSuite
+ *
+ */
+class HBaseStartupShutdownSuite extends HBaseIntegrationTestBase {
 
-private[hbase] class HBasePartition(
-    idx: Int,
-    val lowerBound: Option[HBaseRawType] = None,
-    val upperBound: Option[HBaseRawType] = None,
-    val server: Option[String] = None) extends Partition {
-
-  override def index: Int = idx
-
-  override def hashCode(): Int = idx
-
+  test("Do nothing .. should cause mini cluster to start up and shut down") {
+    println("Doing nothing!")
+  }
 
 }

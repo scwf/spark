@@ -19,7 +19,7 @@ package org.apache.spark.sql.hbase
 
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
-import org.apache.spark.sql.hbase.logical.LoadDataIntoTable
+import org.apache.spark.sql.hbase.logical.BulkLoadPlan
 import org.scalatest.{BeforeAndAfterAll, FunSuite}
 import org.apache.spark.{SparkContext, Logging}
 import org.apache.spark.sql.catalyst.types.IntegerType
@@ -40,9 +40,9 @@ class BulkLoadIntoTableSuite extends FunSuite with BeforeAndAfterAll with Loggin
 
     val plan: LogicalPlan = parser(sql)
     assert(plan != null)
-    assert(plan.isInstanceOf[LoadDataIntoTable])
+    assert(plan.isInstanceOf[BulkLoadPlan])
 
-    val l = plan.asInstanceOf[LoadDataIntoTable]
+    val l = plan.asInstanceOf[BulkLoadPlan]
     assert(l.path.equals(raw"./usr/file.csv"))
     assert(l.isLocal)
 
@@ -60,9 +60,9 @@ class BulkLoadIntoTableSuite extends FunSuite with BeforeAndAfterAll with Loggin
 
     val plan: LogicalPlan = parser(sql)
     assert(plan != null)
-    assert(plan.isInstanceOf[LoadDataIntoTable])
+    assert(plan.isInstanceOf[BulkLoadPlan])
 
-    val l = plan.asInstanceOf[LoadDataIntoTable]
+    val l = plan.asInstanceOf[BulkLoadPlan]
     assert(l.path.equals(raw"/usr/hdfsfile.csv"))
     assert(!l.isLocal)
     assert(plan.children(0).isInstanceOf[UnresolvedRelation])
@@ -77,9 +77,9 @@ class BulkLoadIntoTableSuite extends FunSuite with BeforeAndAfterAll with Loggin
 
     val plan: LogicalPlan = parser(sql)
     assert(plan != null)
-    assert(plan.isInstanceOf[LoadDataIntoTable])
+    assert(plan.isInstanceOf[BulkLoadPlan])
 
-    val l = plan.asInstanceOf[LoadDataIntoTable]
+    val l = plan.asInstanceOf[BulkLoadPlan]
     assert(l.path.equals(raw"/usr/hdfsfile.csv"))
     assert(!l.isLocal)
     assert(plan.children(0).isInstanceOf[UnresolvedRelation])
@@ -98,16 +98,23 @@ class BulkLoadIntoTableSuite extends FunSuite with BeforeAndAfterAll with Loggin
     bulkLoad.makeBulkLoadRDD(splitKeys.toArray)
   }
 
-  ignore("load data into hbase") { // this need to local test with hbase, so here to ignore this
-    // create sql table map with hbase table and run simple sql
+  test("load data into hbase") { // this need to local test with hbase, so here to ignore this
+
     val drop = "drop table testblk"
     val executeSql0 = hbc.executeSql(drop)
-    executeSql0.toRdd.collect().foreach(println)
+    try {
+      executeSql0.toRdd.collect().foreach(println)
+    } catch {
+      case e: IllegalStateException =>
+        // do not throw exception here
+      println(e.getMessage)
+    }
 
+    // create sql table map with hbase table and run simple sql
     val sql1 =
-      s"""CREATE TABLE testblk(col1 STRING, col2 STRING, col3 STRING)
-          MAPPED BY (wf, KEYS=[col1], COLS=[col2=cf1.a, col3=cf1.b])"""
-      .stripMargin
+      s"""CREATE TABLE testblk(col1 STRING, col2 STRING, col3 STRING, PRIMARY KEY(col1))
+          MAPPED BY (wf, COLS=[col2=cf1.a, col3=cf1.b])"""
+        .stripMargin
 
     val sql2 =
       s"""select * from testblk limit 5"""

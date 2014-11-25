@@ -159,15 +159,16 @@ private[hive] trait HiveStrategies {
   object DataSinks extends Strategy {
     def apply(plan: LogicalPlan): Seq[SparkPlan] = plan match {
       case logical.InsertIntoTable(table: MetastoreRelation, partition, child, overwrite) =>
-        InsertIntoHiveTable(table, partition, planLater(child), overwrite)(hiveContext) :: Nil
+        execution.InsertIntoHiveTable(
+          table, partition, planLater(child), overwrite)(hiveContext) :: Nil
 
       case logical.CreateTableAsSelect(database, tableName, child) =>
         val query = planLater(child)
-        CreateTableAsSelect(
+        execution.CreateTableAsSelect(
           database.get,
           tableName,
           query,
-          InsertIntoHiveTable(_: MetastoreRelation,
+          execution.InsertIntoHiveTable(_: MetastoreRelation,
             Map(),
             query,
             overwrite = true)(hiveContext)) :: Nil

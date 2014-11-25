@@ -17,26 +17,27 @@
 
 package org.apache.spark.sql.hbase.execution
 
-import org.apache.hadoop.hbase.client.Put
-import org.apache.hadoop.hbase.util.Bytes
-import org.apache.spark.TaskContext
-
-import scala.collection.mutable.{ArrayBuffer, ListBuffer}
-import org.apache.hadoop.mapreduce.Job
-import org.apache.hadoop.hbase.mapreduce.{LoadIncrementalHFiles, HFileOutputFormat}
+import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.hbase._
+import org.apache.hadoop.hbase.client.Put
 import org.apache.hadoop.hbase.io.ImmutableBytesWritable
-import org.apache.hadoop.fs.{FileSystem, LocalFileSystem, Path}
-
-import org.apache.spark.annotation.DeveloperApi
-import org.apache.spark.rdd.{ShuffledRDD, RDD}
+import org.apache.hadoop.hbase.mapreduce.{HFileOutputFormat, LoadIncrementalHFiles}
+import org.apache.hadoop.hbase.util.Bytes
+import org.apache.hadoop.mapreduce.Job
+import org.apache.log4j.Logger
 import org.apache.spark.SparkContext._
+import org.apache.spark.TaskContext
+import org.apache.spark.annotation.DeveloperApi
+import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.sql.execution.{LeafNode, UnaryNode, SparkPlan}
+import org.apache.spark.sql.catalyst.plans.physical.RangePartitioning
+import org.apache.spark.sql.catalyst.types.DataType
+import org.apache.spark.sql.execution.{LeafNode, SparkPlan, UnaryNode}
 import org.apache.spark.sql.hbase._
 import org.apache.spark.sql.hbase.HBasePartitioner._
 
 import scala.collection.JavaConversions._
+import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
 /**
  * :: DeveloperApi ::
@@ -44,13 +45,22 @@ import scala.collection.JavaConversions._
  */
 @DeveloperApi
 case class HBaseSQLTableScan(
-    relation: HBaseRelation,
-    output: Seq[Attribute],
-    rowKeyPredicate: Option[Expression],
-    valuePredicate: Option[Expression],
-    partitionPredicate: Option[Expression],
-    coProcessorPlan: Option[SparkPlan])(@transient context: HBaseSQLContext)
+                              relation: HBaseRelation,
+                              output: Seq[Attribute],
+                              rowKeyPredicate: Option[Expression],
+                              valuePredicate: Option[Expression],
+                              partitionPredicate: Option[Expression],
+                              coProcessorPlan: Option[SparkPlan])
+                            (@transient context: HBaseSQLContext)
   extends LeafNode {
+
+  override def outputPartitioning = {
+    var ordering = List[SortOrder]()
+    for (key <- relation.partitionKeys) {
+      ordering = ordering :+ SortOrder(key, Ascending)
+    }
+    RangePartitioning(ordering.toSeq, relation.partitions.size)
+  }
 
   override def execute(): RDD[Row] = {
     new HBaseSQLReaderRDD(
@@ -97,7 +107,7 @@ case class InsertIntoHBaseTable(
       var colIndexInBatch = 0
 
       var puts = new ListBuffer[Put]()
-      val buffer = ArrayBuffer[Byte]()
+      val buffer = ListBuffer[Byte]()
       while (iterator.hasNext) {
         val row = iterator.next()
         val rawKeyCol = relation.keyColumns.map {
@@ -136,13 +146,37 @@ case class InsertIntoHBaseTable(
 }
 
 @DeveloperApi
+case class InsertValueIntoHBaseTable(relation: HBaseRelation, valueSeq: Seq[String])(
+  @transient hbContext: HBaseSQLContext) extends LeafNode {
+
+  override def execute() = {
+    val buffer = ListBuffer[Byte]()
+    val keyBytes = ListBuffer[(Array[Byte], DataType)]()
+    val valueBytes = ListBuffer[(Array[Byte], Array[Byte], Array[Byte])]()
+    HBaseKVHelper.string2KV(valueSeq, relation.allColumns, keyBytes, valueBytes)
+    val rowKey = HBaseKVHelper.encodingRawKeyColumns(buffer, keyBytes)
+    val put = new Put(rowKey)
+    valueBytes.foreach { case (family, qualifier, value) =>
+      put.add(family, qualifier, value)
+    }
+    relation.htable.put(put)
+
+    hbContext.sc.parallelize(Seq.empty[Row], 1)
+  }
+
+  override def output = Nil
+}
+
+@DeveloperApi
 case class BulkLoadIntoTable(path: String, relation: HBaseRelation,
                              isLocal: Boolean, delimiter: Option[String])(
-  @transient hbContext: HBaseSQLContext) extends LeafNode {
+                              @transient hbContext: HBaseSQLContext) extends LeafNode {
+
+  val logger = Logger.getLogger(getClass.getName)
 
   val conf = hbContext.sc.hadoopConfiguration
 
-  val job = new Job(hbContext.sc.hadoopConfiguration)
+  val job = new Job(conf)
 
   val hadoopReader = if (isLocal) {
     val fs = FileSystem.getLocal(conf)
@@ -160,10 +194,11 @@ case class BulkLoadIntoTable(path: String, relation: HBaseRelation,
       .asInstanceOf[Ordering[ImmutableBytesWritableWrapper]]
     val rdd = hadoopReader.makeBulkLoadRDDFromTextFile
     val partitioner = new HBasePartitioner(rdd)(splitKeys)
+    // Todo: fix issues with HBaseShuffledRDD
     val shuffled =
       new HBaseShuffledRDD[ImmutableBytesWritableWrapper, PutWrapper, PutWrapper](rdd, partitioner)
-        .setHbasePartitions(relation.partitions)
         .setKeyOrdering(ordering)
+        .setHbasePartitions(relation.partitions)
     val bulkLoadRDD = shuffled.mapPartitions { iter =>
       // the rdd now already sort by key, to sort by value
       val map = new java.util.TreeSet[KeyValue](KeyValue.COMPARATOR)
@@ -209,6 +244,7 @@ case class BulkLoadIntoTable(path: String, relation: HBaseRelation,
         Iterator.empty
       }
     }
+
     job.setOutputKeyClass(classOf[ImmutableBytesWritable])
     job.setOutputValueClass(classOf[KeyValue])
     job.setOutputFormatClass(classOf[HFileOutputFormat])
@@ -217,12 +253,12 @@ case class BulkLoadIntoTable(path: String, relation: HBaseRelation,
   }
 
   override def execute() = {
-    hbContext.sc.getConf.set("spark.sql.hbase.bulkload.textfile.splitRegex", delimiter.get)
     val splitKeys = relation.getRegionStartKeys().toArray
+    logger.debug(s"Starting makeBulkLoad on table ${relation.htable.getName} ...")
     makeBulkLoadRDD(splitKeys)
-    val hbaseConf = HBaseConfiguration.create
     val tablePath = new Path(tmpPath)
-    val load = new LoadIncrementalHFiles(hbaseConf)
+    val load = new LoadIncrementalHFiles(conf)
+    logger.debug(s"Starting doBulkLoad on table ${relation.htable.getName} ...")
     load.doBulkLoad(tablePath, relation.htable)
     hbContext.sc.parallelize(Seq.empty[Row], 1)
   }

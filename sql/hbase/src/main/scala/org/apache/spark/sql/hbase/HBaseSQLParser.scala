@@ -18,9 +18,19 @@ package org.apache.spark.sql.hbase
 
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.plans.logical._
-import org.apache.spark.sql.catalyst.{SqlLexical, SqlParser}
-import org.apache.spark.sql.catalyst.SparkSQLParser
+import org.apache.spark.sql.catalyst.{SparkSQLParser, SqlLexical, SqlParser}
 import org.apache.spark.sql.hbase.logical._
+
+object HBaseSQLParser {
+  def getKeywords(): Seq[String] = {
+    val hbaseSqlFields =
+      Class.forName("org.apache.spark.sql.hbase.HBaseSQLParser").getDeclaredFields
+    val sparkSqlFields = Class.forName("org.apache.spark.sql.catalyst.SqlParser").getDeclaredFields
+    var keywords = hbaseSqlFields.filter(x => x.getName.charAt(0).isUpper).map(_.getName)
+    keywords ++= sparkSqlFields.filter(x => x.getName.charAt(0).isUpper).map(_.getName)
+    keywords.toSeq
+  }
+}
 
 class HBaseSQLParser extends SqlParser {
 
@@ -31,6 +41,7 @@ class HBaseSQLParser extends SqlParser {
   protected val COLS = Keyword("COLS")
   protected val CREATE = Keyword("CREATE")
   protected val DATA = Keyword("DATA")
+  protected val DESCRIBE = Keyword("DESCRIBE")
   protected val DOUBLE = Keyword("DOUBLE")
   protected val DROP = Keyword("DROP")
   protected val EXISTS = Keyword("EXISTS")
@@ -46,6 +57,9 @@ class HBaseSQLParser extends SqlParser {
   protected val MAPPED = Keyword("MAPPED")
   protected val PRIMARY = Keyword("PRIMARY")
   protected val SHORT = Keyword("SHORT")
+  protected val SHOW = Keyword("SHOW")
+  protected val TABLES = Keyword("TABLES")
+  protected val VALUES = Keyword("VALUES")
   protected val TERMINATED = Keyword("TERMINATED")
 
   protected val newReservedWords: Seq[String] =
@@ -63,15 +77,16 @@ class HBaseSQLParser extends SqlParser {
         | EXCEPT ^^^ { (q1: LogicalPlan, q2: LogicalPlan) => Except(q1, q2)}
         | UNION ~ DISTINCT.? ^^^ { (q1: LogicalPlan, q2: LogicalPlan) => Distinct(Union(q1, q2))}
         )
-      | insert | create | drop | alterDrop | alterAdd | load
+      | insert | create | drop | alterDrop | alterAdd | load | show | describe
       )
 
   override protected lazy val insert: Parser[LogicalPlan] =
-    INSERT ~> INTO ~> relation ~ select <~ opt(";") ^^ {
-      case r ~ s =>
-        InsertIntoTable(
-          r, Map[String, Option[String]](), s, false)
-    }
+    (INSERT ~> INTO ~> relation ~ select <~ opt(";") ^^ {
+      case r ~ s => InsertIntoTable(r, Map[String, Option[String]](), s, false)}
+    |
+     INSERT ~> INTO ~> relation ~ (VALUES ~> "(" ~> keys <~ ")") ^^ {
+      case r ~ valueSeq => InsertValueIntoTable(r, Map[String, Option[String]](), valueSeq)}
+    )
 
   protected lazy val create: Parser[LogicalPlan] =
     CREATE ~> TABLE ~> ident ~
@@ -143,6 +158,7 @@ class HBaseSQLParser extends SqlParser {
       (DROP ~> ident) <~ opt(";") ^^ {
       case tableName ~ colName => AlterDropColPlan(tableName, colName)
     }
+
   protected lazy val alterAdd: Parser[LogicalPlan] =
     ALTER ~> TABLE ~> ident ~
       (ADD ~> tableCol) ~
@@ -171,14 +187,24 @@ class HBaseSQLParser extends SqlParser {
     (LOAD ~> DATA ~> INPATH ~> stringLit) ~
     (opt(OVERWRITE) ~> INTO ~> TABLE ~> relation ) ~
     (FIELDS ~> TERMINATED ~> BY ~> stringLit).? <~ opt(";") ^^ {
-      case filePath ~ table ~ delimiter => LoadDataIntoTable(filePath, table, false, delimiter)
+      case filePath ~ table ~ delimiter => BulkLoadPlan(filePath, table, false, delimiter)
     }
   | (LOAD ~> DATA ~> LOCAL ~> INPATH ~> stringLit) ~
       (opt(OVERWRITE) ~> INTO ~> TABLE ~> relation) ~
       (FIELDS ~> TERMINATED ~> BY ~> stringLit).? <~ opt(";") ^^ {
-      case filePath ~ table ~ delimiter => LoadDataIntoTable(filePath, table, true, delimiter)
+      case filePath ~ table ~ delimiter => BulkLoadPlan(filePath, table, true, delimiter)
     }
   )
+
+  // syntax:
+  // SHOW TABLES
+  protected lazy val show: Parser[LogicalPlan] =
+    ( SHOW ~> TABLES <~ opt(";") ^^^ ShowTablesPlan() )
+
+  protected lazy val describe: Parser[LogicalPlan] =
+    (DESCRIBE ~> ident) ^^ {
+      case tableName => DescribePlan(tableName)
+    }
 
   protected lazy val tableCol: Parser[(String, String)] =
     ident ~ (STRING | BYTE | SHORT | INT | INTEGER | LONG | FLOAT | DOUBLE | BOOLEAN) ^^ {

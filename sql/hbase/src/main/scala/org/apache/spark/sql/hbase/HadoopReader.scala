@@ -22,17 +22,16 @@ import org.apache.spark.SparkContext
 import org.apache.spark.sql.catalyst.types._
 
 import scala.collection.mutable.ListBuffer
-import scala.collection.mutable.ArrayBuffer
 
 /**
  * Helper class for scanning files stored in Hadoop - e.g., to read text file when bulk loading.
  */
 private[hbase]
 class HadoopReader(
-    @transient sc: SparkContext,
-    @transient job: Job,
-    path: String,
-    delimiter: Option[String])(columns: Seq[AbstractColumn]) {
+                    @transient sc: SparkContext,
+                    @transient job: Job,
+                    path: String,
+                    delimiter: Option[String])(columns: Seq[AbstractColumn]) {
   // make RDD[(SparkImmutableBytesWritable, SparkKeyValue)] from text file
   private[hbase] def makeBulkLoadRDDFromTextFile = {
 
@@ -41,9 +40,9 @@ class HadoopReader(
     // use to fix serialize issue
     val cls = columns
     // Todo: use mapPartitions more better
-    val buffer = ArrayBuffer[Byte]()
     val keyBytes = ListBuffer[(Array[Byte], DataType)]()
     val valueBytes = ListBuffer[(Array[Byte], Array[Byte], Array[Byte])]()
+    val buffer = ListBuffer[Byte]()
     rdd.map { line =>
       HBaseKVHelper.string2KV(line.split(splitRegex), cls, keyBytes, valueBytes)
       val rowKeyData = HBaseKVHelper.encodingRawKeyColumns(buffer, keyBytes)

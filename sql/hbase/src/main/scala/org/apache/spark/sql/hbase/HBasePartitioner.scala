@@ -17,14 +17,14 @@
 
 package org.apache.spark.sql.hbase
 
-import java.io.{ObjectInputStream, ObjectOutputStream, IOException}
-import scala.reflect.ClassTag
+import java.io.{IOException, ObjectInputStream, ObjectOutputStream}
 
+import org.apache.spark.{Partitioner, SparkEnv}
 import org.apache.spark.rdd.RDD
-import org.apache.spark.SparkEnv
-import org.apache.spark.Partitioner
-import org.apache.spark.util.{Utils, CollectionsUtils}
 import org.apache.spark.serializer.JavaSerializer
+import org.apache.spark.util.{CollectionsUtils, Utils}
+
+import scala.reflect.ClassTag
 
 class HBasePartitioner [K : Ordering : ClassTag, V](
     @transient rdd: RDD[_ <: Product2[K,V]])(splitKeys: Array[K])
@@ -34,7 +34,7 @@ class HBasePartitioner [K : Ordering : ClassTag, V](
 
   private var rangeBounds: Array[K] = splitKeys
 
-  def numPartitions = rangeBounds.length + 1
+  def numPartitions = rangeBounds.length
 
   private var binarySearch: ((Array[K], K) => Int) = CollectionsUtils.makeBinarySearch[K]
 
@@ -51,7 +51,7 @@ class HBasePartitioner [K : Ordering : ClassTag, V](
       partition = binarySearch(rangeBounds, k)
       // binarySearch either returns the match location or -[insertion point]-1
       if (partition < 0) {
-        partition = -partition-1
+        partition = -partition - 1
       }
       if (partition > rangeBounds.length) {
         partition = rangeBounds.length
@@ -61,7 +61,7 @@ class HBasePartitioner [K : Ordering : ClassTag, V](
   }
 
   override def equals(other: Any): Boolean = other match {
-    case r: HBasePartitioner[_,_] =>
+    case r: HBasePartitioner[_, _] =>
       r.rangeBounds.sameElements(rangeBounds)
     case _ =>
       false

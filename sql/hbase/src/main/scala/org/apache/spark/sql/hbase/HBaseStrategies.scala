@@ -17,18 +17,18 @@
 
 package org.apache.spark.sql.hbase
 
+import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.planning.{PhysicalOperation, QueryPlanner}
 import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoTable, LogicalPlan}
 import org.apache.spark.sql.execution._
-import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.hbase.execution._
+import org.apache.spark.sql.hbase.logical.InsertValueIntoTable
 
 private[hbase] trait HBaseStrategies extends QueryPlanner[SparkPlan] {
   self: SQLContext#SparkPlanner =>
 
   val hbaseSQLContext: HBaseSQLContext
-
 
   /**
    * Retrieves data using a HBaseTableScan.  Partition pruning predicates are also detected and
@@ -40,10 +40,10 @@ private[hbase] trait HBaseStrategies extends QueryPlanner[SparkPlan] {
       case PhysicalOperation(projectList, inPredicates, relation: HBaseRelation) =>
 
         // Filter out all predicates that only deal with partition keys
-        val partitionsKeys = AttributeSet(relation.partitionKeys)
-        val (rowKeyPredicates, otherPredicates) = inPredicates.partition {
-          _.references.subsetOf(partitionsKeys)
-        }
+        // val partitionsKeys = AttributeSet(relation.partitionKeys)
+        // val (rowKeyPredicates, otherPredicates) = inPredicates.partition {
+        //  _.references.subsetOf(partitionsKeys)
+        //}
 
         // TODO: Ensure the outputs from the relation match the expected columns of the query
 
@@ -62,12 +62,13 @@ private[hbase] trait HBaseStrategies extends QueryPlanner[SparkPlan] {
         */
 
         // TODO: add pushdowns
+        val filterPred = inPredicates.reduceLeftOption(And)
         val scanBuilder: (Seq[Attribute] => SparkPlan) = HBaseSQLTableScan(
           relation,
           _,
           None, // row key predicate
           None, // value predicate
-          None, // partition predicate
+          filterPred, // partition predicate
           None // coprocSubPlan
         )(hbaseSQLContext)
 
@@ -89,10 +90,12 @@ private[hbase] trait HBaseStrategies extends QueryPlanner[SparkPlan] {
         Seq(execution.CreateHBaseTableCommand(
           tableName, nameSpace, hbaseTableName, colsSeq, keyCols, nonKeyCols)
           (hbaseSQLContext))
-      case logical.LoadDataIntoTable(path, table: HBaseRelation, isLocal, delimiter) =>
+      case logical.BulkLoadPlan(path, table: HBaseRelation, isLocal, delimiter) =>
         execution.BulkLoadIntoTable(path, table, isLocal, delimiter)(hbaseSQLContext) :: Nil
       case InsertIntoTable(table: HBaseRelation, partition, child, _) =>
         new InsertIntoHBaseTable(table, planLater(child))(hbaseSQLContext) :: Nil
+      case InsertValueIntoTable(table: HBaseRelation, partition, valueSeq) =>
+        execution.InsertValueIntoHBaseTable(table, valueSeq)(hbaseSQLContext) :: Nil
       case logical.AlterDropColPlan(tableName, colName) =>
         Seq(AlterDropColCommand(tableName, colName)
           (hbaseSQLContext))
@@ -102,6 +105,10 @@ private[hbase] trait HBaseStrategies extends QueryPlanner[SparkPlan] {
       case logical.DropTablePlan(tableName) =>
         Seq(DropHbaseTableCommand(tableName)
           (hbaseSQLContext))
+      case logical.ShowTablesPlan() =>
+        execution.ShowTablesCommand(hbaseSQLContext) :: Nil
+      case logical.DescribePlan(tableName) =>
+        execution.DescribeTableCommand(tableName)(hbaseSQLContext) :: Nil
       case _ => Nil
     }
   }

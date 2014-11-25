@@ -20,32 +20,35 @@ package org.apache.spark.sql.hbase
 import org.apache.hadoop.hbase.util.Bytes
 import org.apache.spark.sql.catalyst.types._
 
-import scala.collection.mutable.{ListBuffer, ArrayBuffer}
+import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
 object HBaseKVHelper {
   private val delimiter: Byte = 0
 
   /**
    * create row key based on key columns information
-   * @param rawKeyColumns sequence of byte array representing the key columns
+   * @param buffer an input buffer
+   * @param rawKeyColumns sequence of byte array and data type representing the key columns
    * @return array of bytes
    */
-  def encodingRawKeyColumns(buffer: ArrayBuffer[Byte],
+  def encodingRawKeyColumns(buffer: ListBuffer[Byte],
                             rawKeyColumns: Seq[(HBaseRawType, DataType)]): HBaseRawType = {
-    var arrayBuffer = buffer
-    arrayBuffer.clear()
+    var listBuffer = buffer
+    listBuffer.clear()
     for (rawKeyColumn <- rawKeyColumns) {
-      arrayBuffer = arrayBuffer ++ rawKeyColumn._1
+      listBuffer = listBuffer ++ rawKeyColumn._1
       if (rawKeyColumn._2 == StringType) {
-        arrayBuffer += delimiter
+        listBuffer += delimiter
       }
     }
-    arrayBuffer.toArray
+    listBuffer.toArray
   }
 
   /**
    * get the sequence of key columns from the byte array
+   * @param buffer an input buffer
    * @param rowKey array of bytes
+   * @param keyColumns the sequence of key columns
    * @return sequence of byte array
    */
   def decodingRawKeyColumns(buffer: ListBuffer[HBaseRawType],
@@ -76,6 +79,13 @@ object HBaseKVHelper {
     listBuffer.toSeq
   }
 
+  /**
+   * Takes a record, translate it into HBase row key column and value by matching with metadata
+   * @param values record that as a sequence of string
+   * @param columns metadata that contains KeyColumn and NonKeyColumn
+   * @param keyBytes  output paramater, array of (key column and its type);
+   * @param valueBytes array of (column family, column qualifier, value)
+   */
   def string2KV(values: Seq[String],
                 columns: Seq[AbstractColumn],
                 keyBytes: ListBuffer[(Array[Byte], DataType)],
@@ -96,16 +106,18 @@ object HBaseKVHelper {
     }
   }
 
-  def string2Bytes(v: String, dataType: DataType, bu: BytesUtils): Array[Byte] = dataType match {
-    // todo: handle some complex types
-    case BooleanType => bu.toBytes(v.toBoolean)
-    case ByteType => bu.toBytes(v)
-    case DoubleType => bu.toBytes(v.toDouble)
-    case FloatType => bu.toBytes((v.toFloat))
-    case IntegerType => bu.toBytes(v.toInt)
-    case LongType => bu.toBytes(v.toLong)
-    case ShortType => bu.toBytes(v.toShort)
-    case StringType => bu.toBytes(v)
+  private def string2Bytes(v: String, dataType: DataType, bu: BytesUtils): Array[Byte] = {
+    dataType match {
+      // todo: handle some complex types
+      case BooleanType => bu.toBytes(v.toBoolean)
+      case ByteType => bu.toBytes(v)
+      case DoubleType => bu.toBytes(v.toDouble)
+      case FloatType => bu.toBytes((v.toFloat))
+      case IntegerType => bu.toBytes(v.toInt)
+      case LongType => bu.toBytes(v.toLong)
+      case ShortType => bu.toBytes(v.toShort)
+      case StringType => bu.toBytes(v)
+    }
   }
 }
 

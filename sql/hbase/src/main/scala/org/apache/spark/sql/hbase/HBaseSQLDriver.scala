@@ -14,19 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.spark.sql.hbase
 
-import org.apache.spark.Partition
+import java.util.{ArrayList => JArrayList}
 
-private[hbase] class HBasePartition(
-    idx: Int,
-    val lowerBound: Option[HBaseRawType] = None,
-    val upperBound: Option[HBaseRawType] = None,
-    val server: Option[String] = None) extends Partition {
+import org.apache.spark.Logging
+import org.apache.spark.sql.Row
 
-  override def index: Int = idx
+private[hbase] class HBaseSQLDriver(val context: HBaseSQLContext) extends Logging {
+  private var hbaseResponse: Seq[String] = _
 
-  override def hashCode(): Int = idx
-
-
+  def run(command: String): Array[Row] = {
+    val execution = context.executePlan(context.sql(command).logicalPlan)
+    val result = execution.toRdd.collect()
+    result
+  }
 }

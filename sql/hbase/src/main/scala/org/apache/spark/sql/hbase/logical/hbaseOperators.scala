@@ -16,7 +16,7 @@
  */
 package org.apache.spark.sql.hbase.logical
 
-import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, UnaryNode, Command}
+import org.apache.spark.sql.catalyst.plans.logical.{Command, LogicalPlan, UnaryNode}
 
 case class CreateHBaseTablePlan(tableName: String,
                                 nameSpace: String,
@@ -35,6 +35,8 @@ case class AlterAddColPlan(tableName: String,
                            colFamily: String,
                            colQualifier: String) extends Command
 
+case class ShowTablesPlan() extends Command
+
 /**
  * Logical plan for Bulkload
  * @param path input data file path
@@ -42,7 +44,7 @@ case class AlterAddColPlan(tableName: String,
  * @param isLocal using HDFS or local file
  * @param delimiter character in terminated by
  */
-case class LoadDataIntoTable(path: String, child: LogicalPlan,
+case class BulkLoadPlan(path: String, child: LogicalPlan,
                              isLocal: Boolean, delimiter: Option[String])
   extends UnaryNode {
 
@@ -50,3 +52,21 @@ case class LoadDataIntoTable(path: String, child: LogicalPlan,
 
   override def toString = s"LogicalPlan: LoadDataIntoTable(LOAD $path INTO $child)"
 }
+
+case class InsertValueIntoTable(
+                            child: LogicalPlan,
+                            partition: Map[String, Option[String]],
+                            valueSeq: Seq[String])
+  extends UnaryNode {
+
+  override def output = null
+
+  override def toString = s"LogicalPlan: InsertValueIntoTable($valueSeq INTO $child)"
+
+}
+
+/**
+ * Logical plan for DESCRIBE
+ * @param tableName table to describe
+ */
+case class DescribePlan(tableName: String) extends Command
