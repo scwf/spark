@@ -6,6 +6,8 @@ import org.apache.spark.Logging
 import org.apache.spark.sql.catalyst.types.StructType
 import org.apache.spark.sql.hbase.AbstractColumn
 import org.apache.spark.annotation.DeveloperApi
+import org.apache.spark.sql.catalyst.expressions.{And, Attribute, Row, Expression}
+import org.apache.spark.rdd.RDD
 
 /**
  * Allows creation of parquet based tables using the syntax
@@ -34,15 +36,31 @@ class DefaultSource extends RelationProvider with Logging {
     // todo: check for mapping is legal
 
     // todo: rename to HBaseRelation
-    HBaseRelation2(hbaseTableName, Seq.empty, schema.get)(sqlContext)
+    HBaseScanBuilder(hbaseTableName, Seq.empty, schema.get)(sqlContext)
   }
 }
 
 @DeveloperApi
-case class HBaseRelation2(
+case class HBaseScanBuilder(
     hbaseTableName: String,
-    allColumns: Seq[AbstractColumn],  // todo: refer to hbase relation and scan to design this
-    schema: StructType)(sqlContext: SQLContext) extends CatalystScan with Logging {
+    allColumns: Seq[AbstractColumn],
+    schema: StructType)(context: SQLContext) extends CatalystScan with Logging {
+
+  val hbaseMetadata = new HBaseMetadata
+  val relation = hbaseMetadata.createTable("", hbaseTableName, allColumns)
+
+  override def sqlContext: SQLContext = context
+
+  override def buildScan(output: Seq[Attribute], predicates: Seq[Expression]): RDD[Row] = {
+    new HBaseSQLReaderRDD(
+      relation,
+      schema.toAttributes,
+      None,
+      None,
+      predicates.reduceLeftOption(And),// to make it clean
+      None
+    )(sqlContext)
+  }
 
 }
 

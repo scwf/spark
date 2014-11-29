@@ -39,8 +39,7 @@ class HBaseSQLReaderRDD(
     @transient hbaseContext: HBaseSQLContext)
   extends RDD[Row](hbaseContext.sparkContext, Nil) with Logging {
 
-  @transient lazy val logger = Logger.getLogger(getClass.getName)
-  private final val cachingSize: Int = 100 // To be made configurable
+  private final val cachingSize: Int = 100 // Todo: be made configurable
 
   override def getPartitions: Array[Partition] = {
     relation.getPrunedPartitions(partitionPred).get.toArray
@@ -56,7 +55,7 @@ class HBaseSQLReaderRDD(
     val filters = relation.buildFilter(output, rowKeyPred, valuePred)
     val scan = relation.buildScan(split, filters, output)
     scan.setCaching(cachingSize)
-    logger.debug(s"relation.htable scanner conf="
+    logDebug(s"relation.htable scanner conf="
       + s"${relation.htable.getConfiguration.get("hbase.zookeeper.property.clientPort")}")
     val scanner = relation.htable.getScanner(scan)
 
