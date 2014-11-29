@@ -62,14 +62,15 @@ case class HBaseScanBuilder(
 
   val hbaseMetadata = new HBaseMetadata
 
-  val filedByHbaseFamilyColumn = fieldByHbaseColumn.toMap
+  val filedByHbaseFamilyAndColumn = fieldByHbaseColumn.toMap
 
   def allColumns() = schema.fields.map{ field =>
     val fieldName = field.name
     if(keyColumns.contains(fieldName)) {
       KeyColumn(fieldName, field.dataType, keyColumns.indexOf(fieldName))
     } else {
-      val familyAndQuilifier = filedByHbaseFamilyColumn.getOrElse(fieldName, "").split(".")
+      val familyAndQuilifier = filedByHbaseFamilyAndColumn.getOrElse(fieldName, "").split(".")
+      assert(familyAndQuilifier.size == 2, "illegal mapping")
       NonKeyColumn(fieldName, field.dataType, familyAndQuilifier(0), familyAndQuilifier(1))
     }
   }
@@ -88,7 +89,4 @@ case class HBaseScanBuilder(
       None
     )(sqlContext)
   }
-
 }
-
-
