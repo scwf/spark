@@ -22,6 +22,10 @@ import scala.language.implicitConversions
 import scala.math.PartialOrdering
 import scala.reflect.runtime.universe.typeTag
 
+import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.spark.sql.catalyst.types._
+
+
 import org.apache.spark.sql.catalyst.types._
 
 class Range[T](val start: Option[T], // None for open ends
@@ -38,9 +42,10 @@ class Range[T](val start: Option[T], // None for open ends
 
 // HBase ranges:
 // @param
-// id: partition id to be used to map to a HBase partition
+// id: partition id to be used to map to a HBase physical partition
 class PartitionRange[T](start: Option[T], startInclusive: Boolean,
-                        end: Option[T], endInclusive: Boolean, val id: Int, dt: NativeType)
+                        end: Option[T], endInclusive: Boolean,
+                        val id: Int, dt: NativeType, var pred: Expression)
   extends Range[T](start, startInclusive, end, endInclusive, dt)
 
 // A PointRange is a range of a single point. It is used for convenience when
@@ -98,7 +103,8 @@ class RangeType[T] extends PartiallyOrderingDataType {
         && (aRange.dt.ordering.gt(bStart, aEnd)
         || (aRange.dt.ordering.equiv(bStart, aEnd) && !(bStartInclusive && aEndInclusive)))) {
         Some(-1)
-      } else if (aRange.dt.ordering.equiv(bStart, aEnd)
+      } else if (aStart != null && aEnd != null && bStart != null && bEnd != null &&
+        aRange.dt.ordering.equiv(bStart, aEnd)
         && aRange.dt.ordering.equiv(aStart, aEnd)
         && aRange.dt.ordering.equiv(bStart, bEnd)
         && (aStartInclusive && aEndInclusive && bStartInclusive && bEndInclusive)) {
@@ -192,9 +198,16 @@ object RangeType {
   object TimestampRangeType extends RangeType[Timestamp]
 
   val primitiveToPODataTypeMap: HashMap[NativeType, PartiallyOrderingDataType] =
-    HashMap(IntegerType -> IntegerRangeType, LongType -> LongRangeType,
-      DoubleType -> DoubleRangeType, FloatType -> FloatRangeType,
-      ByteType -> ByteRangeType, ShortType -> ShortRangeType,
-      BooleanType -> BooleanRangeType, //DecimalType -> DecimalRangeType,
-      TimestampType -> TimestampRangeType)
+    HashMap(
+      IntegerType -> IntegerRangeType,
+      LongType -> LongRangeType,
+      DoubleType -> DoubleRangeType,
+      FloatType -> FloatRangeType,
+      ByteType -> ByteRangeType,
+      ShortType -> ShortRangeType,
+      BooleanType -> BooleanRangeType,
+//      DecimalType -> DecimalRangeType,
+      TimestampType -> TimestampRangeType,
+      StringType -> StringRangeType
+    )
 }

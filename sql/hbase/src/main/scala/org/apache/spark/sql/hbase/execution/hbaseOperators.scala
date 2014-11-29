@@ -28,9 +28,10 @@ import org.apache.log4j.Logger
 import org.apache.spark.SparkContext._
 import org.apache.spark.TaskContext
 import org.apache.spark.annotation.DeveloperApi
-import org.apache.spark.rdd.RDD
+import org.apache.spark.rdd.{ShuffledRDD, RDD}
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.plans.physical.RangePartitioning
+import org.apache.spark.sql.catalyst.types.DataType
 import org.apache.spark.sql.execution.{LeafNode, SparkPlan, UnaryNode}
 import org.apache.spark.sql.hbase._
 import org.apache.spark.sql.hbase.HBasePartitioner._
@@ -44,13 +45,10 @@ import scala.collection.mutable.{ArrayBuffer, ListBuffer}
  */
 @DeveloperApi
 case class HBaseSQLTableScan(
-                              relation: HBaseRelation,
-                              output: Seq[Attribute],
-                              rowKeyPredicate: Option[Expression],
-                              valuePredicate: Option[Expression],
-                              partitionPredicate: Option[Expression],
-                              coProcessorPlan: Option[SparkPlan])
-                            (@transient context: HBaseSQLContext)
+                        relation: HBaseRelation,
+                        output: Seq[Attribute],
+                        filterPredicate: Option[Expression],
+                        coProcessorPlan: Option[SparkPlan])(@transient context: HBaseSQLContext)
   extends LeafNode {
 
   override def outputPartitioning = {
@@ -64,10 +62,9 @@ case class HBaseSQLTableScan(
   override def execute(): RDD[Row] = {
     new HBaseSQLReaderRDD(
       relation,
+      context.codegenEnabled,
       output,
-      rowKeyPredicate, // TODO:convert to column pruning preds
-      valuePredicate,
-      partitionPredicate, // PartitionPred : Option[Expression]
+      filterPredicate, // PartitionPred : Option[Expression]
       None, // coprocSubPlan: SparkPlan
       context
     )
@@ -150,7 +147,9 @@ case class InsertValueIntoHBaseTable(relation: HBaseRelation, valueSeq: Seq[Stri
 
   override def execute() = {
     val buffer = ListBuffer[Byte]()
-    val (keyBytes, valueBytes) = HBaseKVHelper.string2KV(valueSeq, relation.allColumns)
+    val keyBytes = ListBuffer[(Array[Byte], DataType)]()
+    val valueBytes = ListBuffer[(Array[Byte], Array[Byte], Array[Byte])]()
+    HBaseKVHelper.string2KV(valueSeq, relation.allColumns, keyBytes, valueBytes)
     val rowKey = HBaseKVHelper.encodingRawKeyColumns(buffer, keyBytes)
     val put = new Put(rowKey)
     valueBytes.foreach { case (family, qualifier, value) =>
@@ -173,14 +172,14 @@ case class BulkLoadIntoTable(path: String, relation: HBaseRelation,
 
   val conf = hbContext.sc.hadoopConfiguration
 
-  val job = new Job(conf)
+  val job = Job.getInstance(conf)
 
   val hadoopReader = if (isLocal) {
     val fs = FileSystem.getLocal(conf)
     val pathString = fs.pathToFile(new Path(path)).getCanonicalPath
-    new HadoopReader(hbContext.sparkContext, job, pathString, delimiter)(relation.allColumns)
+    new HadoopReader(hbContext.sparkContext, pathString, delimiter)(relation.allColumns)
   } else {
-    new HadoopReader(hbContext.sparkContext, job, path, delimiter)(relation.allColumns)
+    new HadoopReader(hbContext.sparkContext, path, delimiter)(relation.allColumns)
   }
 
   // tmp path for storing HFile
@@ -193,9 +192,9 @@ case class BulkLoadIntoTable(path: String, relation: HBaseRelation,
     val partitioner = new HBasePartitioner(rdd)(splitKeys)
     // Todo: fix issues with HBaseShuffledRDD
     val shuffled =
-      new HBaseShuffledRDD[ImmutableBytesWritableWrapper, PutWrapper, PutWrapper](rdd, partitioner)
+      new ShuffledRDD[ImmutableBytesWritableWrapper, PutWrapper, PutWrapper](rdd, partitioner)
         .setKeyOrdering(ordering)
-        .setHbasePartitions(relation.partitions)
+        //.setHbasePartitions(relation.partitions)
     val bulkLoadRDD = shuffled.mapPartitions { iter =>
       // the rdd now already sort by key, to sort by value
       val map = new java.util.TreeSet[KeyValue](KeyValue.COMPARATOR)

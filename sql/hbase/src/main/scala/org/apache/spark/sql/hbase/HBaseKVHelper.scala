@@ -20,6 +20,7 @@ package org.apache.spark.sql.hbase
 import org.apache.hadoop.hbase.util.Bytes
 import org.apache.spark.sql.catalyst.types._
 
+import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
 object HBaseKVHelper {
@@ -83,28 +84,33 @@ object HBaseKVHelper {
    * Takes a record, translate it into HBase row key column and value by matching with metadata
    * @param values record that as a sequence of string
    * @param columns metadata that contains KeyColumn and NonKeyColumn
-   * @return 1. array of (key column and its type);
-   *         2. array of (column family, column qualifier, value)
+   * @param keyBytes  output paramater, array of (key column and its type);
+   * @param valueBytes array of (column family, column qualifier, value)
    */
-  def string2KV(values: Seq[String], columns: Seq[AbstractColumn]):
-  (Seq[(Array[Byte], DataType)], Seq[(Array[Byte], Array[Byte], Array[Byte])]) = {
-    assert(values.length == columns.length)
-
-    // TODO: better to let caller allocate the buffer to avoid creating a new buffer everytime
-    val keyBytes = new ArrayBuffer[(Array[Byte], DataType)]()
-    val valueBytes = new ArrayBuffer[(Array[Byte], Array[Byte], Array[Byte])]()
+  def string2KV(values: Seq[String],
+                columns: Seq[AbstractColumn],
+                keyBytes: ListBuffer[(Array[Byte], DataType)],
+                valueBytes: ListBuffer[(Array[Byte], Array[Byte], Array[Byte])]) = {
+    assert(values.length == columns.length,
+      s"values length ${values.length} not equals lolumns length ${columns.length}")
+    keyBytes.clear()
+    valueBytes.clear()
+    val map = mutable.HashMap[Int, (Array[Byte], DataType)]()
+    var index = 0
     for (i <- 0 until values.length) {
       val value = values(i)
       val column = columns(i)
       val bytes = string2Bytes(value, column.dataType, new BytesUtils)
       if (column.isKeyColum()) {
-        keyBytes += ((bytes, column.dataType))
+        map(column.asInstanceOf[KeyColumn].order) = ((bytes, column.dataType))
+        index = index + 1
       } else {
         val realCol = column.asInstanceOf[NonKeyColumn]
         valueBytes += ((Bytes.toBytes(realCol.family), Bytes.toBytes(realCol.qualifier), bytes))
       }
     }
-    (keyBytes, valueBytes)
+
+    (0 until index).foreach(k => keyBytes += map.get(k).get)
   }
 
   private def string2Bytes(v: String, dataType: DataType, bu: BytesUtils): Array[Byte] = {
