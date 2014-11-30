@@ -15,9 +15,9 @@ import scala.util.matching.Regex
  * `CREATE TEMPORARY TABLE table_name(field1 filed1_type, filed2 filed2_type...)
  *  USING org.apache.spark.sql.hbase.source
  *  OPTIONS (
- *    hbase.table hbase_table_name,
- *    mapping [filed1=cf1.column1, filed2=cf2.column2...]
- *    primary.key [filed_name1, field_name2]
+ *    hbase_table "hbase_table_name",
+ *    mapping "filed1=cf1.column1, filed2=cf2.column2...",
+ *    primary_key "filed_name1, field_name2"
  *  )`.
  */
 class DefaultSource extends RelationProvider with Logging {
@@ -28,20 +28,19 @@ class DefaultSource extends RelationProvider with Logging {
        schema: Option[StructType]): BaseRelation = {
 
     assert(schema.nonEmpty, "schema can not be empty for hbase rouce!")
-    assert(parameters.get("hbase.table").nonEmpty, "no option for hbase.table")
+    assert(parameters.get("hbase_table").nonEmpty, "no option for hbase.table")
     assert(parameters.get("mapping").nonEmpty, "no option for mapping")
-    assert(parameters.get("primary.key").nonEmpty, "no option for mapping")
+    assert(parameters.get("primary_key").nonEmpty, "no option for mapping")
 
-    val hbaseTableName = parameters.getOrElse("hbase.table", "").toLowerCase
+    val hbaseTableName = parameters.getOrElse("hbase_table", "").toLowerCase
     val mapping = parameters.getOrElse("mapping", "").toLowerCase
-    val primaryKey = parameters.getOrElse("primary.key", "").toLowerCase()
-    // Todo: not familar with regex, to clean this
-    val regex1 = "[^\\[|^\\]]+".r
-    val regex2 = "[([^=]+)=([^=]+)]".r
-    val fieldByHbaseColumn = regex1.findAllMatchIn(mapping).next().toString.split(",").map {
-      case regex2(key, value) => (key, value)
+    val primaryKey = parameters.getOrElse("primary_key", "").toLowerCase()
+    val partValue = "([^=]+)=([^=]+)".r
+
+    val fieldByHbaseColumn = mapping.split(",").map {
+      case partValue(key, value) => (key, value)
     }
-    val keyColumns = regex1.findAllMatchIn(primaryKey).next().toString().split(",")
+    val keyColumns = primaryKey.split(",").map(_.trim)
 
     // check the mapping is legal
     val fieldSet = schema.get.fields.map(_.name).toSet
@@ -69,7 +68,7 @@ case class HBaseScanBuilder(
     if(keyColumns.contains(fieldName)) {
       KeyColumn(fieldName, field.dataType, keyColumns.indexOf(fieldName))
     } else {
-      val familyAndQuilifier = filedByHbaseFamilyAndColumn.getOrElse(fieldName, "").split(".")
+      val familyAndQuilifier = filedByHbaseFamilyAndColumn.getOrElse(fieldName, "").split("\\.")
       assert(familyAndQuilifier.size == 2, "illegal mapping")
       NonKeyColumn(fieldName, field.dataType, familyAndQuilifier(0), familyAndQuilifier(1))
     }

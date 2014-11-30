@@ -17,53 +17,111 @@
 
 package org.apache.spark.sql.hbase
 
+import java.util.{Random, Date}
+
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.hbase.util.Bytes
-import org.apache.hadoop.hbase.{HColumnDescriptor, HTableDescriptor, MiniHBaseCluster, HBaseTestingUtility}
+import org.apache.hadoop.hbase._
 import org.apache.hadoop.hbase.client.HBaseAdmin
-import org.apache.spark.{Logging, SparkContext}
+import org.apache.hadoop.hbase.util.Bytes
+import org.apache.spark.sql.SQLContext
+import org.apache.spark.{SparkConf, Logging, SparkContext}
 import org.scalatest.{Suite, BeforeAndAfterAll, FunSuite}
 
-class HBaseMiniClusterBase extends FunSuite with BeforeAndAfterAll with Logging { self: Suite =>
-
-  val NMasters = 1
-  val NRegionServers = 2
+class HBaseMiniClusterBase(
+    useMiniCluster: Boolean = true,
+    nRegionServers: Int = 2,
+    nDataNodes: Int = 2,
+    nMasters: Int = 1) extends FunSuite with BeforeAndAfterAll with Logging {
+  self: Suite =>
 
   @transient var sc: SparkContext = null
   @transient var cluster: MiniHBaseCluster = null
   @transient var config: Configuration = null
-  @transient var hbc: HBaseSQLContext = null
+  @transient var hbaseAdmin: HBaseAdmin = null
+  @transient var sqlContext: SQLContext = null
+  @transient var catalog: HBaseCatalog = null
   @transient var testUtil: HBaseTestingUtility = null
 
   def sparkContext: SparkContext = sc
 
-  override def beforeAll: Unit = {
-    sc = new SparkContext("local", "hbase sql test")
-    testUtil = new HBaseTestingUtility
-    cluster = testUtil.startMiniCluster(NMasters, NRegionServers)
-    config = testUtil.getConfiguration
-    hbc = new HBaseSQLContext(sc, Some(config))
+  val startTime = (new Date).getTime
+  val sparkUiPort = 0xc000 + new Random().nextInt(0x3f00)
+  println(s"SparkUIPort = $sparkUiPort")
+
+  override def beforeAll(): Unit = {
+    ctxSetup()
   }
 
-  test("test whether minicluster work") {
-    val hbaseAdmin = new HBaseAdmin(config)
-    println(s"1: ${hbaseAdmin.tableExists("wf")}")
+//  def createNativeHbaseTable(tableName: String, families: Seq[String]) = {
+//    val hdesc = new HTableDescriptor(tableName)
+//    families.foreach { f => hdesc.addFamily(new HColumnDescriptor(f))}
+//    hbaseAdmin.createTable(hdesc)
+//  }
 
-    val desc = new HTableDescriptor("wf")
-    val farmily = Bytes.toBytes("fam")
-    val hcd = new HColumnDescriptor(farmily)
-      .setMaxVersions(10)
-      .setTimeToLive(1)
-    desc.addFamily(hcd)
+  def ctxSetup() {
+    if (useMiniCluster) {
+      logDebug(s"Spin up hbase minicluster w/ $nMasters mast, $nRegionServers RS, $nDataNodes dataNodes")
+      testUtil = new HBaseTestingUtility
+      config = testUtil.getConfiguration
+    } else {
+      config = HBaseConfiguration.create
+    }
 
-    hbaseAdmin.createTable(desc)
-    println(s"2: ${hbaseAdmin.tableExists("wf")}")
+    if (useMiniCluster) {
+      cluster = testUtil.startMiniCluster(nMasters, nRegionServers, nDataNodes)
+      println(s"# of region servers = ${cluster.countServedRegions}")
+    }
+    // Need to retrieve zkPort AFTER mini cluster is started
+    val zkPort = config.get("hbase.zookeeper.property.clientPort")
+    logDebug(s"After testUtil.getConfiguration the hbase.zookeeper.quorum="
+      + s"${config.get("hbase.zookeeper.quorum")} port=$zkPort")
 
+    val sconf = new SparkConf()
 
+    sconf.set("spark.hadoop.hbase.zookeeper.property.clientPort", zkPort)
+    sconf.set("spark.hadoop.hbase.zookeeper.quorum",
+      "%s:%s".format(config.get("hbase.zookeeper.quorum"), zkPort))
+    sconf.set("spark.ui.port", sparkUiPort.toString)
+    sconf.set("spark.hadoop.hbase.regionserver.info.port", "-1")
+    sconf.set("spark.hadoop.hbase.master.info.port", "-1")
+
+    sconf.set("spark.hadoop.dfs.client.socket-timeout", "480000")
+    sconf.set("spark.hadoop.dfs.datanode.socket.write.timeout", "480000")
+    sconf.set("spark.hadoop.zookeeper.session.timeout", "480000")
+    sconf.set("spark.hadoop.zookeeper.minSessionTimeout", "10")
+    sconf.set("spark.hadoop.zookeeper.tickTime", "10")
+    sconf.set("spark.hadoop.hbase.rpc.timeout", "480000")
+    sconf.set("spark.hadoop.ipc.client.connect.timeout", "480000")
+    sconf.set("spark.hadoop.dfs.namenode.stale.datanode.interval", "480000")
+    sconf.set("spark.hadoop.hbase.rpc.shortoperation.timeout", "480000")
+    sconf.set("spark.hadoop.hbase.regionserver.lease.period", "480000")
+    sconf.set("spark.hadoop.hbase.client.scanner.timeout.period", "480000")
+    sc = new SparkContext("local[2]", "TestSQLContext", sconf)
+
+    hbaseAdmin = testUtil.getHBaseAdmin
+    sqlContext = new SQLContext(sc)
+    logDebug(s"In testbase: HBaseAdmin.configuration zkPort="
+      + s"${hbaseAdmin.getConfiguration.get("hbase.zookeeper.property.clientPort")}")
   }
 
-  override def afterAll: Unit = {
-    sc.stop()
-    cluster.shutdown()
+  override def afterAll(): Unit = {
+    var msg = s"Test ${getClass.getName} completed at ${(new java.util.Date).toString} duration=${((new java.util.Date).getTime - startTime) / 1000}"
+    logInfo(msg)
+    try {
+      sqlContext.sparkContext.stop()
+    } catch {
+      case e: Throwable =>
+        logError(s"Exception shutting down sparkContext: ${e.getMessage}")
+    }
+    sqlContext = null
+    msg = "SQLContext was shut down"
+
+    try {
+      testUtil.shutdownMiniCluster()
+    } catch {
+      case e: Throwable =>
+        logError(s"Exception shutting down HBaseMiniCluster: ${e.getMessage}")
+    }
   }
+
 }
