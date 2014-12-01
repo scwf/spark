@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.spark.sql.hbase.source
 
 import org.apache.hadoop.hbase.client.Result
@@ -30,8 +31,8 @@ class HBaseSQLReaderRDD(
     rowKeyPred: Option[Expression],
     valuePred: Option[Expression],
     partitionPred: Option[Expression],
-    coprocSubPlan: Option[SparkPlan])(@transient hbaseContext: SQLContext)
-  extends RDD[Row](hbaseContext.sparkContext, Nil) with Logging {
+    coprocSubPlan: Option[SparkPlan])(@transient sqlContext: SQLContext)
+  extends RDD[Row](sqlContext.sparkContext, Nil) with Logging {
 
   private final val cachingSize: Int = 100 // Todo: be made configurable
 
