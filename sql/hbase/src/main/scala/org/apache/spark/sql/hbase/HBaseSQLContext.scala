@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hbase
 
 import org.apache.hadoop.conf.Configuration
+import org.apache.log4j.Logger
 import org.apache.spark.SparkContext
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
@@ -31,6 +32,8 @@ class HBaseSQLContext(@transient val sc: SparkContext,
                       val optConfiguration : Option[Configuration] = None)
   extends SQLContext(sc) with Serializable {
   self =>
+
+  private val logger = Logger.getLogger(getClass.getName)
 
   // TODO: do we need a analyzer?
   override protected[sql] lazy val catalog: HBaseCatalog = new HBaseCatalog(this)
@@ -67,8 +70,13 @@ class HBaseSQLContext(@transient val sc: SparkContext,
   override protected[sql] def executePlan(plan: LogicalPlan): this.QueryExecution =
     new this.QueryExecution { val logical = plan }
 
-  /** Extends QueryExecution with HBase specific features. */
-  protected[sql] abstract class QueryExecution extends super.QueryExecution {
+//  /** Extends QueryExecution with HBase specific features. */
+//  protected[sql] abstract class QueryExecution extends super.QueryExecution {
+//  }
+
+  override protected[sql] def executeSql(sql: String): QueryExecution = {
+    logger.debug(sql)
+    super.executeSql(sql)
   }
 
   // TODO: can we use SparkSQLParser directly instead of HBaseSparkSQLParser?

@@ -1,8 +1,7 @@
 package org.apache.spark.sql.hbase
 
-import org.apache.hadoop.hbase.{HColumnDescriptor, HTableDescriptor}
-import org.apache.hadoop.hbase.client.HBaseAdmin
 import org.apache.hadoop.hbase.util.Bytes
+import org.apache.hadoop.hbase.{HColumnDescriptor, HTableDescriptor}
 import org.apache.log4j.Logger
 
 /*
@@ -32,65 +31,54 @@ trait CreateTableAndLoadData {
   val DefaultStagingTableName = "StageTable"
   val DefaultTableName = "TestTable"
   val DefaultHbaseStagingTabName = "stageTab"
-  val DefaultHbaseTabName = "testTab"
-  val DefaultHbaseColFamiles = Seq("cf1","cf2")
-  val DefaultLoadFile = "./sql/hbase/src/test/resources/testTable.csv"
+  val DefaultHbaseStagingTableName = s"Hb$DefaultStagingTableName"
+  val DefaultHbaseTabName = s"Hb$DefaultTableName"
+  val DefaultHbaseColFamiles = Seq("cf1", "cf2")
 
-  var AvoidRowkeyBug = true
+  val CsvPath = "./sql/hbase/src/test/resources"
+  val DefaultLoadFile = s"$CsvPath/testTable.csv"
+
+  var AvoidRowkeyBug = false
+
   def createTableAndLoadData(hbc: HBaseSQLContext) = {
-    createTables(AvoidRowkeyBug, hbc)
-    loadData(hbc)
+    createTables(hbc, DefaultStagingTableName, DefaultTableName,
+      DefaultHbaseStagingTableName, DefaultHbaseTabName)
+    loadData(hbc, DefaultStagingTableName, DefaultTableName, DefaultLoadFile)
   }
 
   def createNativeHbaseTable(hbc: HBaseSQLContext, tableName: String, families: Seq[String]) = {
     val hbaseAdmin = hbc.catalog.hBaseAdmin
     val hdesc = new HTableDescriptor(tableName)
-    families.foreach{ f => hdesc.addFamily(new HColumnDescriptor(f))}
+    families.foreach { f => hdesc.addFamily(new HColumnDescriptor(f))}
     hbaseAdmin.createTable(hdesc)
   }
 
-  def createTables(avoidRowkeyBug: Boolean, hbc: HBaseSQLContext, stagingTableName: String = DefaultStagingTableName, tableName: String = DefaultTableName) = {
-    // this need to local test with hbase, so here to ignore this
+  def createTables(hbc: HBaseSQLContext, stagingTableName: String, tableName: String,
+                   hbaseStagingTable: String, hbaseTable: String) = {
 
     val hbaseAdmin = hbc.catalog.hBaseAdmin
-    createNativeHbaseTable(hbc, DefaultHbaseStagingTabName,DefaultHbaseColFamiles)
-    createNativeHbaseTable(hbc, DefaultHbaseTabName,DefaultHbaseColFamiles)
+    createNativeHbaseTable(hbc, DefaultHbaseStagingTabName, DefaultHbaseColFamiles)
+    createNativeHbaseTable(hbc, DefaultHbaseTabName, DefaultHbaseColFamiles)
 
-    val (stagingSql, tabSql) = if (avoidRowkeyBug) {
+    val (stagingSql, tabSql) =
       ( s"""CREATE TABLE $stagingTableName(strcol STRING, bytecol String, shortcol String, intcol String,
-            longcol string, floatcol string, doublecol string,
-            PRIMARY KEY(strcol, intcol,doublecol))
-            MAPPED BY ($DefaultHbaseStagingTabName, COLS=[bytecol=cf1.hbytecol,
+            longcol string, floatcol string, doublecol string, PRIMARY KEY(doublecol, strcol, intcol))
+            MAPPED BY ($hbaseStagingTable, COLS=[bytecol=cf1.hbytecol,
             shortcol=cf1.hshortcol, longcol=cf2.hlongcol, floatcol=cf2.hfloatcol])"""
         .stripMargin
         ,
         s"""CREATE TABLE $tableName(strcol STRING, bytecol BYTE, shortcol SHORT, intcol INTEGER,
-            longcol LONG, floatcol FLOAT, doublecol DOUBLE,
-            PRIMARY KEY(strcol, intcol,doublecol))
-            MAPPED BY ($DefaultHbaseTabName, COLS=[bytecol=cf1.hbytecol,
-            shortcol=cf1.hshortcol, longcol=cf2.hlongcol, floatcol=cf2.hfloatcol])"""
-          .stripMargin
-        )
-    } else {
-      (s"""CREATE TABLE $stagingTableName(strcol STRING, bytecol String, shortcol String, intcol String,
-            longcol string, floatcol string, doublecol string, PRIMARY KEY(doublecol, strcol, intcol))
-            MAPPED BY ($DefaultHbaseStagingTabName, COLS=[bytecol=cf1.hbytecol,
-            shortcol=cf1.hshortcol, longcol=cf2.hlongcol, floatcol=cf2.hfloatcol])"""
-          .stripMargin
-       ,
-        s"""CREATE TABLE $tableName(strcol STRING, bytecol BYTE, shortcol SHORT, intcol INTEGER,
             longcol LONG, floatcol FLOAT, doublecol DOUBLE, PRIMARY KEY(doublecol, strcol, intcol))
-            MAPPED BY ($DefaultHbaseTabName, COLS=[bytecol=cf1.hbytecol,
+            MAPPED BY ($hbaseTable, COLS=[bytecol=cf1.hbytecol,
             shortcol=cf1.hshortcol, longcol=cf2.hlongcol, floatcol=cf2.hfloatcol])"""
           .stripMargin
         )
-      }
     var executeSql1 = hbc.executeSql(stagingSql)
     executeSql1.toRdd.collect().foreach(println)
 
-        logger.debug(s"Created table $tableName: " +
-      s"isTableAvailable= ${hbaseAdmin.isTableAvailable(s2b(DefaultHbaseStagingTabName))}" +
-      s" tableDescriptor= ${hbaseAdmin.getTableDescriptor(s2b(DefaultHbaseStagingTabName))}")
+    logger.debug(s"Created table $tableName: " +
+      s"isTableAvailable= ${hbaseAdmin.isTableAvailable(s2b(hbaseStagingTable))}" +
+      s" tableDescriptor= ${hbaseAdmin.getTableDescriptor(s2b(hbaseStagingTable))}")
 
 
     executeSql1 = hbc.executeSql(tabSql)
@@ -98,8 +86,8 @@ trait CreateTableAndLoadData {
 
   }
 
-  def loadData(hbc: HBaseSQLContext, tableName: String = DefaultTableName,
-               loadFile: String = DefaultLoadFile) = {
+  def loadData(hbc: HBaseSQLContext, stagingTableName: String, tableName: String,
+               loadFile: String) = {
     // then load data into table
     val hbaseAdmin = hbc.catalog.hBaseAdmin
     val loadSql = s"LOAD DATA LOCAL INPATH '$loadFile' INTO TABLE $tableName"
@@ -107,7 +95,7 @@ trait CreateTableAndLoadData {
     val insertSql = s"""insert into $tableName select cast(strcol as string),
     cast(bytecol as tinyint), cast(shortcol as smallint), cast(intcol as int),
     cast (longcol as bigint), cast(floatcol as float), cast(doublecol as double)
-    from $DefaultHbaseStagingTabName"""
+    from $stagingTableName"""
   }
 
   def s2b(s: String) = Bytes.toBytes(s)
