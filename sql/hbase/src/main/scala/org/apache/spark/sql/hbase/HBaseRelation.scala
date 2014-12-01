@@ -23,7 +23,6 @@ import org.apache.hadoop.hbase.HBaseConfiguration
 import org.apache.hadoop.hbase.client.{Get, HTable, Put, Result, Scan}
 import org.apache.hadoop.hbase.filter._
 import org.apache.hadoop.hbase.util.Bytes
-import org.apache.log4j.Logger
 import org.apache.spark.Partition
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.plans.logical.LeafNode
@@ -44,14 +43,15 @@ private[hbase] case class HBaseRelation(
    @transient optConfiguration: Option[Configuration] = None)
   extends LeafNode {
 
-  @transient lazy val logger = Logger.getLogger(getClass.getName)
-
   @transient lazy val keyColumns = allColumns.filter(_.isInstanceOf[KeyColumn])
     .asInstanceOf[Seq[KeyColumn]].sortBy(_.order)
+
   @transient lazy val nonKeyColumns = allColumns.filter(_.isInstanceOf[NonKeyColumn])
     .asInstanceOf[Seq[NonKeyColumn]]
+
   @transient lazy val partitionKeys: Seq[AttributeReference] = keyColumns.map(col =>
     AttributeReference(col.sqlName, col.dataType, nullable = false)())
+
   @transient lazy val columnMap = allColumns.map {
     case key: KeyColumn => (key.sqlName, key.order)
     case nonKey: NonKeyColumn => (nonKey.sqlName, nonKey)
@@ -66,24 +66,25 @@ private[hbase] case class HBaseRelation(
 
   def configuration() = getConf()
 
+  // todo:scwf, why so complex logical for config?
   private def getConf(): Configuration = {
     if (config == null) {
       config = if (serializedConfiguration != null) {
         Util.deserializeHBaseConfiguration(serializedConfiguration)
       } else {
-        optConfiguration.getOrElse {
-          HBaseConfiguration.create
-        }
+        optConfiguration.getOrElse(HBaseConfiguration.create)
       }
     }
     config
   }
 
-  logger.debug(s"HBaseRelation config has zkPort="
+  // todo: scwf,remove this later
+  logDebug(s"HBaseRelation config has zkPort="
     + s"${getConf.get("hbase.zookeeper.property.clientPort")}")
 
   @transient lazy val htable: HTable = new HTable(getConf, hbaseTableName)
 
+  // todo: scwf, why non key columns
   lazy val attributes = nonKeyColumns.map(col =>
     AttributeReference(col.sqlName, col.dataType, nullable = true)())
 

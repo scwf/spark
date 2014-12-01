@@ -95,13 +95,14 @@ case class HBaseScanBuilder(
 
   override def sqlContext: SQLContext = context
 
+  // todo: optimization for predict push down
   override def buildScan(output: Seq[Attribute], predicates: Seq[Expression]): RDD[Row] = {
     new HBaseSQLReaderRDD(
       relation,
       schema.toAttributes,
       None,
       None,
-      predicates.reduceLeftOption(And),// to make it clean
+      predicates.reduceLeftOption(And),
       None
     )(sqlContext)
   }
