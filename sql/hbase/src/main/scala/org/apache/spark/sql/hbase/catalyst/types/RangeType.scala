@@ -71,7 +71,7 @@ class RangeType[T] extends PartiallyOrderingDataType {
     case s: String => new Range[String](Some(s), true, Some(s), true, StringType)
     case b: Boolean => new Range[Boolean](Some(b), true, Some(b), true, BooleanType)
     // todo: fix bigdecimal issue, now this will leads to comile error
-    //case d: BigDecimal => new Range[BigDecimal](Some(d), true, Some(d), true, DecimalType)
+    case d: BigDecimal => new Range[BigDecimal](Some(d), true, Some(d), true, DecimalType.Unlimited)
     case t: Timestamp => new Range[Timestamp](Some(t), true, Some(t), true, TimestampType)
     case _ => s
   }
@@ -206,7 +206,7 @@ object RangeType {
       ByteType -> ByteRangeType,
       ShortType -> ShortRangeType,
       BooleanType -> BooleanRangeType,
-//      DecimalType -> DecimalRangeType,
+      DecimalType.Unlimited -> DecimalRangeType,
       TimestampType -> TimestampRangeType,
       StringType -> StringRangeType
     )
