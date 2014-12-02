@@ -76,6 +76,7 @@ class HBaseSQLContext(@transient val sc: SparkContext,
 
   override protected[sql] def executeSql(sql: String): QueryExecution = {
     logger.debug(sql)
+    println(sql)
     super.executeSql(sql)
   }
 
