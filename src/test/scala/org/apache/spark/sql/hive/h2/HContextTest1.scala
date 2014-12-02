@@ -2,7 +2,6 @@ package org.apache.spark.sql.hive.h2
 
 import org.apache.spark.sql._
 import org.apache.spark.{SparkContext, SparkConf}
-import org.apache.spark.sql.hive.h2.HContext
 
 /**
  * Created by w00297350 on 2014/11/27.

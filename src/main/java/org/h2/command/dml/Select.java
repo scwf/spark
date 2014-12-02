@@ -67,7 +67,8 @@ public class Select extends Query {
     private ArrayList<Expression> expressions;
     private Expression[] expressionArray;
     private Expression having;
-    private Expression condition;
+    //wuwei revised
+    public Expression condition;
     private int visibleColumnCount, distinctColumnCount;
     private ArrayList<SelectOrderBy> orderList;
     private ArrayList<Expression> group;

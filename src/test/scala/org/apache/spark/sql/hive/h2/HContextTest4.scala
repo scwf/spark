@@ -11,12 +11,12 @@ object HContextTest4 {
     val sparkConf = new SparkConf().setAppName("myHContext").setMaster("local")
     val sc = new SparkContext(sparkConf)
     val hContext = new HContext(sc)
-    hContext.setConf("spark.sql.dialect","hiveql")
-    val ret=hContext.sql("call a")
+    hContext.setConf("spark.sql.dialect","h2ql")
+    val ret=hContext.sql("select name from emp where age>1 and depno=1 and name='aaa' or age>10")
 
-    println(ret.collect().length)
+    ret.collect().foreach(row=>println(row.getString(0)))
 
-    println()
+    //println()
 
 
   }

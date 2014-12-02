@@ -110,7 +110,8 @@ public class Comparison extends Condition {
     public static final int SPATIAL_INTERSECTS = 11;
 
     private final Database database;
-    private int compareType;
+    //wuwei revised public
+    public int compareType;
     private Expression left;
     private Expression right;
 

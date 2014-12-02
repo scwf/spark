@@ -11,7 +11,8 @@ import org.h2.value.ValueBoolean;
 /**
  * Represents a condition returning a boolean value, or NULL.
  */
-abstract class Condition extends Expression {
+//wuwei revised to public
+public abstract class Condition extends Expression {
 
     @Override
     public int getType() {

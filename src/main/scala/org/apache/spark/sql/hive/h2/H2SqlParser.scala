@@ -1,13 +1,14 @@
 package org.apache.spark.sql.hive.h2
 
 import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedRelation}
-import org.apache.spark.sql.catalyst.expressions.{And, EqualTo, GreaterThan, Literal}
+import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, LogicalPlan, Project}
 import org.apache.spark.sql.catalyst.types.StringType
 import org.apache.spark.sql.catalyst.types.IntegerType
 import org.h2.adapter.sqlparse.H2SqlParserAdapter
 import org.h2.command.CommandContainer
 import org.h2.command.dml.Select
+import org.h2.expression.{ConditionAndOr, Comparison, Condition}
 
 import scala.collection.mutable.ListBuffer
 
@@ -20,6 +21,24 @@ import scala.collection.mutable.ListBuffer
     def apply(input: String): LogicalPlan = {
       println("parser h2 sql and generate the logic plan")
 
+      return sql3(input)
+
+    }
+
+    //parse the sample code :select name, age from emp
+    def sql1(input:String):LogicalPlan=
+    {
+       val tableName="emp"
+       val relation = UnresolvedRelation(None, tableName, None);
+       val nameAttr=UnresolvedAttribute("name")
+       val ageAttr=UnresolvedAttribute("age")
+       val expressions=Seq(nameAttr,ageAttr)
+       Project(expressions,relation)
+    }
+
+    //parse where
+    def sql2(input:String):LogicalPlan=
+    {
       val h2SqlParser=new H2SqlParserAdapter();
       h2SqlParser.setModel("Oracle");
       h2SqlParser.initH2TableSchemaMapForTest();
@@ -45,6 +64,8 @@ import scala.collection.mutable.ListBuffer
 
         val relation = UnresolvedRelation(None, tableName, None);
 
+        //parse where
+
         val age=UnresolvedAttribute("AGE")
         val ageFl= GreaterThan(age, Literal(1, IntegerType))
 
@@ -57,14 +78,64 @@ import scala.collection.mutable.ListBuffer
 
         return Project(exprArray.toSeq,filter)
       }
-
-      //    val tableName="emp"
-      //    val relation = UnresolvedRelation(None, tableName, None);
-      //    val nameAttr=UnresolvedAttribute("name")
-      //    val ageAttr=UnresolvedAttribute("age")
-      //    val expressions=Seq(nameAttr,ageAttr)
-      //    Project(expressions,relation)
-      null
+      null;
     }
+
+    //parse test ComparisonParser
+    def sql3(input:String):LogicalPlan=
+    {
+      val h2SqlParser=new H2SqlParserAdapter();
+      h2SqlParser.setModel("Oracle");
+      h2SqlParser.initH2TableSchemaMapForTest();
+      val command: CommandContainer =h2SqlParser.getPreparedCommand(input).asInstanceOf[CommandContainer]
+      val prepared=command.prepared;
+
+      if(prepared.isInstanceOf[Select])
+      {
+        val select=prepared.asInstanceOf[Select];
+        val expressions=select.getExpressions();
+
+        val exprArray=new ListBuffer[UnresolvedAttribute]
+        for(i <- 0 to expressions.size()-1)
+        {
+          val expr=expressions.get(i);
+          val columnName=expr.getColumnName();
+          exprArray.append(UnresolvedAttribute(columnName))
+        }
+
+        val fullTableName=select.getTopTableFilter().toString();
+        val nameIndex=fullTableName.lastIndexOf(".")+1;
+        val tableName=fullTableName.substring(nameIndex);
+
+        val relation = UnresolvedRelation(None, tableName, None);
+
+        //parse where
+        var expr:Expression=null;
+        if(select.condition !=null) {
+          val condition: Condition = select.condition.asInstanceOf[Condition]
+
+          condition match
+          {
+            case comparison:Comparison=>
+              expr=ComparisonParser(comparison)
+
+            case conditionAndOr:ConditionAndOr=>
+              expr=ConditionAndOrParser(conditionAndOr)
+
+            case _ =>
+
+          }
+        }
+
+
+        val filter=Filter(expr, relation)
+
+        return Project(exprArray.toSeq,filter)
+      }
+      null;
+    }
+
+
+
   }
 

@@ -13,7 +13,7 @@ object HContextTest2 {
     val hContext = new HContext(sc)
     import hContext._
     hContext.setConf("spark.sql.dialect","hiveql")
-    val ret=hContext.sql("select * from dep")
+    val ret=hContext.sql("select * from emp")
     val ret2=ret.collect()
     println(ret2.size)
 

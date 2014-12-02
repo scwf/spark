@@ -29,7 +29,8 @@ public class ConditionAndOr extends Condition {
      */
     public static final int OR = 1;
 
-    private final int andOrType;
+    //wuwei revised public
+    public final int andOrType;
     private Expression left, right;
 
     public ConditionAndOr(int andOrType, Expression left, Expression right) {
