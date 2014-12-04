@@ -37,7 +37,10 @@ import org.apache.spark.sql.catalyst.expressions.{Expression, Attribute}
 @DeveloperApi
 trait RelationProvider {
   /** Returns a new base relation with the given parameters. */
-  def createRelation(sqlContext: SQLContext, parameters: Map[String, String]): BaseRelation
+  def createRelation(
+     sqlContext: SQLContext,
+     parameters: Map[String, String],
+     schema: Option[StructType]): BaseRelation
 }
 
 /**
