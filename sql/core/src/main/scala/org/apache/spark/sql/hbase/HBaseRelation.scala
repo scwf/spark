@@ -57,6 +57,8 @@ private[hbase] case class HBaseRelation(
 
   def configuration() = optConfiguration.getOrElse(HBaseConfiguration.create)
 
+  println("#################" + configuration())
+
   // todo: scwf,remove this later
   logDebug(s"HBaseRelation config has zkPort="
     + s"${configuration.get("hbase.zookeeper.property.clientPort")}")
