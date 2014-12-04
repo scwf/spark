@@ -122,7 +122,7 @@
     <hadoop.version>1.0.4</hadoop.version>
     <protobuf.version>2.4.1</protobuf.version>
     <yarn.version>${hadoop.version}</yarn.version>
-    <hbase.version>0.94.6</hbase.version>
+    <hbase.version>0.98.5-hadoop1</hbase.version>
     <flume.version>1.4.0</flume.version>
     <zookeeper.version>3.4.5</zookeeper.version>
     <!-- Version used in Maven Hive dependency -->
@@ -156,7 +156,7 @@
       <id>central</id>
       <!-- This should be at top, it makes maven try the central repo first and then others and hence faster dep resolution -->
       <name>Maven Repository</name>
-      <url>https://repo1.maven.org/maven2</url>
+      <url>http://repo1.maven.org/maven2</url>
       <releases>
         <enabled>true</enabled>
       </releases>
@@ -167,7 +167,7 @@
     <repository>
       <id>apache-repo</id>
       <name>Apache Repository</name>
-      <url>https://repository.apache.org/content/repositories/releases</url>
+      <url>http://repository.apache.org/content/repositories/releases</url>
       <releases>
         <enabled>true</enabled>
       </releases>
@@ -178,7 +178,7 @@
     <repository>
       <id>jboss-repo</id>
       <name>JBoss Repository</name>
-      <url>https://repository.jboss.org/nexus/content/repositories/releases</url>
+      <url>http://repository.jboss.org/nexus/content/repositories/releases</url>
       <releases>
         <enabled>true</enabled>
       </releases>
@@ -189,7 +189,7 @@
     <repository>
       <id>mqtt-repo</id>
       <name>MQTT Repository</name>
-      <url>https://repo.eclipse.org/content/repositories/paho-releases</url>
+      <url>http://repo.eclipse.org/content/repositories/paho-releases</url>
       <releases>
         <enabled>true</enabled>
       </releases>
@@ -200,7 +200,7 @@
     <repository>
       <id>cloudera-repo</id>
       <name>Cloudera Repository</name>
-      <url>https://repository.cloudera.com/artifactory/cloudera-repos</url>
+      <url>http://repository.cloudera.com/artifactory/cloudera-repos</url>
       <releases>
         <enabled>true</enabled>
       </releases>
@@ -222,7 +222,7 @@
     <repository>
       <id>spring-releases</id>
       <name>Spring Release Repository</name>
-      <url>https://repo.spring.io/libs-release</url>
+      <url>http://repo.spring.io/libs-release</url>
       <releases>
         <enabled>true</enabled>
       </releases>
@@ -234,7 +234,7 @@
     <repository>
       <id>spark-staging-1038</id>
       <name>Spark 1.2.0 Staging (1038)</name>
-      <url>https://repository.apache.org/content/repositories/orgapachespark-1038/</url>
+      <url>http://repository.apache.org/content/repositories/orgapachespark-1038/</url>
       <releases>
         <enabled>true</enabled>
       </releases>
@@ -246,7 +246,7 @@
   <pluginRepositories>
     <pluginRepository>
       <id>central</id>
-      <url>https://repo1.maven.org/maven2</url>
+      <url>http://repo1.maven.org/maven2</url>
       <releases>
         <enabled>true</enabled>
       </releases>
@@ -1442,6 +1442,12 @@
         <scala.binary.version>2.11</scala.binary.version>
         <jline.version>2.12</jline.version>
         <jline.groupid>jline</jline.groupid>
+      </properties>
+    </profile>
+    <profile>
+      <id>hbase-hadoop2</id>
+      <properties>
+        <hbase.version>0.98.5-hadoop2</hbase.version>
       </properties>
     </profile>
 

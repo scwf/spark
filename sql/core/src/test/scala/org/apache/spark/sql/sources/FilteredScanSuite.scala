@@ -24,18 +24,26 @@ import org.apache.spark.sql._
 class FilteredScanSource extends RelationProvider {
   override def createRelation(
       sqlContext: SQLContext,
-      parameters: Map[String, String]): BaseRelation = {
-    SimpleFilteredScan(parameters("from").toInt, parameters("to").toInt)(sqlContext)
+      parameters: Map[String, String],
+      schema: Option[StructType]): BaseRelation = {
+    SimpleFilteredScan(
+      parameters("from").toInt,
+      parameters("to").toInt,
+      schema: Option[StructType])(sqlContext)
   }
 }
 
-case class SimpleFilteredScan(from: Int, to: Int)(@transient val sqlContext: SQLContext)
+case class SimpleFilteredScan(
+    from: Int,
+    to: Int,
+    _schema: Option[StructType])(@transient val sqlContext: SQLContext)
   extends PrunedFilteredScan {
 
-  override def schema =
+  override def schema = _schema.getOrElse(
     StructType(
       StructField("a", IntegerType, nullable = false) ::
       StructField("b", IntegerType, nullable = false) :: Nil)
+  )
 
   override def buildScan(requiredColumns: Array[String], filters: Array[Filter]) = {
     val rowBuilders = requiredColumns.map {
@@ -80,85 +88,97 @@ class FilteredScanSuite extends DataSourceTest {
         |  to '10'
         |)
       """.stripMargin)
+
+    sql(
+      """
+        |CREATE TEMPORARY TABLE oneToTenFiltered_with_schema(a int, b int)
+        |USING org.apache.spark.sql.sources.FilteredScanSource
+        |OPTIONS (
+        |  from '1',
+        |  to '10'
+        |)
+      """.stripMargin)
   }
+  Seq("oneToTenFiltered", "oneToTenFiltered_with_schema").foreach { table =>
 
-  sqlTest(
-    "SELECT * FROM oneToTenFiltered",
-    (1 to 10).map(i => Row(i, i * 2)).toSeq)
+    sqlTest(
+      s"SELECT * FROM $table",
+      (1 to 10).map(i => Row(i, i * 2)).toSeq)
 
-  sqlTest(
-    "SELECT a, b FROM oneToTenFiltered",
-    (1 to 10).map(i => Row(i, i * 2)).toSeq)
+    sqlTest(
+      s"SELECT a, b FROM $table",
+      (1 to 10).map(i => Row(i, i * 2)).toSeq)
 
-  sqlTest(
-    "SELECT b, a FROM oneToTenFiltered",
-    (1 to 10).map(i => Row(i * 2, i)).toSeq)
+    sqlTest(
+      s"SELECT b, a FROM $table",
+      (1 to 10).map(i => Row(i * 2, i)).toSeq)
 
-  sqlTest(
-    "SELECT a FROM oneToTenFiltered",
-    (1 to 10).map(i => Row(i)).toSeq)
+    sqlTest(
+      s"SELECT a FROM $table",
+      (1 to 10).map(i => Row(i)).toSeq)
 
-  sqlTest(
-    "SELECT b FROM oneToTenFiltered",
-    (1 to 10).map(i => Row(i * 2)).toSeq)
+    sqlTest(
+      s"SELECT b FROM $table",
+      (1 to 10).map(i => Row(i * 2)).toSeq)
 
-  sqlTest(
-    "SELECT a * 2 FROM oneToTenFiltered",
-    (1 to 10).map(i => Row(i * 2)).toSeq)
+    sqlTest(
+      s"SELECT a * 2 FROM $table",
+      (1 to 10).map(i => Row(i * 2)).toSeq)
 
-  sqlTest(
-    "SELECT A AS b FROM oneToTenFiltered",
-    (1 to 10).map(i => Row(i)).toSeq)
+    sqlTest(
+      s"SELECT A AS b FROM $table",
+      (1 to 10).map(i => Row(i)).toSeq)
 
-  sqlTest(
-    "SELECT x.b, y.a FROM oneToTenFiltered x JOIN oneToTenFiltered y ON x.a = y.b",
-    (1 to 5).map(i => Row(i * 4, i)).toSeq)
+    sqlTest(
+      s"SELECT x.b, y.a FROM $table x JOIN $table y ON x.a = y.b",
+      (1 to 5).map(i => Row(i * 4, i)).toSeq)
 
-  sqlTest(
-    "SELECT x.a, y.b FROM oneToTenFiltered x JOIN oneToTenFiltered y ON x.a = y.b",
-    (2 to 10 by 2).map(i => Row(i, i)).toSeq)
+    sqlTest(
+      s"SELECT x.a, y.b FROM $table x JOIN $table y ON x.a = y.b",
+      (2 to 10 by 2).map(i => Row(i, i)).toSeq)
 
-  sqlTest(
-    "SELECT * FROM oneToTenFiltered WHERE a = 1",
-    Seq(1).map(i => Row(i, i * 2)).toSeq)
+    sqlTest(
+      s"SELECT * FROM $table WHERE a = 1",
+      Seq(1).map(i => Row(i, i * 2)).toSeq)
 
-  sqlTest(
-    "SELECT * FROM oneToTenFiltered WHERE a IN (1,3,5)",
-    Seq(1,3,5).map(i => Row(i, i * 2)).toSeq)
+    sqlTest(
+      s"SELECT * FROM $table WHERE a IN (1,3,5)",
+      Seq(1,3,5).map(i => Row(i, i * 2)).toSeq)
 
-  sqlTest(
-    "SELECT * FROM oneToTenFiltered WHERE A = 1",
-    Seq(1).map(i => Row(i, i * 2)).toSeq)
+    sqlTest(
+      s"SELECT * FROM $table WHERE A = 1",
+      Seq(1).map(i => Row(i, i * 2)).toSeq)
 
-  sqlTest(
-    "SELECT * FROM oneToTenFiltered WHERE b = 2",
-    Seq(1).map(i => Row(i, i * 2)).toSeq)
+    sqlTest(
+      s"SELECT * FROM $table WHERE b = 2",
+      Seq(1).map(i => Row(i, i * 2)).toSeq)
 
-  testPushDown("SELECT * FROM oneToTenFiltered WHERE A = 1", 1)
-  testPushDown("SELECT a FROM oneToTenFiltered WHERE A = 1", 1)
-  testPushDown("SELECT b FROM oneToTenFiltered WHERE A = 1", 1)
-  testPushDown("SELECT a, b FROM oneToTenFiltered WHERE A = 1", 1)
-  testPushDown("SELECT * FROM oneToTenFiltered WHERE a = 1", 1)
-  testPushDown("SELECT * FROM oneToTenFiltered WHERE 1 = a", 1)
+    testPushDown(s"SELECT * FROM $table WHERE A = 1", 1)
+    testPushDown(s"SELECT a FROM $table WHERE A = 1", 1)
+    testPushDown(s"SELECT b FROM $table WHERE A = 1", 1)
+    testPushDown(s"SELECT a, b FROM $table WHERE A = 1", 1)
+    testPushDown(s"SELECT * FROM $table WHERE a = 1", 1)
+    testPushDown(s"SELECT * FROM $table WHERE 1 = a", 1)
 
-  testPushDown("SELECT * FROM oneToTenFiltered WHERE a > 1", 9)
-  testPushDown("SELECT * FROM oneToTenFiltered WHERE a >= 2", 9)
+    testPushDown(s"SELECT * FROM $table WHERE a > 1", 9)
+    testPushDown(s"SELECT * FROM $table WHERE a >= 2", 9)
 
-  testPushDown("SELECT * FROM oneToTenFiltered WHERE 1 < a", 9)
-  testPushDown("SELECT * FROM oneToTenFiltered WHERE 2 <= a", 9)
+    testPushDown(s"SELECT * FROM $table WHERE 1 < a", 9)
+    testPushDown(s"SELECT * FROM $table WHERE 2 <= a", 9)
 
-  testPushDown("SELECT * FROM oneToTenFiltered WHERE 1 > a", 0)
-  testPushDown("SELECT * FROM oneToTenFiltered WHERE 2 >= a", 2)
+    testPushDown(s"SELECT * FROM $table WHERE 1 > a", 0)
+    testPushDown(s"SELECT * FROM $table WHERE 2 >= a", 2)
 
-  testPushDown("SELECT * FROM oneToTenFiltered WHERE a < 1", 0)
-  testPushDown("SELECT * FROM oneToTenFiltered WHERE a <= 2", 2)
+    testPushDown(s"SELECT * FROM $table WHERE a < 1", 0)
+    testPushDown(s"SELECT * FROM $table WHERE a <= 2", 2)
 
-  testPushDown("SELECT * FROM oneToTenFiltered WHERE a > 1 AND a < 10", 8)
+    testPushDown(s"SELECT * FROM $table WHERE a > 1 AND a < 10", 8)
 
-  testPushDown("SELECT * FROM oneToTenFiltered WHERE a IN (1,3,5)", 3)
+    testPushDown(s"SELECT * FROM $table WHERE a IN (1,3,5)", 3)
 
-  testPushDown("SELECT * FROM oneToTenFiltered WHERE a = 20", 0)
-  testPushDown("SELECT * FROM oneToTenFiltered WHERE b = 1", 10)
+    testPushDown(s"SELECT * FROM $table WHERE a = 20", 0)
+    testPushDown(s"SELECT * FROM $table WHERE b = 1", 10)
+  }
 
   def testPushDown(sqlString: String, expectedCount: Int): Unit = {
     test(s"PushDown Returns $expectedCount: $sqlString") {
