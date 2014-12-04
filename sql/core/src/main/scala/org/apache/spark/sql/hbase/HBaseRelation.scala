@@ -55,7 +55,35 @@ private[hbase] case class HBaseRelation(
     case nonKey: NonKeyColumn => (nonKey.sqlName, nonKey)
   }.toMap
 
-  def configuration() = optConfiguration.getOrElse(HBaseConfiguration.create)
+
+  // Read the configuration from (a) the serialized version if available
+  //  (b) the constructor parameter if available
+  //  (c) otherwise create a default one using HBaseConfiguration.create
+  private val serializedConfiguration: Array[Byte] = {
+    if (config == null) {
+      null
+    } else {
+      Util.serializeHBaseConfiguration(config)
+    }
+  }
+
+  @transient var config: Configuration = _
+
+  def configuration() = getConf
+
+  private def getConf: Configuration = {
+    if (config == null) {
+      config = {
+        if (serializedConfiguration != null) {
+          Util.deserializeHBaseConfiguration(serializedConfiguration)
+        }
+        else {
+          HBaseConfiguration.create
+        }
+      }
+    }
+    config
+  }
 
   println("#################" + configuration())
 
