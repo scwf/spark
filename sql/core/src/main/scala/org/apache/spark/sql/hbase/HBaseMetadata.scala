@@ -18,18 +18,14 @@
 package org.apache.spark.sql.hbase
 
 import java.io._
-import org.apache.spark.sql.catalyst.types.DataType
-
 import scala.Some
 
 import org.apache.hadoop.hbase.{HColumnDescriptor, TableName, HTableDescriptor, HBaseConfiguration}
 import org.apache.hadoop.hbase.client._
 import org.apache.hadoop.hbase.util.Bytes
 
-import org.apache.spark.sql.hbase._
+import org.apache.spark.sql.catalyst.types.DataType
 import org.apache.spark.Logging
-import org.apache.spark.sql.hbase.HBaseRelation
-import org.apache.spark.sql.hbase.NonKeyColumn
 
 /**
  * Column represent the sql column
