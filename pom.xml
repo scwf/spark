@@ -1432,22 +1432,6 @@
       </modules>
     </profile>
     <profile>
-      <id>hbase</id>
-      <activation>
-        <activeByDefault>false</activeByDefault>
-      </activation>
-      <properties>
-        <hadoop.version>2.3.0</hadoop.version>
-        <protobuf.version>2.5.0</protobuf.version>
-        <jets3t.version>0.9.0</jets3t.version>
-        <hbase.version>0.98.5-hadoop2</hbase.version>
-        <avro.mapred.classifier>hadoop2</avro.mapred.classifier>
-      </properties>
-      <modules>
-        <module>sql/hbase</module>
-      </modules>
-    </profile>
-    <profile>
       <id>scala-2.11</id>
       <activation>
         <property><name>scala-2.11</name></property>
