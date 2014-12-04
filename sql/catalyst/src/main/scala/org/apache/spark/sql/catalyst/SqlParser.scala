@@ -107,13 +107,16 @@ class SqlParser extends AbstractSparkSQLParser {
   protected val WHERE = Keyword("WHERE")
 
   // Use reflection to find the reserved words defined in this class.
+  /* TODO: It will cause the null exception for the subClass of SqlParser.
+   * Temporary solution: Add one more filter to restrain the class must be SqlParser
+   */
   protected val reservedWords =
     this
       .getClass
       .getMethods
       .filter(_.getReturnType == classOf[Keyword])
-      .map(_.invoke(this).asInstanceOf[Keyword].str)
-
+      .filter(_.toString.contains("org.apache.spark.sql.catalyst.SqlParser.".toCharArray))
+      .map{_.invoke(this).asInstanceOf[Keyword].str}
   override val lexical = new SqlLexical(reservedWords)
 
   protected def assignAliases(exprs: Seq[Expression]): Seq[NamedExpression] = {
