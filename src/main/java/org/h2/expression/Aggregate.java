@@ -56,73 +56,79 @@ public class Aggregate extends Expression {
      */
     public static final int GROUP_CONCAT = 2;
 
+    //wuwei revised public
+
     /**
      * The aggregate type for SUM(expression).
      */
-    static final int SUM = 3;
+    public static final int SUM = 3;
 
     /**
      * The aggregate type for MIN(expression).
      */
-    static final int MIN = 4;
+    public  static final int MIN = 4;
 
     /**
      * The aggregate type for MAX(expression).
      */
-    static final int MAX = 5;
+    public static final int MAX = 5;
 
     /**
      * The aggregate type for AVG(expression).
      */
-    static final int AVG = 6;
+    public static final int AVG = 6;
 
     /**
      * The aggregate type for STDDEV_POP(expression).
      */
-    static final int STDDEV_POP = 7;
+    public static final int STDDEV_POP = 7;
 
     /**
      * The aggregate type for STDDEV_SAMP(expression).
      */
-    static final int STDDEV_SAMP = 8;
+    public static final int STDDEV_SAMP = 8;
 
     /**
      * The aggregate type for VAR_POP(expression).
      */
-    static final int VAR_POP = 9;
+    public static final int VAR_POP = 9;
 
     /**
      * The aggregate type for VAR_SAMP(expression).
      */
-    static final int VAR_SAMP = 10;
+    public static final int VAR_SAMP = 10;
 
     /**
      * The aggregate type for BOOL_OR(expression).
      */
-    static final int BOOL_OR = 11;
+    public static final int BOOL_OR = 11;
 
     /**
      * The aggregate type for BOOL_AND(expression).
      */
-    static final int BOOL_AND = 12;
+    public static final int BOOL_AND = 12;
 
     /**
      * The aggregate type for SELECTIVITY(expression).
      */
-    static final int SELECTIVITY = 13;
+    public static final int SELECTIVITY = 13;
 
     /**
      * The aggregate type for HISTOGRAM(expression).
      */
-    static final int HISTOGRAM = 14;
+    public static final int HISTOGRAM = 14;
 
     private static final HashMap<String, Integer> AGGREGATES = New.hashMap();
 
-    private final int type;
+    //wuwei revised public
+    public final int type;
+
     private final Select select;
     private final boolean distinct;
 
-    private Expression on;
+    //wuwei revised for public
+    public Expression on;
+
     private Expression groupConcatSeparator;
     private ArrayList<SelectOrderBy> groupConcatOrderList;
     private SortOrder groupConcatSort;

@@ -60,17 +60,20 @@ public class SortOrder implements Comparator<Value[]> {
     /**
      * The column indexes of the order by expressions within the query.
      */
-    private final int[] queryColumnIndexes;
+    //wuwei revised
+    public final int[] queryColumnIndexes;
 
     /**
      * The sort type bit mask (DESCENDING, NULLS_FIRST, NULLS_LAST).
      */
-    private final int[] sortTypes;
+    //wuwei revised
+    public final int[] sortTypes;
 
     /**
      * The order list.
      */
-    private final ArrayList<SelectOrderBy> orderList;
+    //wuwei revised for public
+    public final ArrayList<SelectOrderBy> orderList;
 
     /**
      * Construct a new sort order object.

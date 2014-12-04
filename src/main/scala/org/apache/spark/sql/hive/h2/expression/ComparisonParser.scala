@@ -1,11 +1,9 @@
-package org.apache.spark.sql.hive.h2
+package org.apache.spark.sql.hive.h2.expression
 
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions._
-import org.h2.expression.{ValueExpression, ExpressionColumn, Expression, Comparison}
+import org.h2.expression.{Comparison, ExpressionColumn, ValueExpression}
 import org.h2.message.DbException
-import org.h2.value.Value
-import org.apache.spark.sql.catalyst.types.IntegerType
 
 /**
  * Created by w00297350 on 2014/12/2.

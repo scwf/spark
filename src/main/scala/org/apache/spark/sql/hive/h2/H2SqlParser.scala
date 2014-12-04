@@ -2,9 +2,10 @@ package org.apache.spark.sql.hive.h2
 
 import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedRelation}
 import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.sql.catalyst.plans.logical.{Filter, LogicalPlan, Project}
+import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.types.StringType
 import org.apache.spark.sql.catalyst.types.IntegerType
+import org.apache.spark.sql.hive.h2.expression.{SortOrderParser, ConditionAndOrParser, ComparisonParser}
 import org.h2.adapter.sqlparse.H2SqlParserAdapter
 import org.h2.command.CommandContainer
 import org.h2.command.dml.Select
@@ -25,6 +26,14 @@ import scala.collection.mutable.ListBuffer
 
     }
 
+    //copy from catalyst Sql Parser
+    protected def assignAliases(exprs: Seq[Expression]): Seq[NamedExpression] = {
+      exprs.zipWithIndex.map {
+        case (ne: NamedExpression, _) => ne
+        case (e, i) => Alias(e, s"c$i")()
+      }
+    }
+
     //parse the sample code :select name, age from emp
     def sql1(input:String):LogicalPlan=
     {
@@ -33,7 +42,13 @@ import scala.collection.mutable.ListBuffer
        val nameAttr=UnresolvedAttribute("name")
        val ageAttr=UnresolvedAttribute("age")
        val expressions=Seq(nameAttr,ageAttr)
-       Project(expressions,relation)
+       val project=Project(expressions,relation)
+       val seqOrder:Seq[SortOrder]=
+       {
+         SortOrder(ageAttr, Descending)::Nil
+       }
+       val sort=Sort(seqOrder,project);
+       sort
     }
 
     //parse where
@@ -93,23 +108,15 @@ import scala.collection.mutable.ListBuffer
       if(prepared.isInstanceOf[Select])
       {
         val select=prepared.asInstanceOf[Select];
-        val expressions=select.getExpressions();
-
-        val exprArray=new ListBuffer[UnresolvedAttribute]
-        for(i <- 0 to expressions.size()-1)
-        {
-          val expr=expressions.get(i);
-          val columnName=expr.getColumnName();
-          exprArray.append(UnresolvedAttribute(columnName))
-        }
 
         val fullTableName=select.getTopTableFilter().toString();
         val nameIndex=fullTableName.lastIndexOf(".")+1;
         val tableName=fullTableName.substring(nameIndex);
 
+        // relation
         val relation = UnresolvedRelation(None, tableName, None);
 
-        //parse where
+        //filter
         var expr:Expression=null;
         if(select.condition !=null) {
           val condition: Condition = select.condition.asInstanceOf[Condition]
@@ -126,11 +133,32 @@ import scala.collection.mutable.ListBuffer
 
           }
         }
+        val filter= if(expr!=null)  Filter(expr, relation) else relation
+
+        //group or project
+        var project:UnaryNode=null
+
+        val expressions=select.getExpressions();
+        val projectExpressions = ExpressionsParser(expressions)
+
+        val groupExpr=select.groupExprForSpark
+
+        if(groupExpr!=null)
+        {
+          val groupingExpressions=GroupParser(groupExpr)
+          project=Aggregate(assignAliases(groupingExpressions), assignAliases(projectExpressions), filter)
+        }
+        else
+        {
+          project = Project(assignAliases(projectExpressions), filter)
+        }
+
+        //sort order by
+        val sort= if(select.sort==null) project  else Sort(SortOrderParser(select.sort,expressions), project)
 
 
-        val filter=Filter(expr, relation)
+        return sort
 
-        return Project(exprArray.toSeq,filter)
       }
       null;
     }

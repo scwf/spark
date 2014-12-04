@@ -16,8 +16,9 @@ import org.h2.value.Value;
  */
 public class Alias extends Expression {
 
-    private final String alias;
-    private Expression expr;
+    //wuwei revised for public
+    public final String alias;
+    public Expression expr;
     private final boolean aliasColumnName;
 
     public Alias(Expression expression, String alias, boolean aliasColumnName) {

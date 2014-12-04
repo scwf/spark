@@ -12,10 +12,17 @@ object HContextTest2 {
     val sc = new SparkContext(sparkConf)
     val hContext = new HContext(sc)
     import hContext._
-    hContext.setConf("spark.sql.dialect","hiveql")
-    val ret=hContext.sql("select * from emp")
+    hContext.setConf("spark.sql.dialect","sql")
+    hContext.setConf("spark.sql.shuffle.partitions","1")
+    val ret=hContext.sql("select min(age) as minage  from emp group by depno having minage>10 order by minage desc ")
     val ret2=ret.collect()
     println(ret2.size)
+
+    println(ret.printSchema())
+    println(ret.queryExecution.toString)
+    ret2.foreach(row => println(row.getInt(0)+"\t"
+      //+row.getInt(1)
+    ))
 
   }
 }

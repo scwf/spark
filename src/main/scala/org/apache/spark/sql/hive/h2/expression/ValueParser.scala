@@ -1,8 +1,7 @@
-package org.apache.spark.sql.hive.h2
+package org.apache.spark.sql.hive.h2.expression
 
-import org.apache.spark.sql.catalyst.expressions.{Literal, Expression}
-import org.apache.spark.sql.catalyst.types.{StringType, IntegerType}
-import org.h2.expression.ValueExpression
+import org.apache.spark.sql.catalyst.expressions.{Expression, Literal}
+import org.apache.spark.sql.catalyst.types.{IntegerType, StringType}
 import org.h2.message.DbException
 import org.h2.value.Value
 

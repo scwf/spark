@@ -71,18 +71,28 @@ public class Select extends Query {
     public Expression condition;
     private int visibleColumnCount, distinctColumnCount;
     private ArrayList<SelectOrderBy> orderList;
+
     private ArrayList<Expression> group;
-    private int[] groupIndex;
+
+    //wuwei revised add
+    public ArrayList<Expression> groupExprForSpark;
+
+    //wuwei revised for public
+    public int[] groupIndex;
     private boolean[] groupByExpression;
     private HashMap<Expression, Object> currentGroup;
     private int havingIndex;
-    private boolean isGroupQuery, isGroupSortedQuery;
+    //wuwei revised for public
+    public boolean isGroupQuery, isGroupSortedQuery;
+
     private boolean isForUpdate, isForUpdateMvcc;
     private double cost;
     private boolean isQuickAggregateQuery, isDistinctQuery;
     private boolean isPrepared, checkInit;
     private boolean sortUsingIndex;
-    private SortOrder sort;
+    //wuwei revised for public
+    public SortOrder sort;
+
     private int currentGroupRowId;
 
     public Select(Session session) {
@@ -247,6 +257,10 @@ public class Select extends Query {
             return null;
         }
         ArrayList<Index> indexes = topTableFilter.getTable().getIndexes();
+
+        //wuwei revised add set null,no index
+        indexes=null;
+
         if (indexes != null) {
             for (int i = 0, size = indexes.size(); i < size; i++) {
                 Index index = indexes.get(i);
@@ -786,6 +800,9 @@ public class Select extends Query {
                         }
                     }
                 }
+
+                //wuwei revised
+                found=0;
                 if (found < 0) {
                     int index = expressions.size();
                     groupIndex[i] = index;
@@ -798,6 +815,9 @@ public class Select extends Query {
             for (int gi : groupIndex) {
                 groupByExpression[gi] = true;
             }
+            //wuwei add
+            groupExprForSpark=group;
+
             group = null;
         }
         // map columns in select list and condition

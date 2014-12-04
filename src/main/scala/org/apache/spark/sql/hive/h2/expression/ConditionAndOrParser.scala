@@ -1,7 +1,7 @@
-package org.apache.spark.sql.hive.h2
+package org.apache.spark.sql.hive.h2.expression
 
-import org.h2.expression.{Comparison, ConditionAndOr}
 import org.apache.spark.sql.catalyst.expressions._
+import org.h2.expression.{Comparison, ConditionAndOr}
 
 /**
  * Created by w00297350 on 2014/12/2.
