@@ -15,15 +15,14 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.hbase.source
+package org.apache.spark.sql.hbase
 
 import org.apache.hadoop.hbase.client.Result
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{SQLContext, Row}
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression, GenericMutableRow}
 import org.apache.spark.sql.execution.SparkPlan
+import org.apache.spark.sql.{Row, SQLContext}
 import org.apache.spark.{InterruptibleIterator, Logging, Partition, TaskContext}
-import org.apache.spark.sql.hbase.{HBasePartition, HBaseRelation, BytesUtils}
 
 class HBaseSQLReaderRDD(
     relation: HBaseRelation,

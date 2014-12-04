@@ -14,19 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.spark.sql.hbase.catalyst.types
+package org.apache.spark.sql.hbase
 
 import java.sql.Timestamp
-import scala.collection.immutable.HashMap
-import scala.language.implicitConversions
-import scala.math.PartialOrdering
-import scala.reflect.runtime.universe.typeTag
 
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.types._
 
-
-import org.apache.spark.sql.catalyst.types._
+import scala.collection.immutable.HashMap
+import scala.language.implicitConversions
+import scala.math.PartialOrdering
+import scala.reflect.runtime.universe.typeTag
 
 class Range[T](val start: Option[T], // None for open ends
                val startInclusive: Boolean,

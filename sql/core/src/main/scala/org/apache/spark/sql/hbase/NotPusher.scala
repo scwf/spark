@@ -14,25 +14,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.spark.sql.hbase
 
-import org.apache.log4j.Logger
-import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
-import org.apache.spark.sql.{Row, SchemaRDD}
+import org.apache.spark.sql.catalyst.expressions._
+import org.apache.spark.sql.catalyst.rules._
 
 /**
- * TestingSchemaRDD
- * Created by sboesch on 10/6/14.
+ * Pushes NOT through And/Or
  */
-class TestingSchemaRDD(@transient sqlContext: HBaseSQLContext,
-    @transient baseLogicalPlan: LogicalPlan)
-    extends SchemaRDD(sqlContext, baseLogicalPlan) {
-  @transient val logger = Logger.getLogger(getClass.getName)
-
-  /** A private method for tests, to look at the contents of each partition */
-  override private[spark] def collectPartitions(): Array[Array[Row]] = {
-    sparkContext.runJob(this, (iter: Iterator[Row]) => iter.toArray, partitions.map{_.index},
-      allowLocal=true)
+object NOTPusher extends Rule[Expression] {
+  def apply(pred: Expression): Expression = pred transformDown  {
+    case Not(And(left, right)) => Or(Not(left), Not(right))
+    case Not(Or(left, right)) => And(Not(left), Not(right))
+    case not @ Not(exp) => {
+      // This pattern has been caught by optimizer but after NOT pushdown
+      // more opportunities may present
+      exp match {
+        case GreaterThan(l, r) => LessThanOrEqual(l, r)
+        case GreaterThanOrEqual(l, r) => LessThan(l, r)
+        case LessThan(l, r) => GreaterThanOrEqual(l, r)
+        case LessThanOrEqual(l, r) => GreaterThan(l, r)
+        case Not(e) => e
+        case _ => not
+      }
+    }
   }
-
 }

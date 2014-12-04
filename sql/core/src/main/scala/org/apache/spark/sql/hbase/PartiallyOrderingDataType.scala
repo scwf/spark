@@ -14,20 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.spark.sql.hbase
 
-import java.util.{ArrayList => JArrayList}
+import org.apache.spark.sql.catalyst.types._
+import scala.math.PartialOrdering
+import scala.reflect.runtime.universe.TypeTag
 
-import org.apache.spark.Logging
-import org.apache.spark.sql.Row
+abstract class PartiallyOrderingDataType extends DataType {
+  private[sql] type JvmType
 
-private[hbase] class HBaseSQLDriver(val context: HBaseSQLContext) extends Logging {
-  private var hbaseResponse: Seq[String] = _
+  def toPartiallyOrderingDataType(s: Any, dt: NativeType): Any
 
-  def run(command: String): Array[Row] = {
-    val execution = context.executePlan(context.sql(command).logicalPlan)
-    val result = execution.toRdd.collect()
-    result
-  }
+  @transient private[sql] val tag: TypeTag[JvmType]
+
+  private[sql] val partialOrdering: PartialOrdering[JvmType]
 }

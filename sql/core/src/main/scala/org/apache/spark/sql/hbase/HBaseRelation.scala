@@ -27,9 +27,7 @@ import org.apache.spark.Partition
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.plans.logical.LeafNode
 import org.apache.spark.sql.catalyst.types._
-import org.apache.spark.sql.hbase.catalyst.expressions.PartialPredicateOperations._
-import org.apache.spark.sql.hbase.catalyst.types.PartitionRange
-import org.apache.spark.sql.hbase.catalyst.NOTPusher
+import org.apache.spark.sql.hbase.PartialPredicateOperations._
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
@@ -57,32 +55,13 @@ private[hbase] case class HBaseRelation(
     case nonKey: NonKeyColumn => (nonKey.sqlName, nonKey)
   }.toMap
 
-  // Read the configuration from (a) the serialized version if available
-  //  (b) the constructor parameter if available
-  //  (c) otherwise create a default one using HBaseConfiguration.create
-  private var serializedConfiguration: Array[Byte] = optConfiguration.map
-    { conf => Util.serializeHBaseConfiguration(conf)}.orNull
-  @transient private var config: Configuration = _
-
-  def configuration() = getConf()
-
-  // todo:scwf, why so complex logical for config?
-  private def getConf(): Configuration = {
-    if (config == null) {
-      config = if (serializedConfiguration != null) {
-        Util.deserializeHBaseConfiguration(serializedConfiguration)
-      } else {
-        optConfiguration.getOrElse(HBaseConfiguration.create)
-      }
-    }
-    config
-  }
+  def configuration() = optConfiguration.getOrElse(HBaseConfiguration.create)
 
   // todo: scwf,remove this later
   logDebug(s"HBaseRelation config has zkPort="
-    + s"${getConf.get("hbase.zookeeper.property.clientPort")}")
+    + s"${configuration.get("hbase.zookeeper.property.clientPort")}")
 
-  @transient lazy val htable: HTable = new HTable(getConf, hbaseTableName)
+  @transient lazy val htable: HTable = new HTable(configuration, hbaseTableName)
 
   // todo: scwf, why non key columns
   lazy val attributes = nonKeyColumns.map(col =>

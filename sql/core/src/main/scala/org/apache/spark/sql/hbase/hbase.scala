@@ -15,22 +15,20 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.hbase.source
+package org.apache.spark.sql.hbase
 
-import org.apache.spark.sql.sources.{CatalystScan, BaseRelation, RelationProvider}
-import org.apache.spark.sql.SQLContext
 import org.apache.spark.Logging
-import org.apache.spark.sql.catalyst.types.StructType
-import org.apache.spark.sql.hbase.{NonKeyColumn, KeyColumn, AbstractColumn}
 import org.apache.spark.annotation.DeveloperApi
-import org.apache.spark.sql.catalyst.expressions.{And, Attribute, Row, Expression}
 import org.apache.spark.rdd.RDD
-import scala.util.matching.Regex
+import org.apache.spark.sql.SQLContext
+import org.apache.spark.sql.catalyst.expressions.{And, Attribute, Expression, Row}
+import org.apache.spark.sql.catalyst.types.StructType
+import org.apache.spark.sql.sources.{BaseRelation, CatalystScan, RelationProvider}
 
 /**
  * Allows creation of parquet based tables using the syntax
  * `CREATE TEMPORARY TABLE table_name(field1 filed1_type, filed2 filed2_type...)
- *  USING org.apache.spark.sql.hbase.source
+ *  USING org.apache.spark.sql.hbase
  *  OPTIONS (
  *    hbase_table "hbase_table_name",
  *    mapping "filed1=cf1.column1, filed2=cf2.column2...",

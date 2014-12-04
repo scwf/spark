@@ -15,12 +15,11 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.hbase.catalyst.expressions
+package org.apache.spark.sql.hbase
 
 import org.apache.spark.sql.catalyst.errors.TreeNodeException
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.types.{DataType, NativeType}
-import org.apache.spark.sql.hbase.catalyst.types._
 
 
 object PartialPredicateOperations {

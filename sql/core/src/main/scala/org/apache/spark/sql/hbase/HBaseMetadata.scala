@@ -15,9 +15,11 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.hbase.source
+package org.apache.spark.sql.hbase
 
 import java.io._
+import org.apache.spark.sql.catalyst.types.DataType
+
 import scala.Some
 
 import org.apache.hadoop.hbase.{HColumnDescriptor, TableName, HTableDescriptor, HBaseConfiguration}
@@ -29,7 +31,41 @@ import org.apache.spark.Logging
 import org.apache.spark.sql.hbase.HBaseRelation
 import org.apache.spark.sql.hbase.NonKeyColumn
 
-private[source] class HBaseMetadata extends Logging with Serializable {
+/**
+ * Column represent the sql column
+ * sqlName the name of the column
+ * dataType the data type of the column
+ */
+sealed abstract class AbstractColumn {
+  val sqlName: String
+  val dataType: DataType
+
+  def isKeyColum(): Boolean = false
+
+  override def toString: String = {
+    s"$sqlName , $dataType.typeName"
+  }
+}
+
+case class KeyColumn(val sqlName: String, val dataType: DataType, val order: Int)
+  extends AbstractColumn {
+  override def isKeyColum() = true
+}
+
+case class NonKeyColumn(
+                         val sqlName: String,
+                         val dataType: DataType,
+                         val family: String,
+                         val qualifier: String) extends AbstractColumn {
+  @transient lazy val familyRaw = Bytes.toBytes(family)
+  @transient lazy val qualifierRaw = Bytes.toBytes(qualifier)
+
+  override def toString = {
+    s"$sqlName , $dataType.typeName , $family:$qualifier"
+  }
+}
+
+private[hbase] class HBaseMetadata extends Logging with Serializable {
 
   lazy val configuration = HBaseConfiguration.create()
 
