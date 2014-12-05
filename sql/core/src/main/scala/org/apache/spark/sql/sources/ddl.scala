@@ -28,12 +28,12 @@ import scala.util.parsing.combinator.syntactical.StandardTokenParsers
 import scala.util.parsing.combinator.PackratParsers
 
 import org.apache.spark.sql.catalyst.plans.logical._
-import org.apache.spark.sql.catalyst.SqlLexical
+import org.apache.spark.sql.catalyst.{SqlParser, SqlLexical}
 
 /**
  * A parser for foreign DDL commands.
  */
-private[sql] class DDLParser extends StandardTokenParsers with PackratParsers with Logging {
+private[sql] class DDLParser extends SqlParser with Logging {
 
   def apply(input: String): Option[LogicalPlan] = {
     phrase(ddl)(new lexical.Scanner(input)) match {
@@ -44,8 +44,6 @@ private[sql] class DDLParser extends StandardTokenParsers with PackratParsers wi
     }
   }
 
-  protected case class Keyword(str: String)
-
   protected implicit def asParser(k: Keyword): Parser[String] =
     lexical.allCaseVersions(k.str).map(x => x : Parser[String]).reduce(_ | _)
 
@@ -54,6 +52,26 @@ private[sql] class DDLParser extends StandardTokenParsers with PackratParsers wi
   protected val TABLE = Keyword("TABLE")
   protected val USING = Keyword("USING")
   protected val OPTIONS = Keyword("OPTIONS")
+  protected val LOAD = Keyword("LOAD")
+  protected val DATA = Keyword("DATA")
+  protected val LOCAL = Keyword("LOCAL")
+  protected val INPATH = Keyword("INPATH")
+  protected val OVERWRITE = Keyword("OVERWRITE")
+  protected val TERMINATED = Keyword("TERMINATED")
+  protected val FIELDS = Keyword("FIELDS")
+  protected val INTO = Keyword("INTO")
+
+  protected lazy val start: Parser[LogicalPlan] =
+    ( select *
+      ( UNION ~ ALL        ^^^ { (q1: LogicalPlan, q2: LogicalPlan) => Union(q1, q2) }
+      | INTERSECT          ^^^ { (q1: LogicalPlan, q2: LogicalPlan) => Intersect(q1, q2) }
+      | EXCEPT             ^^^ { (q1: LogicalPlan, q2: LogicalPlan) => Except(q1, q2)}
+      | UNION ~ DISTINCT.? ^^^ { (q1: LogicalPlan, q2: LogicalPlan) => Distinct(Union(q1, q2)) }
+      )
+    | insert
+    | createTable
+    | load
+    )
 
   // Use reflection to find the reserved words defined in this class.
   protected val reservedWords =
@@ -76,6 +94,22 @@ private[sql] class DDLParser extends StandardTokenParsers with PackratParsers wi
       case tableName ~ provider ~ opts =>
         CreateTableUsing(tableName, provider, opts)
     }
+
+  // Load syntax:
+  // LOAD DATA [LOCAL] INPATH filepath [OVERWRITE] INTO TABLE tablename [FIELDS TERMINATED BY char]
+  protected lazy val load: Parser[LogicalPlan] =
+    (
+      (LOAD ~> DATA ~> INPATH ~> stringLit) ~
+        (opt(OVERWRITE) ~> INTO ~> TABLE ~> relation ) ~
+        (FIELDS ~> TERMINATED ~> BY ~> stringLit) ^^ {
+        case filePath ~ table ~ delimiter => BulkLoadPlan(filePath, table, false, delimiter)
+      }
+        | (LOAD ~> DATA ~> LOCAL ~> INPATH ~> stringLit) ~
+        (opt(OVERWRITE) ~> INTO ~> TABLE ~> relation) ~
+        (FIELDS ~> TERMINATED ~> BY ~> stringLit) ^^ {
+        case filePath ~ table ~ delimiter => BulkLoadPlan(filePath, table, true, delimiter)
+      }
+      )
 
   protected lazy val options: Parser[Map[String, String]] =
     "(" ~> repsep(pair, ",") <~ ")" ^^ { case s: Seq[(String, String)] => s.toMap }
