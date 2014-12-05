@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hbasesource
 
-import org.apache.spark.sql.SQLContext
+import org.apache.spark.sql.{Strategy, SQLContext}
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.planning.{PhysicalOperation, QueryPlanner}
 import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoTable, LogicalPlan}
