@@ -5,7 +5,7 @@ import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.types.StringType
 import org.apache.spark.sql.catalyst.types.IntegerType
-import org.apache.spark.sql.hive.h2.expression.{SortOrderParser, ConditionAndOrParser, ComparisonParser}
+import org.apache.spark.sql.hive.h2.expression.{H2ExpressionParser, SortOrderParser, ConditionAndOrParser, ComparisonParser}
 import org.h2.adapter.sqlparse.H2SqlParserAdapter
 import org.h2.command.CommandContainer
 import org.h2.command.dml.Select
@@ -117,32 +117,18 @@ import scala.collection.mutable.ListBuffer
         val relation = UnresolvedRelation(None, tableName, None);
 
         //filter
-        var expr:Expression=null;
+        var conditionExpr:Expression=null;
         if(select.condition !=null) {
           val condition: Condition = select.condition.asInstanceOf[Condition]
-
-          condition match
-          {
-            case comparison:Comparison=>
-              expr=ComparisonParser(comparison)
-
-            case conditionAndOr:ConditionAndOr=>
-              expr=ConditionAndOrParser(conditionAndOr)
-
-            case _ =>
-
-          }
+          conditionExpr=H2ExpressionParser(condition)
         }
-        val filter= if(expr!=null)  Filter(expr, relation) else relation
+        val filter= if(conditionExpr!=null)  Filter(conditionExpr, relation) else relation
 
-        //group or project
+        //project and group
         var project:UnaryNode=null
-
         val expressions=select.getExpressions();
         val projectExpressions = ExpressionsParser(expressions)
-
         val groupExpr=select.groupExprForSpark
-
         if(groupExpr!=null)
         {
           val groupingExpressions=GroupParser(groupExpr)
@@ -153,14 +139,20 @@ import scala.collection.mutable.ListBuffer
           project = Project(assignAliases(projectExpressions), filter)
         }
 
-        //sort order by
-        val sort= if(select.sort==null) project  else Sort(SortOrderParser(select.sort,expressions), project)
+        //having
+        val havingExprCondition=select.havingExprForSpark
+        val having= if(havingExprCondition==null) project else Filter(H2ExpressionParser(havingExprCondition),project)
 
+        //sort order by
+        val sort= if(select.sort==null) project  else Sort(SortOrderParser(select.sort,expressions), having)
 
         return sort
-
       }
-      null;
+      else
+      {
+        sys.error("UNSupported the h2 sql grammar parser!")
+      }
+
     }
 
 

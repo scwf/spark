@@ -67,6 +67,10 @@ public class Select extends Query {
     private ArrayList<Expression> expressions;
     private Expression[] expressionArray;
     private Expression having;
+
+    //wuwei revised add
+    public Expression havingExprForSpark;
+
     //wuwei revised
     public Expression condition;
     private int visibleColumnCount, distinctColumnCount;
@@ -762,9 +766,15 @@ public class Select extends Query {
         }
         distinctColumnCount = expressions.size();
         if (having != null) {
-            expressions.add(having);
-            havingIndex = expressions.size() - 1;
-            having = null;
+
+            //wuwei add
+            havingExprForSpark=having;
+            having=null;
+
+            // wuwei remove
+//            expressions.add(having);
+//            havingIndex = expressions.size() - 1;
+//            having = null;
         } else {
             havingIndex = -1;
         }

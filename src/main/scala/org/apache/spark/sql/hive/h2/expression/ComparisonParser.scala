@@ -14,27 +14,32 @@ object ComparisonParser {
   {
     val compareType: Int = comparison.compareType
 
-    val leftExpr: org.h2.expression.Expression = comparison.getExpression(true)
-    val rightExpr: org.h2.expression.Expression = comparison.getExpression(false)
-    val column: ExpressionColumn = leftExpr.asInstanceOf[ExpressionColumn]
-    val columnName: String = column.getColumnName
+    val leftExpr: Expression_H2 = comparison.getExpression(true)
+    val rightExpr: Expression_H2 = comparison.getExpression(false)
 
-    val columnExpr: UnresolvedAttribute = new UnresolvedAttribute(columnName)
-    var rightCatalystExpr:org.apache.spark.sql.catalyst.expressions.Expression=null;
+    var leftCatalystExpr:Expression=null;
+    leftExpr match
+    {
+      case expressionColumn: ExpressionColumn =>
+        leftCatalystExpr=ExpressionColumnParser(expressionColumn)
+
+      case _ =>
+        sys.error("unsupported the h2 comparison left type.")
+    }
 
     //deal the comparison Right Expression Type
-    if (rightExpr.isInstanceOf[ValueExpression]) {
-      val rightValue: ValueExpression = rightExpr.asInstanceOf[ValueExpression]
-      val value = rightValue.getValue(null)
-      rightCatalystExpr=ValueParser(value)
-    }
-    else if (rightExpr.isInstanceOf[ExpressionColumn]) {
-      val rightValue: ExpressionColumn = rightExpr.asInstanceOf[ExpressionColumn]
-      val rightColumnName=rightValue.getColumnName
-      rightCatalystExpr=UnresolvedAttribute(rightColumnName)
-    }
-    else {
-      throw DbException.throwInternalError("not support" )
+    var rightCatalystExpr:Expression=null;
+
+    rightExpr match
+    {
+      case valueExpression:ValueExpression =>
+        rightCatalystExpr=ValueParser(valueExpression.value)
+
+      case expressionColumn: ExpressionColumn =>
+        leftCatalystExpr=ExpressionColumnParser(expressionColumn)
+
+      case _ =>
+        sys.error("unsupported the h2 comparison right type.")
     }
 
 
@@ -46,19 +51,19 @@ object ComparisonParser {
       case Comparison.SPATIAL_INTERSECTS =>
 
       case Comparison.EQUAL =>
-        return  EqualTo(columnExpr,rightCatalystExpr)
+        return  EqualTo(leftCatalystExpr,rightCatalystExpr)
 
       case Comparison.EQUAL_NULL_SAFE =>
 
       case Comparison.BIGGER_EQUAL =>
 
       case Comparison.BIGGER =>
-        return GreaterThan(columnExpr,rightCatalystExpr)
+        return GreaterThan(leftCatalystExpr,rightCatalystExpr)
 
       case Comparison.SMALLER_EQUAL =>
 
       case Comparison.SMALLER =>
-        return LessThan(columnExpr,rightCatalystExpr)
+        return LessThan(leftCatalystExpr,rightCatalystExpr)
 
       case Comparison.NOT_EQUAL =>
 

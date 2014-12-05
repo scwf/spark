@@ -6,6 +6,7 @@ package org.apache.spark.sql.hive.h2
 package object expression
 {
    type Alias_H2=org.h2.expression.Alias
+   type Expression_H2=org.h2.expression.Expression
 
 
 }

@@ -31,7 +31,8 @@ public class ValueExpression extends Expression {
      */
     private static final Object DEFAULT = new ValueExpression(ValueNull.INSTANCE);
 
-    private final Value value;
+    // wuwei revised for public
+    public final Value value;
 
     private ValueExpression(Value value) {
         this.value = value;
