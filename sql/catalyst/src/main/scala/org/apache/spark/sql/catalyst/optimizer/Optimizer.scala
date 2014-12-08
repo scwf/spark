@@ -369,6 +369,8 @@ object SimplifyFilters extends Rule[LogicalPlan] {
   def combinePredicate(expr: BinaryPredicate): Expression = expr match {
     case Or(BinaryComparison.LiteralComparison(left), BinaryComparison.LiteralComparison(right)) =>
       combineComparison(left , right)
+    case And(BinaryComparison.LiteralComparison(left), BinaryComparison.LiteralComparison(right)) =>
+      combineComparison(left, right, false)
     case or @ Or(left @ And(left1, right1), right) =>
       or
     case or @ Or(left, right @ And(left1, right1)) =>
@@ -517,10 +519,6 @@ object SimplifyFilters extends Rule[LogicalPlan] {
       case _ =>
         None
     }
-  }
-
-  def combineAndComparison(left: BinaryComparison, right: BinaryComparison): Expression = {
-    null
   }
 }
 
