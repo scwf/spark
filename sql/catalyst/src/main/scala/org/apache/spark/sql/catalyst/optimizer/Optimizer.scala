@@ -17,6 +17,8 @@
 
 package org.apache.spark.sql.catalyst.optimizer
 
+import java.sql.Date
+
 import scala.collection.immutable.HashSet
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.plans.Inner
@@ -39,8 +41,8 @@ object DefaultOptimizer extends Optimizer {
       NullPropagation,
       ConstantFolding,
       LikeSimplification,
-      BooleanSimplification,
       SimplifyFilters,
+      BooleanSimplification,
       SimplifyCasts,
       SimplifyCaseConversionExpressions,
       OptimizeIn) ::
@@ -361,6 +363,164 @@ object SimplifyFilters extends Rule[LogicalPlan] {
     // replace the input with an empty relation.
     case Filter(Literal(null, _), child) => LocalRelation(child.output, data = Seq.empty)
     case Filter(Literal(false, BooleanType), child) => LocalRelation(child.output, data = Seq.empty)
+    case Filter(bp: BinaryPredicate, child) => Filter(combinePredicate(bp), child)
+  }
+
+  def combinePredicate(expr: BinaryPredicate): Expression = expr match {
+    case Or(BinaryComparison.LiteralComparison(left), BinaryComparison.LiteralComparison(right)) =>
+      combineComparison(left , right)
+    case or @ Or(left @ And(left1, right1), right) =>
+      or
+    case or @ Or(left, right @ And(left1, right1)) =>
+      or
+    case and @ And(Or(left1, right1), Or(left2, right2)) =>
+      and
+    case other =>
+      other
+  }
+
+  private def isLess(comparison: BinaryComparison): Boolean = {
+    comparison.isInstanceOf[LessThan]
+  }
+
+  private def isLessEquals(comparison: BinaryComparison): Boolean = {
+    comparison.isInstanceOf[LessThanOrEqual]
+  }
+
+  private def isEquals(comparison: BinaryComparison): Boolean = {
+    comparison.isInstanceOf[EqualTo]
+  }
+
+  private def isGreater(comparison: BinaryComparison): Boolean = {
+    comparison.isInstanceOf[GreaterThan]
+  }
+
+  private def isGreaterEquals(comparison: BinaryComparison): Boolean = {
+    comparison.isInstanceOf[GreaterThanOrEqual]
+  }
+
+  def combineComparison(
+    left: BinaryComparison,
+    right: BinaryComparison,
+    isOr: Boolean = true): Expression = {
+    val origin = if (isOr) {
+      Or(left, right)
+    } else {
+      And(left, right)
+    }
+    // if not the same attribute, do nothing
+    if (left.left.fastEquals(right.left) == false) {
+      origin
+    } else {
+      (left, right) match {
+        case (BinaryComparison(attr, Literal(vLeft, tLeft @ NativeType())),
+              BinaryComparison(_, Literal(vRight, tRight @ NativeType()))) =>
+          val result = compare(vLeft, vRight)
+          result.filter(_ > 0).map(c => {
+            if (((isLess(left) || isLessEquals(left))
+              && (isLess(right) || isLessEquals(right) || isEquals(right)))) {
+              if (isOr) left else right
+            } else if ((isLess(left) || isLessEquals(left))
+              && (isGreater(right) || isGreaterEquals(right))) {
+              if (isOr) Literal(true, BooleanType) else origin
+            } else if ((isEquals(left) || isGreater(left) || isGreaterEquals(left))
+              && (isLess(right) || isLessEquals(right) || isEquals(right))) {
+              if (isOr) origin else Literal(false, BooleanType)
+            } else if (isEquals(left) && (isGreater(right) || isGreaterEquals(right))) {
+              if (isOr) right else left
+            } else {
+              if (isOr) left else right
+            }
+          }).getOrElse(result.filter(_ == 0).map(c => {
+              if (isOr) {
+                if ((left.symbol == right.symbol)
+                  || (isLessEquals(left) && (isLess(right) || isEquals(right)))
+                  || (isGreaterEquals(left) && (isGreater(right) || isEquals(right)))){
+                  left
+                } else if(((isEquals(left) || isLess(left)) && isLessEquals(right))
+                  || ((isEquals(left) || isGreater(left)) && isGreaterEquals(right))) {
+                  right
+                } else if ((isEquals(left) && isLess(right))
+                  || (isEquals(right) && isLess(left))) {
+                  LessThanOrEqual(attr, Literal(vLeft, tLeft))
+                } else if ((isEquals(left) && isGreater(right))
+                  || (isEquals(right) && isGreater(left))){
+                  GreaterThanOrEqual(attr, Literal(vLeft, tLeft))
+                } else if((isLess(left) && isGreater(right))
+                  || (isGreater(left) && isLess(right))) {
+                  Not(EqualTo(attr, Literal(vLeft, tRight)))
+                }else {
+                  Literal(true, BooleanType)
+                }
+              } else {
+                if ((left.symbol == right.symbol)
+                  || (isLess(left) && isLessEquals(right))
+                  || (isGreater(left) && isGreaterEquals(right))) {
+                  left
+                } else if((isEquals(left) && (isLessEquals(right) || isGreaterEquals(right)))
+                  || (isEquals(right) && (isLessEquals(left) || isGreaterEquals(left)))) {
+                  EqualTo(attr, Literal(vLeft, tLeft))
+                } else if ((isLessEquals(left) && isLess(right))
+                  || (isGreaterEquals(left) && isGreater(right))) {
+                  right
+                } else {
+                  Literal(false, BooleanType)
+                }
+              }
+          }).getOrElse(result.filter(_ > 0).map(c => {
+            combineComparison(right, left, isOr)
+          }).getOrElse(origin)))
+
+        case _ =>
+          origin
+      }
+    }
+  }
+
+  private def compare(left: Any, right: Any): Option[Int] = {
+    left match {
+      case numLeft: Number =>
+        right match {
+          case numRight: Number =>
+            Some(numLeft.doubleValue().compareTo(numRight.doubleValue()))
+
+          case _ =>
+            None
+        }
+
+      case strLeft: String =>
+        right match {
+          case strRight: String =>
+            if (strLeft == null && strRight == null) {
+              Some(0)
+            } else {
+              Some(strLeft.compareTo(strRight))
+            }
+
+          case _ =>
+            None
+        }
+
+      case dateLeft: Date =>
+        right match {
+          case dateRight: Date =>
+            if (dateLeft == null && dateLeft == dateRight) {
+              Some(0)
+            } else {
+              Some(dateLeft.compareTo(dateRight))
+            }
+
+          case _ =>
+            None
+        }
+
+      case _ =>
+        None
+    }
+  }
+
+  def combineAndComparison(left: BinaryComparison, right: BinaryComparison): Expression = {
+    null
   }
 }
 

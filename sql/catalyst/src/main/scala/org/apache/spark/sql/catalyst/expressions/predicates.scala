@@ -160,6 +160,60 @@ abstract class BinaryComparison extends BinaryPredicate {
   self: Product =>
 }
 
+object BinaryComparison {
+
+  object LiteralComparison {
+    def unapply(expr: Expression): Option[BinaryComparison] = expr match {
+      case LessThan(left: Literal, right: AttributeReference) =>
+        Some(LessThan(right, left))
+
+      case lt @ LessThan(left: AttributeReference, right: Literal) =>
+        Some(lt)
+
+      case LessThanOrEqual(left: Literal, right: AttributeReference) =>
+        Some(LessThanOrEqual(right, left))
+
+      case ltoe @ LessThanOrEqual(left: AttributeReference, right: Literal) =>
+        Some(ltoe)
+
+      case EqualTo(left: Literal, right: AttributeReference) =>
+        Some(EqualTo(right, left))
+
+      case eq @ EqualTo(left: AttributeReference, right: Literal) =>
+        Some(eq)
+
+      case EqualNullSafe(left: Literal, right: AttributeReference) =>
+        Some(EqualNullSafe(right, left))
+
+      case eqs @ EqualNullSafe(left: AttributeReference, right: Literal) =>
+        Some(eqs)
+
+      case GreaterThan(left: Literal, right: AttributeReference) =>
+        Some(GreaterThan(right, left))
+
+      case gt @ GreaterThan(left: AttributeReference, right: Literal) =>
+        Some(gt)
+
+      case GreaterThanOrEqual(left: Literal, right: AttributeReference) =>
+        Some(GreaterThanOrEqual(right, left))
+
+      case gtoe @ GreaterThanOrEqual(left: AttributeReference, right: Literal) =>
+        Some(gtoe)
+
+      case _ => None
+    }
+  }
+
+  def unapply(expr: Expression): Option[(Expression, Expression)] = {
+    expr match {
+      case bc: BinaryComparison =>
+        Some((bc.left, bc.right))
+      case _ =>
+        None
+    }
+  }
+}
+
 case class EqualTo(left: Expression, right: Expression) extends BinaryComparison {
   def symbol = "="
   override def eval(input: Row): Any = {

@@ -153,6 +153,11 @@
 
   <repositories>
     <repository>
+      <id>spark-project</id>
+      <name>Spark Project Repository</name>
+      <url>http://central.maven.org/maven2/</url>
+    </repository>
+    <repository>
       <id>central</id>
       <!-- This should be at top, it makes maven try the central repo first and then others and hence faster dep resolution -->
       <name>Maven Repository</name>
@@ -253,6 +258,11 @@
       <snapshots>
         <enabled>false</enabled>
       </snapshots>
+    </pluginRepository>
+    <pluginRepository>
+      <id>spark-project</id>
+      <name>Spark Project Repository</name>
+      <url>http://repo1.maven.org/maven2/org/apache/maven/plugins/</url>
     </pluginRepository>
   </pluginRepositories>
 
