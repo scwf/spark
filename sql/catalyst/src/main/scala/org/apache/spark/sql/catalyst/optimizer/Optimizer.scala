@@ -469,7 +469,7 @@ object SimplifyFilters extends Rule[LogicalPlan] {
                   Literal(false, BooleanType)
                 }
               }
-          }).getOrElse(result.filter(_ > 0).map(c => {
+          }).getOrElse(result.filter(_ < 0).map(c => {
             combineComparison(right, left, isOr)
           }).getOrElse(origin)))
 
