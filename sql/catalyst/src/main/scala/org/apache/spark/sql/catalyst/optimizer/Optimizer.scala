@@ -363,22 +363,53 @@ object SimplifyFilters extends Rule[LogicalPlan] {
     // replace the input with an empty relation.
     case Filter(Literal(null, _), child) => LocalRelation(child.output, data = Seq.empty)
     case Filter(Literal(false, BooleanType), child) => LocalRelation(child.output, data = Seq.empty)
-    case Filter(bp: BinaryPredicate, child) => Filter(combinePredicate(bp), child)
+    // simplify Or or And predicate
+    case Filter(bp @ BinaryPredicate.CombinePredicate(_, _), child) =>
+      Filter(optimizePredicate(bp), child)
   }
 
-  def combinePredicate(expr: BinaryPredicate): Expression = expr match {
-    case Or(BinaryComparison.LiteralComparison(left), BinaryComparison.LiteralComparison(right)) =>
-      combineComparison(left , right)
-    case And(BinaryComparison.LiteralComparison(left), BinaryComparison.LiteralComparison(right)) =>
-      combineComparison(left, right, false)
-    case or @ Or(left @ And(left1, right1), right) =>
-      or
-    case or @ Or(left, right @ And(left1, right1)) =>
-      or
-    case and @ And(Or(left1, right1), Or(left2, right2)) =>
-      and
+  def optimizePredicate(expr: BinaryPredicate): Expression = expr match {
+    case bp @ BinaryPredicate.CombinePredicate(left, right) if left.fastEquals(right) =>
+      if (left.isInstanceOf[BinaryPredicate]) {
+        optimizePredicate(left.asInstanceOf[BinaryPredicate])
+      } else {
+        left
+      }
+
+    case bp @ BinaryPredicate.CombinePredicate(BinaryComparison.LiteralComparison(left),
+                              BinaryComparison.LiteralComparison(right)) =>
+      combineComparison(left , right, bp.isInstanceOf[Or])
+
+    case origin @ Or(left @ Or(left1, right1), right)
+      if notCombinePredicate(left1, right1, right) =>
+      val optimizedLeft = optimizePredicate(left)
+      if (optimizedLeft.fastEquals(left)) {
+        val lr = optimizePredicate(Or(left1, right))
+        if (lr.fastEquals(Or(left1, right))) {
+          val rr = optimizePredicate(Or(right1, right))
+          if (rr.fastEquals(Or(right1, right))) {
+            origin
+          } else {
+            optimizePredicate(Or(rr, left1))
+          }
+        } else {
+          optimizePredicate(Or(lr, right1))
+        }
+      } else {
+        optimizePredicate(Or(optimizedLeft, right))
+      }
+
+    // TODO: 添加处理其他可被优化的处理过程
     case other =>
       other
+  }
+  // predicate that is not And or Or
+  private def notCombinePredicate(exprs: Expression*): Boolean = {
+    exprs.count(e => e.isInstanceOf[Or] || e.isInstanceOf[And]) == 0
+  }
+
+  private def isOrAndPredicate(bp: BinaryPredicate): Boolean = {
+    bp.isInstanceOf[Or] || bp.isInstanceOf[And]
   }
 
   private def isLess(comparison: BinaryComparison): Boolean = {
@@ -411,7 +442,7 @@ object SimplifyFilters extends Rule[LogicalPlan] {
       And(left, right)
     }
     // if not the same attribute, do nothing
-    if (left.left.fastEquals(right.left) == false) {
+    if (!left.left.fastEquals(right.left)) {
       origin
     } else {
       (left, right) match {
@@ -430,8 +461,11 @@ object SimplifyFilters extends Rule[LogicalPlan] {
               if (isOr) origin else Literal(false, BooleanType)
             } else if (isEquals(left) && (isGreater(right) || isGreaterEquals(right))) {
               if (isOr) right else left
+            } else if ((isGreater(left) || isGreaterEquals(left))
+              && (isLess(right) || isEquals(right) || isLessEquals(right))) {
+              if (isOr) origin else Literal(false, BooleanType)
             } else {
-              if (isOr) left else right
+              if (isOr) right else left
             }
           }).getOrElse(result.filter(_ == 0).map(c => {
               if (isOr) {
@@ -481,39 +515,24 @@ object SimplifyFilters extends Rule[LogicalPlan] {
 
   private def compare(left: Any, right: Any): Option[Int] = {
     left match {
-      case numLeft: Number =>
-        right match {
-          case numRight: Number =>
-            Some(numLeft.doubleValue().compareTo(numRight.doubleValue()))
+      case numLeft: Number if right.isInstanceOf[Number] =>
+        val numRight = right.asInstanceOf[Number]
+        Some(numLeft.doubleValue().compareTo(numRight.doubleValue()))
 
-          case _ =>
-            None
+      case strLeft: String if right.isInstanceOf[String] =>
+        val strRight = right.toString
+        if (strLeft == null && strRight == null) {
+          Some(0)
+        } else {
+          Some(strLeft.compareTo(strRight))
         }
 
-      case strLeft: String =>
-        right match {
-          case strRight: String =>
-            if (strLeft == null && strRight == null) {
-              Some(0)
-            } else {
-              Some(strLeft.compareTo(strRight))
-            }
-
-          case _ =>
-            None
-        }
-
-      case dateLeft: Date =>
-        right match {
-          case dateRight: Date =>
-            if (dateLeft == null && dateLeft == dateRight) {
-              Some(0)
-            } else {
-              Some(dateLeft.compareTo(dateRight))
-            }
-
-          case _ =>
-            None
+      case dateLeft: Date if right.isInstanceOf[Date]=>
+        val dateRight = right.asInstanceOf[Date]
+        if (dateLeft == null && dateLeft == dateRight) {
+          Some(0)
+        } else {
+          Some(dateLeft.compareTo(dateRight))
         }
 
       case _ =>

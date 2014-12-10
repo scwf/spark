@@ -39,6 +39,12 @@ trait Predicate extends Expression {
   type EvaluatedType = Any
 }
 
+object Predicate {
+  def unapply(p: Expression): Boolean = {
+    p.isInstanceOf[Predicate]
+  }
+}
+
 trait PredicateHelper {
   protected def splitConjunctivePredicates(condition: Expression): Seq[Expression] = {
     condition match {
@@ -65,6 +71,23 @@ trait PredicateHelper {
 abstract class BinaryPredicate extends BinaryExpression with Predicate {
   self: Product =>
   def nullable = left.nullable || right.nullable
+}
+
+object BinaryPredicate {
+
+  object CombinePredicate {
+    def unapply(bp: BinaryPredicate): Option[(Expression, Expression)] = {
+      if (bp.isInstanceOf[Or] || bp.isInstanceOf[And]) {
+        Some((bp.left, bp.right))
+      } else {
+        None
+      }
+    }
+  }
+
+  def unapply(bp: BinaryPredicate): Option[(Expression, Expression)] = {
+    Some((bp.left, bp.right))
+  }
 }
 
 case class Not(child: Expression) extends UnaryExpression with Predicate {
