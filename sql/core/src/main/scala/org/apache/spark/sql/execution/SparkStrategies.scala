@@ -196,6 +196,16 @@ private[sql] abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
     }
   }
 
+  object SinkOperations extends Strategy {
+    def apply(plan: LogicalPlan): Seq[SparkPlan] = plan match {
+      case logical.WriteToFile(path, child) =>
+        val relation =
+          ParquetRelation.create(path, child, sparkContext.hadoopConfiguration, sqlContext)
+        // Note: overwrite=false because otherwise the metadata we just created will be deleted
+        InsertIntoParquetTable(relation, planLater(child), overwrite = false) :: Nil
+    } // how to unify here? i not wish using case here
+  }
+
   object ParquetOperations extends Strategy {
     def apply(plan: LogicalPlan): Seq[SparkPlan] = plan match {
       // TODO: need to support writing to other types of files.  Unify the below code paths.
