@@ -45,7 +45,7 @@ import org.apache.spark.sql.parquet.FileSystemHelper
  * Allows creation of orc based tables using the syntax
  * `CREATE TEMPORARY TABLE ... USING org.apache.spark.sql.orc`.
  * Currently the only option required is `path`, which should be the location of a collection of,
- * optionally partitioned, parquet files.
+ * optionally partitioned, orc files.
  */
 class DefaultSource extends RelationProvider {
   /** Returns a new base relation with the given parameters. */
