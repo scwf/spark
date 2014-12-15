@@ -36,7 +36,9 @@ abstract class OrcTest extends QueryTest with BeforeAndAfterAll {
   var partitionedTableDirWithKey: File = null
 
   override def beforeAll(): Unit = {
-    partitionedTableDir = File.createTempFile("orctests", "sparksql")
+    super.beforeAll()
+
+    partitionedTableDir = File.createTempFile("parquettests", "sparksql")
     partitionedTableDir.delete()
     partitionedTableDir.mkdir()
 
@@ -44,10 +46,10 @@ abstract class OrcTest extends QueryTest with BeforeAndAfterAll {
       val partDir = new File(partitionedTableDir, s"p=$p")
       sparkContext.makeRDD(1 to 10)
         .map(i => OrcData(i, s"part-$p"))
-        .saveAsOrcFile(partDir.getCanonicalPath)
+        .registerTempTable("orc_table_1")
     }
 
-    partitionedTableDirWithKey = File.createTempFile("orctests", "sparksql")
+    partitionedTableDirWithKey = File.createTempFile("parquettests", "sparksql")
     partitionedTableDirWithKey.delete()
     partitionedTableDirWithKey.mkdir()
 
@@ -55,8 +57,65 @@ abstract class OrcTest extends QueryTest with BeforeAndAfterAll {
       val partDir = new File(partitionedTableDirWithKey, s"p=$p")
       sparkContext.makeRDD(1 to 10)
         .map(i => OrcDataWithKey(p, i, s"part-$p"))
-        .saveAsOrcFile(partDir.getCanonicalPath)
+        .registerTempTable("orc_table_2")
     }
+
+    sql(s"""
+      create external table partitioned_orc
+      (
+        intField INT,
+        stringField STRING
+      )
+      PARTITIONED BY (p int)
+      STORED AS orc
+      location '${partitionedTableDir.getCanonicalPath}'
+    """)
+
+    sql(s"""
+      create external table partitioned_orc_with_key
+      (
+        intField INT,
+        stringField STRING
+      )
+      PARTITIONED BY (p int)
+      STORED AS orc
+      location '${partitionedTableDirWithKey.getCanonicalPath}'
+    """)
+
+    sql(s"""
+      create external table normal_orc
+      (
+        intField INT,
+        stringField STRING
+      )
+      STORED AS orc
+      location '${new File(partitionedTableDir, "p=1").getCanonicalPath}'
+    """)
+
+    (1 to 10).foreach { p =>
+      sql(s"ALTER TABLE partitioned_orc ADD PARTITION (p=$p)")
+    }
+
+    (1 to 10).foreach { p =>
+      sql(s"ALTER TABLE partitioned_orc_with_key ADD PARTITION (p=$p)")
+    }
+    (1 to 10).foreach { p =>
+      sql(s"""
+      insert into table partitioned_orc PARTITION(p=$p)
+      select intField, stringField from orc_table_1
+    """)
+    }
+    (1 to 10).foreach { p =>
+      sql(s"""
+      insert into table partitioned_orc_with_key PARTITION(p=$p)
+      select p, intField, stringField from orc_table_2
+    """)
+    }
+  }
+
+  override def afterAll(): Unit = {
+    partitionedTableDirWithKey.delete()
+    partitionedTableDir.delete()
   }
 
   Seq("partitioned_orc", "partitioned_orc_with_key").foreach { table =>

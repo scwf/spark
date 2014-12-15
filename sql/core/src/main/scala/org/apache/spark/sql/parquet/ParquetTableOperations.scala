@@ -390,26 +390,6 @@ private[parquet] class FilteringParquetRowInputFormat
     }
   }
 
-  override def listStatus(jobContext: JobContext): JList[FileStatus] = {
-    val conf = ContextUtil.getConfiguration(jobContext)
-    val paths = NewFileInputFormat.getInputPaths(jobContext)
-    if (paths.isEmpty) { return new ArrayList[FileStatus]() }
-    val fs = paths.head.getFileSystem(conf)
-    val statuses = new ArrayList[FileStatus]
-    paths.foreach { p =>
-      val cached = FilteringParquetRowInputFormat.statusCache.getIfPresent(p)
-      if (cached == null) {
-        logWarning(s"Status cache miss for $p")
-        val res = fs.listStatus(p).filterNot(_.getPath.getName.startsWith("_"))
-        res.foreach(statuses.add)
-        FilteringParquetRowInputFormat.statusCache.put(p, res)
-      } else {
-        cached.foreach(statuses.add)
-      }
-    }
-    statuses
-  }
-
   override def getFooters(jobContext: JobContext): JList[Footer] = {
     import org.apache.spark.sql.parquet.FilteringParquetRowInputFormat.footerCache
 
@@ -619,10 +599,6 @@ private[parquet] class FilteringParquetRowInputFormat
 }
 
 private[parquet] object FilteringParquetRowInputFormat {
-  val statusCache = CacheBuilder.newBuilder()
-    .maximumSize(20000)
-    .build[Path, Array[FileStatus]]()
-
   private val footerCache = CacheBuilder.newBuilder()
     .maximumSize(20000)
     .build[FileStatus, Footer]()

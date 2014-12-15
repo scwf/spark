@@ -21,8 +21,6 @@ import java.util.{Locale, Properties}
 import scala.collection.JavaConversions._
 
 import org.apache.hadoop.mapreduce.Job
-import org.apache.hadoop.mapreduce.lib.input.FileInputFormat
-import org.apache.hadoop.hive.serde2.ColumnProjectionUtils
 import org.apache.hadoop.io.{NullWritable, Writable}
 import org.apache.hadoop.mapred.JobConf
 import org.apache.hadoop.conf.Configuration
@@ -40,33 +38,7 @@ import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.hive.{HiveShim, HadoopTableReader, HiveMetastoreTypes}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.parquet.FileSystemHelper
-import org.apache.spark.sql.catalyst.types.StructField
-import org.apache.spark.sql.hive.orc.OrcRelation2
-import scala.Some
-import org.apache.spark.sql.hive.orc.Partition
-import org.apache.spark.sql.catalyst.types.StructField
-import org.apache.spark.sql.hive.orc.OrcRelation2
-import scala.Some
-import org.apache.spark.sql.hive.orc.Partition
-import org.apache.spark.sql.catalyst.types.StructField
-import org.apache.spark.sql.hive.orc.OrcRelation2
-import scala.Some
-import org.apache.spark.sql.hive.orc.Partition
-import org.apache.spark.sql.catalyst.types.StructField
-import org.apache.spark.sql.hive.orc.OrcRelation2
-import scala.Some
-import org.apache.spark.sql.hive.orc.Partition
-import org.apache.spark.sql.catalyst.types.StructField
-import org.apache.spark.sql.hive.orc.OrcRelation2
-import scala.Some
-import org.apache.spark.sql.hive.orc.Partition
-import org.apache.spark.sql.catalyst.types.StructField
-import org.apache.spark.sql.hive.orc.OrcRelation2
-import scala.Some
-import org.apache.spark.sql.catalyst.expressions.And
-import org.apache.spark.sql.hive.orc.Partition
-import org.apache.spark.sql.catalyst.expressions.BoundReference
-import org.apache.spark.sql.catalyst.expressions.AttributeReference
+
 
 /**
  * Allows creation of orc based tables using the syntax
@@ -82,7 +54,7 @@ class DefaultSource extends RelationProvider {
     val path =
       parameters.getOrElse("path", sys.error("'path' must be specified for orc tables."))
 
-    OrcRelation2(path)(sqlContext)
+    OrcRelation(path)(sqlContext)
   }
 }
 private[orc] case class Partition(partitionValues: Map[String, Any], files: Seq[FileStatus])
@@ -105,7 +77,7 @@ private[orc] case class Partition(partitionValues: Map[String, Any], files: Seq[
  * discovery.
  */
 @DeveloperApi
-case class OrcRelation2(path: String)(@transient val sqlContext: SQLContext)
+case class OrcRelation(path: String)(@transient val sqlContext: SQLContext)
   extends CatalystScan with Logging {
 
   @transient

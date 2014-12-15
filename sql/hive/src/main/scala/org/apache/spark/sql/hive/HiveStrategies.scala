@@ -17,7 +17,6 @@
 
 package org.apache.spark.sql.hive
 
-import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.hive.ql.plan.CreateTableDesc
 
 import org.apache.spark.annotation.Experimental
@@ -31,12 +30,10 @@ import org.apache.spark.sql.catalyst.types.StringType
 import org.apache.spark.sql.execution.{DescribeCommand, OutputFaker, SparkPlan, PhysicalRDD}
 import org.apache.spark.sql.hive
 import org.apache.spark.sql.hive.execution._
-import org.apache.spark.sql.hive.orc._
 import org.apache.spark.sql.parquet.ParquetRelation
 import org.apache.spark.sql.{SQLContext, SchemaRDD, Strategy}
 
 import scala.collection.JavaConversions._
-import org.apache.hadoop.mapreduce.Job
 
 private[hive] trait HiveStrategies {
   // Possibly being too clever with types here... or not clever enough.
@@ -247,54 +244,6 @@ private[hive] trait HiveStrategies {
             Seq(DescribeCommand(planLater(o), describe.output)(context))
         }
 
-      case _ => Nil
-    }
-  }
-
-  object OrcOperations extends Strategy {
-    def apply(plan: LogicalPlan): Seq[SparkPlan] = plan match {
-      case WriteToOrcFile(path, child) =>
-        val relation =
-          OrcRelation.create(path, child, sparkContext.hadoopConfiguration, sqlContext)
-        InsertIntoOrcTable(relation, planLater(child), overwrite = true) :: Nil
-      case logical.InsertIntoTable(table: OrcRelation, partition, child, overwrite) =>
-        InsertIntoOrcTable(table, planLater(child), overwrite) :: Nil
-      case PhysicalOperation(projectList, filters, relation: OrcRelation) =>
-        val prunePushedDownFilters = {
-          OrcRelation.jobConf =  sparkContext.hadoopConfiguration
-          if (ORC_FILTER_PUSHDOWN_ENABLED) {
-            val job = new Job(OrcRelation.jobConf)
-            val conf: Configuration = job.getConfiguration
-            logInfo("Orc push down filter enabled:" + filters)
-            (filters: Seq[Expression]) => {
-              val recordFilter = OrcFilters.createFilter(filters)
-              if (recordFilter.isDefined) {
-
-                logInfo("Parsed filters:" + recordFilter)
-                /**
-                 * To test it, we can set follows so that the reader
-                 * will not read whole file if small
-                 * sparkContext.hadoopConfiguration.setInt(
-                 * "mapreduce.input.fileinputformat.split.maxsize", 50)
-                 */
-                conf.set(SARG_PUSHDOWN, toKryo(recordFilter.get))
-                conf.setBoolean("hive.optimize.index.filter", true)
-                OrcRelation.jobConf = conf
-              }
-              // no matter whether it is filtered or not in orc,
-              // we need to do more fine grained filter
-              // in the upper layer, return all of them
-              filters
-            }
-          } else {
-            identity[Seq[Expression]] _
-          }
-        }
-        pruneFilterProject(
-          projectList,
-          filters,
-          prunePushedDownFilters,
-          OrcTableScan(_, relation, None)) :: Nil
       case _ => Nil
     }
   }
