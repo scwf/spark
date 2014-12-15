@@ -36,10 +36,37 @@ import org.apache.spark.sql.SQLContext
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.Logging
 import org.apache.spark.sql.catalyst.types._
-import org.apache.spark.sql.catalyst.expressions.{SpecificMutableRow, Attribute, Expression, Row}
+import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.hive.{HiveShim, HadoopTableReader, HiveMetastoreTypes}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.parquet.FileSystemHelper
+import org.apache.spark.sql.catalyst.types.StructField
+import org.apache.spark.sql.hive.orc.OrcRelation2
+import scala.Some
+import org.apache.spark.sql.hive.orc.Partition
+import org.apache.spark.sql.catalyst.types.StructField
+import org.apache.spark.sql.hive.orc.OrcRelation2
+import scala.Some
+import org.apache.spark.sql.hive.orc.Partition
+import org.apache.spark.sql.catalyst.types.StructField
+import org.apache.spark.sql.hive.orc.OrcRelation2
+import scala.Some
+import org.apache.spark.sql.hive.orc.Partition
+import org.apache.spark.sql.catalyst.types.StructField
+import org.apache.spark.sql.hive.orc.OrcRelation2
+import scala.Some
+import org.apache.spark.sql.hive.orc.Partition
+import org.apache.spark.sql.catalyst.types.StructField
+import org.apache.spark.sql.hive.orc.OrcRelation2
+import scala.Some
+import org.apache.spark.sql.hive.orc.Partition
+import org.apache.spark.sql.catalyst.types.StructField
+import org.apache.spark.sql.hive.orc.OrcRelation2
+import scala.Some
+import org.apache.spark.sql.catalyst.expressions.And
+import org.apache.spark.sql.hive.orc.Partition
+import org.apache.spark.sql.catalyst.expressions.BoundReference
+import org.apache.spark.sql.catalyst.expressions.AttributeReference
 
 /**
  * Allows creation of orc based tables using the syntax
@@ -102,7 +129,6 @@ case class OrcRelation2(path: String)(@transient val sqlContext: SQLContext)
   discoverPartitions()
 
   // TODO: Only finds the first partition, assumes the key is of type Integer...
-  // Why key type is Int?
   private def discoverPartitions() = {
     val fs = FileSystem.get(new java.net.URI(path), sparkContext.hadoopConfiguration)
     val partValue = "([^=]+)=([^=]+)".r
@@ -198,13 +224,39 @@ case class OrcRelation2(path: String)(@transient val sqlContext: SQLContext)
     val sc = sparkContext
     val job = new Job(sc.hadoopConfiguration)
     val conf: Configuration = job.getConfiguration
-    // todo: predicates push down
-    path.split(",").foreach { curPath =>
-      val qualifiedPath = {
-        val path = new Path(curPath)
-        path.getFileSystem(conf).makeQualified(path)
+    val partitionKeySet = partitionKeys.toSet
+    val rawPredicate =
+      predicates
+        .filter(_.references.map(_.name).toSet.subsetOf(partitionKeySet))
+        .reduceOption(And)
+        .getOrElse(Literal(true))
+
+    // Translate the predicate so that it reads from the information derived from the
+    // folder structure
+    val castedPredicate = rawPredicate transform {
+      case a: AttributeReference =>
+        val idx = partitionKeys.indexWhere(a.name == _)
+        BoundReference(idx, IntegerType, nullable = true)
+    }
+
+    val inputData = new GenericMutableRow(partitionKeys.size)
+    val pruningCondition = InterpretedPredicate(castedPredicate)
+
+    val selectedPartitions =
+      if (partitionKeys.nonEmpty && predicates.nonEmpty) {
+        partitions.filter { part =>
+          inputData(0) = part.partitionValues.values.head
+          pruningCondition(inputData)
+        }
+      } else {
+        partitions
       }
-      FileInputFormat.addInputPath(job, qualifiedPath)
+
+    val fs = FileSystem.get(new java.net.URI(path), sparkContext.hadoopConfiguration)
+    val selectedFiles = selectedPartitions.flatMap(_.files).map(f => fs.makeQualified(f.getPath))
+    // FileInputFormat cannot handle empty lists.
+    if (selectedFiles.nonEmpty) {
+      org.apache.hadoop.mapreduce.lib.input.FileInputFormat.setInputPaths(job, selectedFiles: _*)
     }
 
     addColumnIds(output, schema.toAttributes, conf)

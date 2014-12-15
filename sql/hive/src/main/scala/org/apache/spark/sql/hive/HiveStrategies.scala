@@ -36,6 +36,7 @@ import org.apache.spark.sql.parquet.ParquetRelation
 import org.apache.spark.sql.{SQLContext, SchemaRDD, Strategy}
 
 import scala.collection.JavaConversions._
+import org.apache.hadoop.mapreduce.Job
 
 private[hive] trait HiveStrategies {
   // Possibly being too clever with types here... or not clever enough.
