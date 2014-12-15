@@ -74,8 +74,17 @@ abstract class BinaryPredicate extends BinaryExpression with Predicate {
 }
 
 object BinaryPredicate {
-
+  // the combine predicate we call here is "||" or "&&" predicate
+  // maybe we can create a new predicate type called CombinePredicate extends BinaryPredicate?
   object CombinePredicate {
+    def apply(left: Expression, right: Expression, isOr: Boolean): BinaryPredicate = {
+      if (isOr) {
+        Or(left, right)
+      } else {
+        And(left, right)
+      }
+    }
+
     def unapply(bp: BinaryPredicate): Option[(Expression, Expression)] = {
       if (bp.isInstanceOf[Or] || bp.isInstanceOf[And]) {
         Some((bp.left, bp.right))
@@ -186,44 +195,26 @@ abstract class BinaryComparison extends BinaryPredicate {
 object BinaryComparison {
 
   object LiteralComparison {
-    def unapply(expr: Expression): Option[BinaryComparison] = expr match {
+    def unapply(expr: BinaryComparison): Option[BinaryComparison] = expr match {
       case LessThan(left: Literal, right: AttributeReference) =>
-        Some(LessThan(right, left))
-
-      case lt @ LessThan(left: AttributeReference, right: Literal) =>
-        Some(lt)
+        Some(GreaterThan(right, left))
 
       case LessThanOrEqual(left: Literal, right: AttributeReference) =>
-        Some(LessThanOrEqual(right, left))
-
-      case ltoe @ LessThanOrEqual(left: AttributeReference, right: Literal) =>
-        Some(ltoe)
+        Some(GreaterThanOrEqual(right, left))
 
       case EqualTo(left: Literal, right: AttributeReference) =>
         Some(EqualTo(right, left))
 
-      case eq @ EqualTo(left: AttributeReference, right: Literal) =>
-        Some(eq)
-
       case EqualNullSafe(left: Literal, right: AttributeReference) =>
         Some(EqualNullSafe(right, left))
 
-      case eqs @ EqualNullSafe(left: AttributeReference, right: Literal) =>
-        Some(eqs)
-
       case GreaterThan(left: Literal, right: AttributeReference) =>
-        Some(GreaterThan(right, left))
-
-      case gt @ GreaterThan(left: AttributeReference, right: Literal) =>
-        Some(gt)
+        Some(LessThan(right, left))
 
       case GreaterThanOrEqual(left: Literal, right: AttributeReference) =>
-        Some(GreaterThanOrEqual(right, left))
+        Some(LessThanOrEqual(right, left))
 
-      case gtoe @ GreaterThanOrEqual(left: AttributeReference, right: Literal) =>
-        Some(gtoe)
-
-      case _ => None
+      case _ => Some(expr)
     }
   }
 

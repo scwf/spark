@@ -18,7 +18,7 @@
 package org.apache.spark.sql.catalyst.optimizer
 
 import org.apache.spark.sql.catalyst.analysis.EliminateAnalysisOperators
-import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.spark.sql.catalyst.expressions.{Literal, Expression}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.plans.PlanTest
 import org.apache.spark.sql.catalyst.rules._
@@ -54,6 +54,10 @@ class FilterSimplificationSuite extends PlanTest {
     comparePlans(optimized, expected)
   }
 
+  test("literal in front of attribute") {
+    doFavor(Literal(1) < 'a || Literal(2) < 'a, 'a > 1)
+  }
+
   test("combine the same filter condition") {
     doFavor('a < 1 || 'a < 1, 'a < 1)
     doFavor('a > 2 && 'a > 2, 'a > 2)
@@ -65,7 +69,7 @@ class FilterSimplificationSuite extends PlanTest {
     doFavor('a === 1 || 'a < 1, 'a <= 1)
 
     doFavor('a === 1 && 'a === 2)
-    doFavor('a === 1 || 'a === 2, 'a === 2 || 'a === 1)
+    doFavor('a === 1 || 'a === 2, 'a === 1 || 'a === 2)
 
     doFavor('a <= 1 && 'a > 1)
     doFavor('a <= 1 || 'a > 1)
@@ -78,8 +82,26 @@ class FilterSimplificationSuite extends PlanTest {
 
   }
 
-  test("combine or predicate") {
+  test("combine predicate : 2 same combine") {
     doFavor('a < 1 || 'b > 2 || 'a >= 1)
+    doFavor('a < 1 && 'b > 2 && 'a >= 1)
+
     doFavor('a < 2 || 'b > 3 || 'b > 2, 'a < 2 || 'b > 2)
+    doFavor('a < 2 && 'b > 3 && 'b > 2, 'a < 2 && 'b > 3)
+
+    doFavor('a < 2 || ('b > 3 || 'b > 2), 'b > 2 || 'a < 2)
+    doFavor('a < 2 && ('b > 3 && 'b > 2), 'b > 3 && 'a < 2)
+
+    doFavor('a < 2 || 'a === 3 || 'a > 5, 'a < 2 || 'a === 3 || 'a > 5)
+  }
+
+  test("combine predicate : 2 difference combine") {
+    doFavor(('a < 2 || 'a > 3) && 'a > 4, 'a > 4)
+    doFavor(('a < 2 || 'b > 3) && 'a < 2, 'a < 2)
+
+    doFavor('a < 2 || ('a >= 2 && 'b > 1), 'b > 1 ||  'a < 2)
+    doFavor('a < 2 || ('a === 2 && 'b > 1), 'a < 2 || ('a === 2 && 'b > 1))
+
+    doFavor('a > 3 || ('a > 2 && 'a < 4), 'a > 2)
   }
 }

@@ -356,6 +356,9 @@ object CombineFilters extends Rule[LogicalPlan] {
  * filter will always evaluate to `false`.
  */
 object SimplifyFilters extends Rule[LogicalPlan] {
+  import BinaryPredicate.CombinePredicate
+  import BinaryComparison.LiteralComparison
+
   def apply(plan: LogicalPlan): LogicalPlan = plan transform {
     // If the filter condition always evaluate to true, remove the filter.
     case Filter(Literal(true, BooleanType), child) => child
@@ -364,52 +367,109 @@ object SimplifyFilters extends Rule[LogicalPlan] {
     case Filter(Literal(null, _), child) => LocalRelation(child.output, data = Seq.empty)
     case Filter(Literal(false, BooleanType), child) => LocalRelation(child.output, data = Seq.empty)
     // simplify Or or And predicate
-    case Filter(bp @ BinaryPredicate.CombinePredicate(_, _), child) =>
+    case Filter(bp @ CombinePredicate(_, _), child) =>
       Filter(optimizePredicate(bp), child)
   }
-
+  // TODO : check if support EqualsNullSafe well
   def optimizePredicate(expr: BinaryPredicate): Expression = expr match {
-    case bp @ BinaryPredicate.CombinePredicate(left, right) if left.fastEquals(right) =>
+    // predicate is || or &&, left equals right , drop right, keep left
+    // if left is also || or &&, optimize it
+    case CombinePredicate(left, right) if left.fastEquals(right) =>
       if (left.isInstanceOf[BinaryPredicate]) {
         optimizePredicate(left.asInstanceOf[BinaryPredicate])
       } else {
         left
       }
 
-    case bp @ BinaryPredicate.CombinePredicate(BinaryComparison.LiteralComparison(left),
-                              BinaryComparison.LiteralComparison(right)) =>
-      combineComparison(left , right, bp.isInstanceOf[Or])
-
-    case origin @ Or(left @ Or(left1, right1), right)
-      if notCombinePredicate(left1, right1, right) =>
-      val optimizedLeft = optimizePredicate(left)
-      if (optimizedLeft.fastEquals(left)) {
-        val lr = optimizePredicate(Or(left1, right))
-        if (lr.fastEquals(Or(left1, right))) {
-          val rr = optimizePredicate(Or(right1, right))
-          if (rr.fastEquals(Or(right1, right))) {
-            origin
-          } else {
-            optimizePredicate(Or(rr, left1))
-          }
-        } else {
-          optimizePredicate(Or(lr, right1))
-        }
+    // left and right are both binary comparison that contains literal
+    // here LiteralComparison unapply method changed the child position
+    // if there is no combination, should return the origin one
+    case origin @ CombinePredicate(LiteralComparison(left), LiteralComparison(right)) =>
+      val changed = CombinePredicate(left, right, isOR(origin))
+      val optimized = combineComparison(left , right, isOR(origin))
+      if (changed.fastEquals(optimized)) {
+        origin
       } else {
-        optimizePredicate(Or(optimizedLeft, right))
+        optimized
       }
+
+    case origin @ BinaryPredicate(left @ BinaryPredicate(left1, right1), right)
+      if !isCombinePredicate(left1, right1, right) && isCombinePredicate(origin, left) =>
+      val optimizedLeft = optimizePredicate(left)
+      if (left.fastEquals(optimizedLeft)) {
+        if (left1.fastEquals(right) || right1.fastEquals(right)) {
+          if (isSameCombinePredicate(origin, left)) optimizedLeft else right
+        } else {
+          val left1Right = CombinePredicate(left1, right, isOR(origin))
+          val right1Right = CombinePredicate(right1, right, isOR(origin))
+          val optimizedLR = optimizePredicate(left1Right)
+          val optimizedRR = optimizePredicate(right1Right)
+          if (left1Right.fastEquals(optimizedLR) && right1Right.fastEquals(optimizedRR)) {
+            origin
+          } else if ((!isCombinePredicate(optimizedLR) && !isCombinePredicate(optimizedRR))
+            || isSameCombinePredicate(origin, left)) {
+            optimizePredicate(CombinePredicate(optimizedLR, optimizedRR, isOR(left)))
+          } else if (optimizedLR.isInstanceOf[Literal] || optimizedRR.isInstanceOf[Literal]) {
+            CombinePredicate(optimizedLR, optimizedRR, isOR(left))
+          } else {
+            origin
+          }
+        }
+      } else if (!isCombinePredicate(optimizedLeft)) {
+        optimizePredicate(CombinePredicate(optimizedLeft, right, isOR(origin)))
+      } else {
+        origin
+      }
+
+    case origin @ BinaryPredicate(left, right @ BinaryPredicate(left2, right2))
+      if !isCombinePredicate(left2, right2, right) && isCombinePredicate(origin, right) =>
+      val changed = CombinePredicate(right, left, isOR(origin))
+      val optimized = optimizePredicate(changed)
+      if (changed.fastEquals(optimized)) {
+        origin
+      } else {
+        optimized
+      }
+
+    case origin @ BinaryPredicate(left @ BinaryPredicate(ll, lr), right @ BinaryPredicate(rl, rr))
+      if !isCombinePredicate(ll, lr, rl, rr)
+        && isCombinePredicate(origin, left, right)
+        && isSameCombinePredicate(left, right) =>
+      val optimizedLeft = optimizePredicate(left)
+      val optimizedRight = optimizePredicate(right)
+
+      if (left.fastEquals(optimizedLeft)) {
+        if (right.fastEquals(optimizedRight)) {
+          val llrl = CombinePredicate(ll, rl, isOR(left))
+          val lrrl = CombinePredicate(lr, rl, isOR(left))
+          val llrr = CombinePredicate(ll, rr, isOR(left))
+          val lrrr = CombinePredicate(lr, rr, isOR(left))
+        }
+      }
+      null
 
     // TODO: 添加处理其他可被优化的处理过程
     case other =>
       other
   }
-  // predicate that is not And or Or
-  private def notCombinePredicate(exprs: Expression*): Boolean = {
-    exprs.count(e => e.isInstanceOf[Or] || e.isInstanceOf[And]) == 0
+
+  private def isOR(predicate: Predicate): Boolean = {
+    predicate.isInstanceOf[Or]
   }
 
-  private def isOrAndPredicate(bp: BinaryPredicate): Boolean = {
-    bp.isInstanceOf[Or] || bp.isInstanceOf[And]
+  // predicate that is "&&" or "||"
+  private def isCombinePredicate(exprs: Expression*): Boolean = {
+    exprs.foreach(expr => if (!expr.isInstanceOf[Or] && !expr.isInstanceOf[And]) return false)
+    true
+  }
+
+  private def isSameCombinePredicate(predicates: Predicate*): Boolean = {
+    val head = predicates.head
+    if (head.isInstanceOf[Or] || head.isInstanceOf[And]) {
+      predicates.tail.forall(p => p.getClass == head.getClass)
+    } else {
+      false
+    }
   }
 
   private def isLess(comparison: BinaryComparison): Boolean = {
@@ -504,7 +564,15 @@ object SimplifyFilters extends Rule[LogicalPlan] {
                 }
               }
           }).getOrElse(result.filter(_ < 0).map(c => {
-            combineComparison(right, left, isOr)
+            // if there is no combination, return the origin one
+            // since `fastEqual` is not equals when `A.left = B.right && A.right = B.left`
+            val changed = CombinePredicate(right, left, isOr)
+            val optimized = combineComparison(right, left, isOr)
+            if (changed.fastEquals(optimized)) {
+              origin
+            } else {
+              optimized
+            }
           }).getOrElse(origin)))
 
         case _ =>
