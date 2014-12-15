@@ -30,7 +30,9 @@ public abstract class DbObjectBase implements DbObject {
     protected String comment;
 
     private int id;
-    private String objectName;
+
+    //wuwei revised
+    public String objectName;
     private long modificationId;
     private boolean temporary;
 

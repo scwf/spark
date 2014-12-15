@@ -1,7 +1,7 @@
 package org.apache.spark.sql.hive.h2.expression
 
 import org.apache.spark.sql.catalyst.expressions.Expression
-import org.h2.expression.{ConditionAndOr, Comparison}
+import org.h2.expression.{ValueExpression, ConditionAndOr, Comparison}
 
 /**
  * Created by w00297350 on 2014/12/5.
@@ -19,6 +19,9 @@ object H2ExpressionParser {
 
       case conditionAndOr:ConditionAndOr=>
         expr_catalyst=ConditionAndOrParser(conditionAndOr)
+
+      case valueExpression:ValueExpression =>
+        expr_catalyst=ValueParser(valueExpression.value)
 
       case _ =>
         sys.error("unsupported the h2 expression parser.")

@@ -70,6 +70,17 @@ public class H2SqlParserAdapter
         mytable.myinit(session);
         tableSchemaMap.put("DEP", mytable);
 
+        data=new CreateTableData();
+        data.schema=db.getSchema("PUBLIC");
+        cols = data.columns;
+        cols.add(new Column("DEPNO", Value.INT));
+        cols.add(new Column("DEPNAME", Value.STRING));
+        data.tableName = "DEP2";
+        data.id = 2;
+        mytable =new MVTable(data);
+        mytable.myinit(session);
+        tableSchemaMap.put("DEP2", mytable);
+
         return tableSchemaMap;
     }
 

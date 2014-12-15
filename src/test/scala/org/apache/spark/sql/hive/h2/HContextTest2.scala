@@ -14,15 +14,31 @@ object HContextTest2 {
     import hContext._
     hContext.setConf("spark.sql.dialect","sql")
     hContext.setConf("spark.sql.shuffle.partitions","1")
-    val ret=hContext.sql("select depno,min(age) as minage  from emp group by depno having minage>10 and depno=1 order by minage desc")
-    val ret2=ret.collect()
-    println(ret2.size)
+    val ret=hContext.sql("select  name, age, emp.depno, dep2.depno, dep2.depname from emp inner join dep2 on emp.depno=dep2.depno")
+    println(ret.logicalPlan)
+//    val ret2=ret.collect()
+//    println(ret2.size)
 
-    println(ret.printSchema())
+//    println(ret.printSchema())
     println(ret.queryExecution.toString)
-    ret2.foreach(row => println(row.getInt(0)+"\t"
-      //+row.getInt(1)
-    ))
+
+    ret.collect().foreach(row =>
+    {
+      print(if(row.isNullAt(0)) "null" else row.getString(0))
+      print("\t")
+      print(if(row.isNullAt(1)) "null" else row.getInt(1))
+      print("\t")
+      print(if(row.isNullAt(2)) "null" else row.getInt(2))
+      print("\t")
+      print(if(row.isNullAt(3)) "null" else row.getInt(3))
+      print("\t")
+      print(if(row.isNullAt(4)) "null" else row.getString(4))
+      println("\t")
+    }
+    )
+//    ret2.foreach(row => println(row.getInt(0)+"\t"
+//      //+row.getInt(1)
+//    ))
 
   }
 }

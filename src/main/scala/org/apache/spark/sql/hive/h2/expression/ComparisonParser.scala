@@ -36,7 +36,7 @@ object ComparisonParser {
         rightCatalystExpr=ValueParser(valueExpression.value)
 
       case expressionColumn: ExpressionColumn =>
-        leftCatalystExpr=ExpressionColumnParser(expressionColumn)
+        rightCatalystExpr=ExpressionColumnParser(expressionColumn)
 
       case _ =>
         sys.error("unsupported the h2 comparison right type.")

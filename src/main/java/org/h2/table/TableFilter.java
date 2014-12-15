@@ -47,7 +47,8 @@ public class TableFilter implements ColumnResolver {
 
     private Session session;
 
-    private final Table table;
+    //wuwei revised
+    public final Table table;
     private final Select select;
     private String alias;
     private Index index;
@@ -75,29 +76,33 @@ public class TableFilter implements ColumnResolver {
      */
     private Expression filterCondition;
 
+    //wuwei revised
     /**
      * The complete join condition.
      */
-    private Expression joinCondition;
+    public Expression joinCondition;
 
     private SearchRow currentSearchRow;
     private Row current;
     private int state;
 
+    //wuwei revised
     /**
      * The joined table (if there is one).
      */
-    private TableFilter join;
+    public TableFilter join;
 
+    //wuwei revised
     /**
      * Whether this is an outer join.
      */
-    private boolean joinOuter;
+    public boolean joinOuter;
 
+    //wuwei revised
     /**
      * The nested joined table (if there is one).
      */
-    private TableFilter nestedJoin;
+    public TableFilter nestedJoin;
 
     private ArrayList<Column> naturalJoinColumns;
     private boolean foundOne;

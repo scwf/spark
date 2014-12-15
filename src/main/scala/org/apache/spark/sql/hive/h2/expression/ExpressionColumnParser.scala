@@ -11,8 +11,15 @@ object ExpressionColumnParser {
 
   def apply(expressionColumn:ExpressionColumn): NamedExpression =
   {
-    val columnName=expressionColumn.getColumnName();
-    UnresolvedAttribute(columnName)
+    val columnName=expressionColumn.columnName;
+    val tableAlias=expressionColumn.tableAlias
+    if(tableAlias==null) {
+      UnresolvedAttribute(columnName)
+    }
+    else
+    {
+      UnresolvedAttribute(tableAlias+"."+columnName)
+    }
   }
 
 }

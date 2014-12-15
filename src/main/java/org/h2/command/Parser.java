@@ -1893,14 +1893,16 @@ public class Parser {
             if (isOuter) {
                 command.addTableFilter(join, false);
             } else {
+                // wuwei revised
                 // make flat so the optimizer can work better
-                Expression on = join.getJoinCondition();
-                if (on != null) {
-                    command.addCondition(on);
-                }
-                join.removeJoinCondition();
-                top.removeJoin();
-                command.addTableFilter(join, true);
+//                Expression on = join.getJoinCondition();
+//                if (on != null) {
+//                    command.addCondition(on);
+//                }
+//                join.removeJoinCondition();
+//                top.removeJoin();
+//                command.addTableFilter(join, true);
+                command.addTableFilter(join, false);
             }
             top = join;
         }

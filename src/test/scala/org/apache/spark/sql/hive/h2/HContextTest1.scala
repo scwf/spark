@@ -17,7 +17,7 @@ object HContextTest1 {
     import hContext._
     import hContext.createSchemaRDD
 
-    hContext.setConf("spark.sql.dialect","sql")
+    hContext.setConf("spark.sql.dialect","hiveql")
     val structFields = new Array[StructField](3)
     structFields.update(0, StructField("NAME", StringType, true))
     structFields.update(1, StructField("AGE", IntegerType, true))
@@ -32,7 +32,7 @@ object HContextTest1 {
     val empSchemaRdd=hContext.applySchema(empRdd,empSchema);
     hContext.registerRDDAsTable(empSchemaRdd,"EMP")
 
-    val ret=hContext.sql("select name , age from emp")
+    val ret=hContext.sql("select name , age from emp limit 20")
     ret.collect().foreach(r=> (println(r.getString(0)+","+r.getInt(1))))
 
     //ret.printSchema()

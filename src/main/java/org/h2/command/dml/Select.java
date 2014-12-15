@@ -61,7 +61,8 @@ import org.h2.value.ValueNull;
  * @author Joel Turkel (Group sorted query)
  */
 public class Select extends Query {
-    private TableFilter topTableFilter;
+    //wuwei revised
+    public TableFilter topTableFilter;
     private final ArrayList<TableFilter> filters = New.arrayList();
     private final ArrayList<TableFilter> topFilters = New.arrayList();
     private ArrayList<Expression> expressions;

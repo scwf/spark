@@ -2,10 +2,11 @@ package org.apache.spark.sql.hive.h2
 
 import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedRelation}
 import org.apache.spark.sql.catalyst.expressions._
+import org.apache.spark.sql.catalyst.plans.Inner
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.types.StringType
 import org.apache.spark.sql.catalyst.types.IntegerType
-import org.apache.spark.sql.hive.h2.expression.{H2ExpressionParser, SortOrderParser, ConditionAndOrParser, ComparisonParser}
+import org.apache.spark.sql.hive.h2.expression._
 import org.h2.adapter.sqlparse.H2SqlParserAdapter
 import org.h2.command.CommandContainer
 import org.h2.command.dml.Select
@@ -39,13 +40,19 @@ import scala.collection.mutable.ListBuffer
     {
        val tableName="emp"
        val relation = UnresolvedRelation(None, tableName, None);
+       val tbl_dep="dep"
+       val relation_dep=UnresolvedRelation(None, tbl_dep,None)
+       val rel=Join(relation,relation_dep,Inner,None)
+       val relation_dep2=UnresolvedRelation(None,"dep",None)
+       val rel2=Join(rel,relation_dep2,Inner,None)
+
        val nameAttr=UnresolvedAttribute("name")
        val ageAttr=UnresolvedAttribute("age")
        val expressions=Seq(nameAttr,ageAttr)
-       val project=Project(expressions,relation)
+       val project=Project(expressions,rel2)
        val seqOrder:Seq[SortOrder]=
        {
-         SortOrder(ageAttr, Descending)::Nil
+        SortOrder(ageAttr, Descending)::Nil
        }
        val sort=Sort(seqOrder,project);
        sort
@@ -96,7 +103,7 @@ import scala.collection.mutable.ListBuffer
       null;
     }
 
-    //parse test ComparisonParser
+    //parse integrate
     def sql3(input:String):LogicalPlan=
     {
       val h2SqlParser=new H2SqlParserAdapter();
@@ -109,12 +116,8 @@ import scala.collection.mutable.ListBuffer
       {
         val select=prepared.asInstanceOf[Select];
 
-        val fullTableName=select.getTopTableFilter().toString();
-        val nameIndex=fullTableName.lastIndexOf(".")+1;
-        val tableName=fullTableName.substring(nameIndex);
-
         // relation
-        val relation = UnresolvedRelation(None, tableName, None);
+        val relation =if(select.topTableFilter==null) NoRelation else TableFilterParser(select.topTableFilter)
 
         //filter
         var conditionExpr:Expression=null;
@@ -139,14 +142,20 @@ import scala.collection.mutable.ListBuffer
           project = Project(assignAliases(projectExpressions), filter)
         }
 
+        //distinct
+        val distinct= if(select.distinct) Distinct(project) else project
+
         //having
         val havingExprCondition=select.havingExprForSpark
-        val having= if(havingExprCondition==null) project else Filter(H2ExpressionParser(havingExprCondition),project)
+        val having= if(havingExprCondition==null) distinct else Filter(H2ExpressionParser(havingExprCondition),distinct)
 
         //sort order by
-        val sort= if(select.sort==null) project  else Sort(SortOrderParser(select.sort,expressions), having)
+        val sort= if(select.sort==null) having  else Sort(SortOrderParser(select.sort,expressions), having)
 
-        return sort
+        //limit (该逻辑计划不支持 offset的情况，即limit 10,20语法)
+        val limit=if(select.limitExpr!=null) Limit(H2ExpressionParser(select.limitExpr),sort) else sort
+
+        return limit
       }
       else
       {

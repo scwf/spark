@@ -35,10 +35,11 @@ import org.h2.value.ValueNull;
  */
 public abstract class Query extends Prepared {
 
+    //wuwei revised
     /**
      * The limit expression as specified in the LIMIT or TOP clause.
      */
-    protected Expression limitExpr;
+    public Expression limitExpr;
 
     /**
      * The offset expression as specified in the LIMIT .. OFFSET clause.
@@ -50,10 +51,11 @@ public abstract class Query extends Prepared {
      */
     protected Expression sampleSizeExpr;
 
+    //wuwei revised
     /**
      * Whether the result must only contain distinct rows.
      */
-    protected boolean distinct;
+    public boolean distinct;
 
     /**
      * Whether the result needs to support random access.

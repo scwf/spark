@@ -31,8 +31,11 @@ public class ExpressionColumn extends Expression {
 
     private final Database database;
     private final String schemaName;
-    private final String tableAlias;
-    private final String columnName;
+
+    //wuwei revised
+    public final String tableAlias;
+    public final String columnName;
+
     private ColumnResolver columnResolver;
     private int queryLevel;
     private Column column;
