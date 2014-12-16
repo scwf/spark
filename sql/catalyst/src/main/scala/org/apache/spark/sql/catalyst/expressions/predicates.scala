@@ -39,12 +39,6 @@ trait Predicate extends Expression {
   type EvaluatedType = Any
 }
 
-object Predicate {
-  def unapply(p: Expression): Boolean = {
-    p.isInstanceOf[Predicate]
-  }
-}
-
 trait PredicateHelper {
   protected def splitConjunctivePredicates(condition: Expression): Seq[Expression] = {
     condition match {
@@ -74,26 +68,6 @@ abstract class BinaryPredicate extends BinaryExpression with Predicate {
 }
 
 object BinaryPredicate {
-  // the combine predicate we call here is "||" or "&&" predicate
-  // maybe we can create a new predicate type called CombinePredicate extends BinaryPredicate?
-  object CombinePredicate {
-    def apply(left: Expression, right: Expression, isOr: Boolean): BinaryPredicate = {
-      if (isOr) {
-        Or(left, right)
-      } else {
-        And(left, right)
-      }
-    }
-
-    def unapply(bp: BinaryPredicate): Option[(Expression, Expression)] = {
-      if (bp.isInstanceOf[Or] || bp.isInstanceOf[And]) {
-        Some((bp.left, bp.right))
-      } else {
-        None
-      }
-    }
-  }
-
   def unapply(bp: BinaryPredicate): Option[(Expression, Expression)] = {
     Some((bp.left, bp.right))
   }
@@ -144,7 +118,30 @@ case class InSet(value: Expression, hset: Set[Any])
   }
 }
 
-case class And(left: Expression, right: Expression) extends BinaryPredicate {
+abstract class CombinePredicate extends BinaryPredicate {
+  self: Product =>
+}
+
+// the combine predicate we call here is "||" or "&&" predicate
+object CombinePredicate {
+  def apply(left: Expression, right: Expression, isOr: Boolean): CombinePredicate = {
+    if (isOr) {
+      Or(left, right)
+    } else {
+      And(left, right)
+    }
+  }
+
+  def unapply(bp: CombinePredicate): Option[(Expression, Expression)] = {
+    if (bp.isInstanceOf[Or] || bp.isInstanceOf[And]) {
+      Some((bp.left, bp.right))
+    } else {
+      None
+    }
+  }
+}
+
+case class And(left: Expression, right: Expression) extends CombinePredicate {
   def symbol = "&&"
 
   override def eval(input: Row): Any = {
@@ -166,7 +163,7 @@ case class And(left: Expression, right: Expression) extends BinaryPredicate {
   }
 }
 
-case class Or(left: Expression, right: Expression) extends BinaryPredicate {
+case class Or(left: Expression, right: Expression) extends CombinePredicate {
   def symbol = "||"
 
   override def eval(input: Row): Any = {
@@ -195,6 +192,7 @@ abstract class BinaryComparison extends BinaryPredicate {
 object BinaryComparison {
 
   object LiteralComparison {
+    // this method will exchange the child position when left child is Literal
     def unapply(expr: BinaryComparison): Option[BinaryComparison] = expr match {
       case LessThan(left: Literal, right: AttributeReference) =>
         Some(GreaterThan(right, left))

@@ -31,6 +31,8 @@ import org.apache.spark.sql.catalyst.rules._
 import org.apache.spark.sql.catalyst.types._
 import org.apache.spark.sql.catalyst.types.decimal.Decimal
 
+import scala.collection.mutable.ArrayBuffer
+
 abstract class Optimizer extends RuleExecutor[LogicalPlan]
 
 object DefaultOptimizer extends Optimizer {
@@ -41,8 +43,9 @@ object DefaultOptimizer extends Optimizer {
       NullPropagation,
       ConstantFolding,
       LikeSimplification,
-      SimplifyFilters,
+      ConditionSimplification,
       BooleanSimplification,
+      SimplifyFilters,
       SimplifyCasts,
       SimplifyCaseConversionExpressions,
       OptimizeIn) ::
@@ -296,6 +299,363 @@ object OptimizeIn extends Rule[LogicalPlan] {
   }
 }
 
+object ConditionSimplification extends Rule[LogicalPlan] {
+  import BinaryComparison.LiteralComparison
+
+  def apply(plan: LogicalPlan): LogicalPlan = plan transform {
+    case q: LogicalPlan => q transformExpressionsDown  {
+      case origin: CombinePredicate =>
+        origin.toOptimized
+    }
+  }
+
+  case class SplitUnit(unit: Expression, remain: Expression)
+
+  implicit class CombinePredicateExtension(source: CombinePredicate) {
+    def find(goal: Expression): Boolean = {
+      def delegate(child: Expression): Boolean = (child, goal) match {
+        case (combine: CombinePredicate, _) =>
+          isSameCombinePredicate(source, combine) && combine.find(goal)
+
+         // if left child is a literal
+         // LiteralComparison's unapply method change the literal and attribute position
+        case (LiteralComparison(childComparison), LiteralComparison(goalComparison)) =>
+          isSame(childComparison, goalComparison)
+
+        case other =>
+          isSame(child, goal)
+      }
+
+      // using method to avoid right side compute if left side is true
+      val leftResult = () => delegate(source.left)
+      val rightResult = () => delegate(source.right)
+      leftResult() || rightResult()
+    }
+
+    @inline
+    def isOrPredicate: Boolean = {
+      source.isInstanceOf[Or]
+    }
+
+    // create a new combine predicate that has the same combine operator as this
+    @inline
+    def build(left: Expression, right: Expression): CombinePredicate = {
+      CombinePredicate(left, right, isOrPredicate)
+    }
+
+    // swap left child and right child
+    @inline
+    def swap: CombinePredicate = {
+      source.build(source.right, source.left)
+    }
+
+    // Example : a || b || (c && d) => (a, b || (c && d)) or (b, a || (c && d)) or (c && d, a || b)
+    def split: Seq[SplitUnit] = {
+      def process(child: Expression, others: Expression): Seq[SplitUnit] = {
+        child match {
+          case combine: CombinePredicate if isSameCombinePredicate(source, combine)=>
+            combine.split.map(unit =>
+              SplitUnit(unit.unit, source.build(unit.remain, others)))
+
+          case other =>
+            Seq(SplitUnit(child, others))
+        }
+      }
+      val leftUnits = process(source.left, source.right)
+      val rightUnits = process(source.right, source.left)
+      leftUnits ++ rightUnits
+    }
+
+    def toOptimized: Expression = source match {
+      // predicate is || or &&, left equals right , drop right, keep left
+      // if left is also || or &&, optimize it
+      case CombinePredicate(left, right) if left.fastEquals(right) =>
+        if (isCombinePredicate(left)) {
+          left.toCombinePredicate.toOptimized
+        } else {
+          left
+        }
+
+      // left and right are both binary comparison that contains literal
+      // here LiteralComparison unapply method changed the child position
+      // if there is no combination, should return the origin one
+      case origin @ CombinePredicate(LiteralComparison(left), LiteralComparison(right)) =>
+        val changed = origin.build(left, right)
+        val optimized = changed.mergeComparison
+        if (isSame(changed, optimized)) {
+          origin
+        } else {
+          optimized
+        }
+
+      case origin @ CombinePredicate(left @ CombinePredicate(left1, right1), right)
+        if isNotCombinePredicate(left1, right1, right) =>
+        val leftOptimized = left.toOptimized
+        if (isSame(left, leftOptimized)) {
+          if (isSame(left1, right) || isSame(right1, right)) {
+            if (isSameCombinePredicate(origin, left)) leftOptimized else right
+          } else {
+            val left1Right = origin.build(left1, right)
+            val right1Right = origin.build(right1, right)
+            val optimizedLR = left1Right.toOptimized
+            val optimizedRR = right1Right.toOptimized
+            if (isSame(left1Right, optimizedLR) && isSame(right1Right, optimizedRR)) {
+              origin
+            } else if ((isNotCombinePredicate(optimizedLR, optimizedRR))
+              || isSameCombinePredicate(origin, left)) {
+              left.build(optimizedLR, optimizedRR).toOptimized
+            } else if (optimizedLR.isLiteral || optimizedRR.isLiteral) {
+              left.build(optimizedLR, optimizedRR)
+            } else {
+              origin
+            }
+          }
+        } else if (isNotCombinePredicate(leftOptimized)) {
+          origin.build(leftOptimized, right).toOptimized
+        } else {
+          origin
+        }
+
+      case origin @ CombinePredicate(left, right @ CombinePredicate(left2, right2))
+        if isNotCombinePredicate(left, left2, right2) =>
+        val changed = origin.swap
+        val optimized = changed.toOptimized
+        if (isSame(changed, optimized)) {
+          origin
+        } else {
+          optimized
+        }
+
+      // do optimize like : (a || b || c)  && a => a, here a, b , c is a condition
+      case origin @ CombinePredicate(left @ CombinePredicate(ll, lr), right)
+        if isNotCombinePredicate(right) =>
+        val leftOptimized = left.toOptimized
+        if (isSame(left, leftOptimized)) {
+          if (left.find(right)) {
+            if (isSameCombinePredicate(origin, left)) left else right
+          } else {
+            // process more complicated case ?
+            origin
+          }
+        } else {
+          origin.build(leftOptimized, right).toOptimized
+        }
+
+      case origin @ CombinePredicate(left, right @ CombinePredicate(rl, rr))
+        if isNotCombinePredicate(left) =>
+        val changed = origin.swap
+        val optimized = changed.toOptimized
+        if (isSame(changed, optimized)) {
+          origin
+        } else {
+          optimized
+        }
+
+      case origin @ CombinePredicate(left: CombinePredicate,
+                                    right: CombinePredicate)  =>
+        val leftOptimized = left.toOptimized
+        val rightOptimized = right.toOptimized
+
+        if (isSame(left, leftOptimized) && isSame(right, rightOptimized)) {
+          val leftUnits = left.split
+          val rightUnits = right.split
+          for (leftUnit <- leftUnits) {
+            for (rightUnit <- rightUnits) {
+              if (isSame(leftUnit.unit, rightUnit.unit)) {
+                if (isSameCombinePredicate(origin, left, right)) {
+                  return origin.build(leftUnit.remain, right).toOptimized
+                } else if (isSameCombinePredicate(origin, right)) {
+                  return right
+                } else if (isSameCombinePredicate(origin, left)) {
+                  return left
+                } else {
+                  val remains = origin.build(leftUnit.remain, rightUnit.remain).toOptimized
+                  return left.build(leftUnit.unit, remains)
+                }
+              }
+            }
+          }
+          // TODO : process more complicated case
+          origin
+        } else {
+          origin.build(leftOptimized, rightOptimized).toOptimized
+        }
+
+      case other =>
+        other
+    }
+    // merge to literal comparison(contains literal in binary comparison)
+    // here assume two children both are `BinaryComparison`
+    // TODO : find a way to simplify the code O_o
+    def mergeComparison: Expression = {
+      val left = source.left.toBinaryComparison
+      val right = source.right.toBinaryComparison
+      if (!isSame(left.left, right.left)) {
+        source
+      } else {
+        (left, right) match {
+          case (BinaryComparison(attr, Literal(vLeft, tLeft @ NativeType())),
+          BinaryComparison(_, Literal(vRight, tRight @ NativeType()))) =>
+            val result = compare(vLeft, vRight)
+            result.filter(_ > 0).map(c => {
+              if (((left.isLess || left.isLessEquals)
+                && (right.isLess || right.isLessEquals || right.isEquals))) {
+                if (isOrPredicate) left else right
+              } else if ((left.isLess || left.isLessEquals)
+                && (right.isGreater || right.isGreaterEquals)) {
+                if (isOrPredicate) Literal(true, BooleanType) else source
+              } else if ((left.isEquals || left.isGreater || left.isGreaterEquals)
+                && (right.isLess || right.isLessEquals || right.isEquals)) {
+                if (isOrPredicate) source else Literal(false, BooleanType)
+              } else if (left.isEquals && (right.isGreater || right.isGreaterEquals)) {
+                if (isOrPredicate) right else left
+              } else if ((left.isGreater || left.isGreaterEquals)
+                && (right.isLess || right.isEquals || right.isLessEquals)) {
+                if (isOrPredicate) source else Literal(false, BooleanType)
+              } else {
+                if (isOrPredicate) right else left
+              }
+            }).getOrElse(result.filter(_ == 0).map(c => {
+              if (isOrPredicate) {
+                if ((left.symbol == right.symbol)
+                  || (left.isLessEquals && (right.isLess || right.isEquals))
+                  || (left.isGreaterEquals && (right.isGreater || right.isEquals))){
+                  left
+                } else if(((left.isEquals || left.isLess) && right.isLessEquals)
+                  || ((left.isEquals || left.isGreater) && right.isGreaterEquals)) {
+                  right
+                } else if ((left.isEquals && right.isLess)
+                  || (right.isEquals && left.isLess)) {
+                  LessThanOrEqual(attr, Literal(vLeft, tLeft))
+                } else if ((left.isEquals && right.isGreater)
+                  || (right.isEquals && left.isGreater)){
+                  GreaterThanOrEqual(attr, Literal(vLeft, tLeft))
+                } else if((left.isLess && right.isGreater)
+                  || (left.isGreater && right.isLess)) {
+                  Not(EqualTo(attr, Literal(vLeft, tRight)))
+                }else {
+                  Literal(true, BooleanType)
+                }
+              } else {
+                if ((left.symbol == right.symbol)
+                  || (left.isLess && right.isLessEquals)
+                  || (left.isGreater && right.isGreaterEquals)) {
+                  left
+                } else if((left.isEquals && (right.isLessEquals || right.isGreaterEquals))
+                  || (right.isEquals && (left.isLessEquals || left.isGreaterEquals))) {
+                  EqualTo(attr, Literal(vLeft, tLeft))
+                } else if ((left.isLessEquals && right.isLess)
+                  || (left.isGreaterEquals && right.isGreater)) {
+                  right
+                } else {
+                  Literal(false, BooleanType)
+                }
+              }
+            }).getOrElse(result.filter(_ < 0).map(c => {
+              // if there is no combination, return the origin one
+              // since `fastEqual` is not equals when `A.left = B.right && A.right = B.left`
+              val changed = build(right, left)
+              val optimized = changed.mergeComparison
+              if (changed.fastEquals(optimized)) {
+                source
+              } else {
+                optimized
+              }
+            }).getOrElse(source)))
+
+          case _ =>
+            source
+        }
+      }
+    }
+  }
+
+  implicit class ExpressionCookies(expression: Expression) {
+    @inline
+    def isLiteral = expression.isInstanceOf[Literal]
+
+    @inline
+    def toCombinePredicate = expression.asInstanceOf[CombinePredicate]
+
+    @inline
+    def toBinaryComparison = expression.asInstanceOf[BinaryComparison]
+
+    @inline
+    def isLess: Boolean = {
+      expression.isInstanceOf[LessThan]
+    }
+
+    @inline
+    def isLessEquals: Boolean = {
+      expression.isInstanceOf[LessThanOrEqual]
+    }
+
+    @inline
+    def isEquals: Boolean = {
+      expression.isInstanceOf[EqualTo]
+    }
+
+    @inline
+    def isGreater: Boolean = {
+      expression.isInstanceOf[GreaterThan]
+    }
+
+    @inline
+    def isGreaterEquals: Boolean = {
+      expression.isInstanceOf[GreaterThanOrEqual]
+    }
+  }
+
+  // it's better for reconstruction, cause `fastEquals` isn't always valid
+  // for example: a < 3 do not equals 3 > a when using `fastEquals`
+  // can we override `fastEquals` in Binary Node
+  // like `BinaryExpression` or create new equals method in `BinaryNode`?
+  @inline
+  private def isSame(left: Expression, right: Expression): Boolean = {
+    left.fastEquals(right)
+  }
+
+  // predicate that is "&&" or "||"
+  @inline
+  private def isCombinePredicate(exprs: Expression*): Boolean = {
+    exprs.forall(expr => expr.isInstanceOf[CombinePredicate])
+  }
+
+  @inline
+  private def isNotCombinePredicate(exprs: Expression*): Boolean = {
+    exprs.forall(!_.isInstanceOf[CombinePredicate])
+  }
+
+  private def isSameCombinePredicate(head: CombinePredicate, others: CombinePredicate*) = {
+    others.forall(p => p.getClass == head.getClass)
+  }
+
+  // compare left and right
+  // if left and right can be compared(means left and right are the same type)
+  // reture left compare right
+  // else if left and right are not the same type, return none
+  private def compare(left: Any, right: Any): Option[Int] = (left, right) match {
+    case (leftNumber: Number, rightNumber: Number) =>
+      Some(leftNumber.doubleValue().compareTo(rightNumber.doubleValue()))
+
+    case (leftString: String, rightString: String) =>
+      if (leftString == null && rightString == null) {
+        Some(0)
+      } else {
+        Some(leftString.compareTo(rightString))
+      }
+
+    case (leftDate: Date, rightDate: Date)=>
+      if (leftDate == null && rightDate == null) {
+        Some(0)
+      } else {
+        Some(leftDate.compareTo(rightDate))
+      }
+
+    case _ =>
+      None
+  }
+}
 /**
  * Simplifies boolean expressions where the answer can be determined without evaluating both sides.
  * Note that this rule can eliminate expressions that might otherwise have been evaluated and thus
@@ -356,9 +716,6 @@ object CombineFilters extends Rule[LogicalPlan] {
  * filter will always evaluate to `false`.
  */
 object SimplifyFilters extends Rule[LogicalPlan] {
-  import BinaryPredicate.CombinePredicate
-  import BinaryComparison.LiteralComparison
-
   def apply(plan: LogicalPlan): LogicalPlan = plan transform {
     // If the filter condition always evaluate to true, remove the filter.
     case Filter(Literal(true, BooleanType), child) => child
@@ -366,246 +723,6 @@ object SimplifyFilters extends Rule[LogicalPlan] {
     // replace the input with an empty relation.
     case Filter(Literal(null, _), child) => LocalRelation(child.output, data = Seq.empty)
     case Filter(Literal(false, BooleanType), child) => LocalRelation(child.output, data = Seq.empty)
-    // simplify Or or And predicate
-    case Filter(bp @ CombinePredicate(_, _), child) =>
-      Filter(optimizePredicate(bp), child)
-  }
-  // TODO : check if support EqualsNullSafe well
-  def optimizePredicate(expr: BinaryPredicate): Expression = expr match {
-    // predicate is || or &&, left equals right , drop right, keep left
-    // if left is also || or &&, optimize it
-    case CombinePredicate(left, right) if left.fastEquals(right) =>
-      if (left.isInstanceOf[BinaryPredicate]) {
-        optimizePredicate(left.asInstanceOf[BinaryPredicate])
-      } else {
-        left
-      }
-
-    // left and right are both binary comparison that contains literal
-    // here LiteralComparison unapply method changed the child position
-    // if there is no combination, should return the origin one
-    case origin @ CombinePredicate(LiteralComparison(left), LiteralComparison(right)) =>
-      val changed = CombinePredicate(left, right, isOR(origin))
-      val optimized = combineComparison(left , right, isOR(origin))
-      if (changed.fastEquals(optimized)) {
-        origin
-      } else {
-        optimized
-      }
-
-    case origin @ BinaryPredicate(left @ BinaryPredicate(left1, right1), right)
-      if !isCombinePredicate(left1, right1, right) && isCombinePredicate(origin, left) =>
-      val optimizedLeft = optimizePredicate(left)
-      if (left.fastEquals(optimizedLeft)) {
-        if (left1.fastEquals(right) || right1.fastEquals(right)) {
-          if (isSameCombinePredicate(origin, left)) optimizedLeft else right
-        } else {
-          val left1Right = CombinePredicate(left1, right, isOR(origin))
-          val right1Right = CombinePredicate(right1, right, isOR(origin))
-          val optimizedLR = optimizePredicate(left1Right)
-          val optimizedRR = optimizePredicate(right1Right)
-          if (left1Right.fastEquals(optimizedLR) && right1Right.fastEquals(optimizedRR)) {
-            origin
-          } else if ((!isCombinePredicate(optimizedLR) && !isCombinePredicate(optimizedRR))
-            || isSameCombinePredicate(origin, left)) {
-            optimizePredicate(CombinePredicate(optimizedLR, optimizedRR, isOR(left)))
-          } else if (optimizedLR.isInstanceOf[Literal] || optimizedRR.isInstanceOf[Literal]) {
-            CombinePredicate(optimizedLR, optimizedRR, isOR(left))
-          } else {
-            origin
-          }
-        }
-      } else if (!isCombinePredicate(optimizedLeft)) {
-        optimizePredicate(CombinePredicate(optimizedLeft, right, isOR(origin)))
-      } else {
-        origin
-      }
-
-    case origin @ BinaryPredicate(left, right @ BinaryPredicate(left2, right2))
-      if !isCombinePredicate(left2, right2, right) && isCombinePredicate(origin, right) =>
-      val changed = CombinePredicate(right, left, isOR(origin))
-      val optimized = optimizePredicate(changed)
-      if (changed.fastEquals(optimized)) {
-        origin
-      } else {
-        optimized
-      }
-
-    case origin @ BinaryPredicate(left @ BinaryPredicate(ll, lr), right @ BinaryPredicate(rl, rr))
-      if !isCombinePredicate(ll, lr, rl, rr)
-        && isCombinePredicate(origin, left, right)
-        && isSameCombinePredicate(left, right) =>
-      val optimizedLeft = optimizePredicate(left)
-      val optimizedRight = optimizePredicate(right)
-
-      if (left.fastEquals(optimizedLeft)) {
-        if (right.fastEquals(optimizedRight)) {
-          val llrl = CombinePredicate(ll, rl, isOR(left))
-          val lrrl = CombinePredicate(lr, rl, isOR(left))
-          val llrr = CombinePredicate(ll, rr, isOR(left))
-          val lrrr = CombinePredicate(lr, rr, isOR(left))
-        }
-      }
-      null
-
-    // TODO: 添加处理其他可被优化的处理过程
-    case other =>
-      other
-  }
-
-  private def isOR(predicate: Predicate): Boolean = {
-    predicate.isInstanceOf[Or]
-  }
-
-  // predicate that is "&&" or "||"
-  private def isCombinePredicate(exprs: Expression*): Boolean = {
-    exprs.foreach(expr => if (!expr.isInstanceOf[Or] && !expr.isInstanceOf[And]) return false)
-    true
-  }
-
-  private def isSameCombinePredicate(predicates: Predicate*): Boolean = {
-    val head = predicates.head
-    if (head.isInstanceOf[Or] || head.isInstanceOf[And]) {
-      predicates.tail.forall(p => p.getClass == head.getClass)
-    } else {
-      false
-    }
-  }
-
-  private def isLess(comparison: BinaryComparison): Boolean = {
-    comparison.isInstanceOf[LessThan]
-  }
-
-  private def isLessEquals(comparison: BinaryComparison): Boolean = {
-    comparison.isInstanceOf[LessThanOrEqual]
-  }
-
-  private def isEquals(comparison: BinaryComparison): Boolean = {
-    comparison.isInstanceOf[EqualTo]
-  }
-
-  private def isGreater(comparison: BinaryComparison): Boolean = {
-    comparison.isInstanceOf[GreaterThan]
-  }
-
-  private def isGreaterEquals(comparison: BinaryComparison): Boolean = {
-    comparison.isInstanceOf[GreaterThanOrEqual]
-  }
-
-  def combineComparison(
-    left: BinaryComparison,
-    right: BinaryComparison,
-    isOr: Boolean = true): Expression = {
-    val origin = if (isOr) {
-      Or(left, right)
-    } else {
-      And(left, right)
-    }
-    // if not the same attribute, do nothing
-    if (!left.left.fastEquals(right.left)) {
-      origin
-    } else {
-      (left, right) match {
-        case (BinaryComparison(attr, Literal(vLeft, tLeft @ NativeType())),
-              BinaryComparison(_, Literal(vRight, tRight @ NativeType()))) =>
-          val result = compare(vLeft, vRight)
-          result.filter(_ > 0).map(c => {
-            if (((isLess(left) || isLessEquals(left))
-              && (isLess(right) || isLessEquals(right) || isEquals(right)))) {
-              if (isOr) left else right
-            } else if ((isLess(left) || isLessEquals(left))
-              && (isGreater(right) || isGreaterEquals(right))) {
-              if (isOr) Literal(true, BooleanType) else origin
-            } else if ((isEquals(left) || isGreater(left) || isGreaterEquals(left))
-              && (isLess(right) || isLessEquals(right) || isEquals(right))) {
-              if (isOr) origin else Literal(false, BooleanType)
-            } else if (isEquals(left) && (isGreater(right) || isGreaterEquals(right))) {
-              if (isOr) right else left
-            } else if ((isGreater(left) || isGreaterEquals(left))
-              && (isLess(right) || isEquals(right) || isLessEquals(right))) {
-              if (isOr) origin else Literal(false, BooleanType)
-            } else {
-              if (isOr) right else left
-            }
-          }).getOrElse(result.filter(_ == 0).map(c => {
-              if (isOr) {
-                if ((left.symbol == right.symbol)
-                  || (isLessEquals(left) && (isLess(right) || isEquals(right)))
-                  || (isGreaterEquals(left) && (isGreater(right) || isEquals(right)))){
-                  left
-                } else if(((isEquals(left) || isLess(left)) && isLessEquals(right))
-                  || ((isEquals(left) || isGreater(left)) && isGreaterEquals(right))) {
-                  right
-                } else if ((isEquals(left) && isLess(right))
-                  || (isEquals(right) && isLess(left))) {
-                  LessThanOrEqual(attr, Literal(vLeft, tLeft))
-                } else if ((isEquals(left) && isGreater(right))
-                  || (isEquals(right) && isGreater(left))){
-                  GreaterThanOrEqual(attr, Literal(vLeft, tLeft))
-                } else if((isLess(left) && isGreater(right))
-                  || (isGreater(left) && isLess(right))) {
-                  Not(EqualTo(attr, Literal(vLeft, tRight)))
-                }else {
-                  Literal(true, BooleanType)
-                }
-              } else {
-                if ((left.symbol == right.symbol)
-                  || (isLess(left) && isLessEquals(right))
-                  || (isGreater(left) && isGreaterEquals(right))) {
-                  left
-                } else if((isEquals(left) && (isLessEquals(right) || isGreaterEquals(right)))
-                  || (isEquals(right) && (isLessEquals(left) || isGreaterEquals(left)))) {
-                  EqualTo(attr, Literal(vLeft, tLeft))
-                } else if ((isLessEquals(left) && isLess(right))
-                  || (isGreaterEquals(left) && isGreater(right))) {
-                  right
-                } else {
-                  Literal(false, BooleanType)
-                }
-              }
-          }).getOrElse(result.filter(_ < 0).map(c => {
-            // if there is no combination, return the origin one
-            // since `fastEqual` is not equals when `A.left = B.right && A.right = B.left`
-            val changed = CombinePredicate(right, left, isOr)
-            val optimized = combineComparison(right, left, isOr)
-            if (changed.fastEquals(optimized)) {
-              origin
-            } else {
-              optimized
-            }
-          }).getOrElse(origin)))
-
-        case _ =>
-          origin
-      }
-    }
-  }
-
-  private def compare(left: Any, right: Any): Option[Int] = {
-    left match {
-      case numLeft: Number if right.isInstanceOf[Number] =>
-        val numRight = right.asInstanceOf[Number]
-        Some(numLeft.doubleValue().compareTo(numRight.doubleValue()))
-
-      case strLeft: String if right.isInstanceOf[String] =>
-        val strRight = right.toString
-        if (strLeft == null && strRight == null) {
-          Some(0)
-        } else {
-          Some(strLeft.compareTo(strRight))
-        }
-
-      case dateLeft: Date if right.isInstanceOf[Date]=>
-        val dateRight = right.asInstanceOf[Date]
-        if (dateLeft == null && dateLeft == dateRight) {
-          Some(0)
-        } else {
-          Some(dateLeft.compareTo(dateRight))
-        }
-
-      case _ =>
-        None
-    }
   }
 }
 

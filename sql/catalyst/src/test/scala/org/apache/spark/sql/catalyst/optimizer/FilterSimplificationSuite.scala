@@ -34,6 +34,7 @@ class FilterSimplificationSuite extends PlanTest {
       Batch("Constant Folding", FixedPoint(10),
         NullPropagation,
         ConstantFolding,
+        ConditionSimplification,
         BooleanSimplification,
         SimplifyFilters) :: Nil
   }
@@ -104,4 +105,21 @@ class FilterSimplificationSuite extends PlanTest {
 
     doFavor('a > 3 || ('a > 2 && 'a < 4), 'a > 2)
   }
+
+  test("multi left, single right") {
+    doFavor(('a < 2 || 'a > 3 || 'b > 5) && 'a < 2, 'a < 2)
+  }
+
+  test("multi left, multi right") {
+    doFavor(('a < 2 || 'b > 3) && ('a < 2 || 'c > 5), 'a < 2 || ('b > 3 && 'c > 5))
+
+    var input = ('a === 'b || 'b > 3) && ('a === 'b || 'a > 3) && ('a === 'b || 'a < 5)
+    var expected = 'a === 'b || ('b > 3 && 'a > 3 && 'a < 5)
+    doFavor(input, expected)
+
+    input = ('a === 'b || 'b > 3) && ('a === 'b || 'a > 3) && ('a === 'b || 'a > 1)
+    expected = 'a === 'b || ('b > 3 && 'a > 3)
+    doFavor(input, expected)
+  }
+
 }
