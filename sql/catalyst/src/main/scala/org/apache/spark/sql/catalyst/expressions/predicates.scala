@@ -67,12 +67,6 @@ abstract class BinaryPredicate extends BinaryExpression with Predicate {
   def nullable = left.nullable || right.nullable
 }
 
-object BinaryPredicate {
-  def unapply(bp: BinaryPredicate): Option[(Expression, Expression)] = {
-    Some((bp.left, bp.right))
-  }
-}
-
 case class Not(child: Expression) extends UnaryExpression with Predicate {
   override def foldable = child.foldable
   def nullable = child.nullable
