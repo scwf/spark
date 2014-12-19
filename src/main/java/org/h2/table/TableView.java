@@ -47,7 +47,9 @@ public class TableView extends Table {
     private String querySQL;
     private ArrayList<Table> tables;
     private String[] columnNames;
-    private Query viewQuery;
+
+    //wuwei revised
+    public Query viewQuery;
     private ViewIndex index;
     private boolean recursive;
     private DbException createException;

@@ -13,11 +13,11 @@ object HContextTest1 {
     val sparkConf = new SparkConf().setAppName("aaa").setMaster("local")
     val sc = new SparkContext(sparkConf)
 
-    val hContext = new HContext(sc)
+    val hContext = new SQLContext(sc)
     import hContext._
     import hContext.createSchemaRDD
 
-    hContext.setConf("spark.sql.dialect","hiveql")
+    hContext.setConf("spark.sql.dialect","sql")
     val structFields = new Array[StructField](3)
     structFields.update(0, StructField("NAME", StringType, true))
     structFields.update(1, StructField("AGE", IntegerType, true))
@@ -32,7 +32,7 @@ object HContextTest1 {
     val empSchemaRdd=hContext.applySchema(empRdd,empSchema);
     hContext.registerRDDAsTable(empSchemaRdd,"EMP")
 
-    val ret=hContext.sql("select name , age from emp limit 20")
+    val ret=hContext.sql("select name , age from emp".toUpperCase)
     ret.collect().foreach(r=> (println(r.getString(0)+","+r.getInt(1))))
 
     //ret.printSchema()

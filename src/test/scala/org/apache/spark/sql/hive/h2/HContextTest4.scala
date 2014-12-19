@@ -14,23 +14,25 @@ object HContextTest4 {
     hContext.setConf("spark.sql.dialect","h2ql")
     hContext.setConf("spark.sql.shuffle.partitions","1")
 
-//    test1(hContext)
-//    test2(hContext)
-//    test3(hContext)
-//    test4(hContext)
-//    test5(hContext)
-//    test6(hContext)
-//    test7(hContext)
-//    test8(hContext)
-//    test9(hContext)
-//    test10(hContext)
-//    test11(hContext)
-//    test12(hContext)
-//    test13(hContext)
-//      test14(hContext)
-//    test15(hContext)
-//    test16(hContext)
+    test1(hContext)
+    test2(hContext)
+    test3(hContext)
+    test4(hContext)
+    test5(hContext)
+    test6(hContext)
+    test7(hContext)
+    test8(hContext)
+    test9(hContext)
+    test10(hContext)
+    test11(hContext)
+    test12(hContext)
+    test13(hContext)
+    test14(hContext)
+    test15(hContext)
+    test16(hContext)
     test17(hContext)
+    test18(hContext)
+    test19(hContext)
 
     //sc.stop()
   }
@@ -324,7 +326,7 @@ object HContextTest4 {
     val sql="select  name, age, emp.depno, dep2.depno, dep2.depname from emp cross join dep2 where emp.depno=dep2.depno"
     val ret=hcontext.sql(sql)
     println(sql)
-    println(ret.logicalPlan)
+    //println(ret.logicalPlan)
     ret.collect().foreach(row =>
     {
       print(if(row.isNullAt(0)) "null" else row.getString(0))
@@ -336,6 +338,50 @@ object HContextTest4 {
       print(if(row.isNullAt(3)) "null" else row.getInt(3))
       print("\t")
       print(if(row.isNullAt(4)) "null" else row.getString(4))
+      println("\t")
+    }
+    )
+  }
+
+  def test18(hcontext:HContext):Unit=
+  {
+    val sql="select  name, age from emp inner join (select depno, depname from (select * from dep) ) as  dep2 on emp.depno=dep2.depno"
+    val ret=hcontext.sql(sql)
+    println(sql)
+    println(ret.logicalPlan)
+    ret.collect().foreach(row =>
+    {
+      print(if(row.isNullAt(0)) "null" else row.getString(0))
+      print("\t")
+      print(if(row.isNullAt(1)) "null" else row.getInt(1))
+//      print("\t")
+//      print(if(row.isNullAt(2)) "null" else row.getInt(2))
+//      print("\t")
+//      print(if(row.isNullAt(3)) "null" else row.getInt(3))
+//      print("\t")
+//      print(if(row.isNullAt(4)) "null" else row.getString(4))
+      println("\t")
+    }
+    )
+  }
+
+  def test19(hcontext:HContext):Unit=
+  {
+    val sql="select * from (SELECT e.name,e.age,e.depno FROM (select * from (select name,age,ea.depno from emp ea left join dep ed on ea.depno=ed.depno) ee where ee.age>20) e where e.age>0) t1, emp t2 where t1.name=t2.name"
+    val ret=hcontext.sql(sql)
+    println(sql)
+    println(ret.logicalPlan)
+    ret.collect().foreach(row =>
+    {
+      print(if(row.isNullAt(0)) "null" else row.getString(0))
+      print("\t")
+      print(if(row.isNullAt(1)) "null" else row.getInt(1))
+      //      print("\t")
+      //      print(if(row.isNullAt(2)) "null" else row.getInt(2))
+      //      print("\t")
+      //      print(if(row.isNullAt(3)) "null" else row.getInt(3))
+      //      print("\t")
+      //      print(if(row.isNullAt(4)) "null" else row.getString(4))
       println("\t")
     }
     )

@@ -50,7 +50,9 @@ public class TableFilter implements ColumnResolver {
     //wuwei revised
     public final Table table;
     private final Select select;
-    private String alias;
+
+    //wuwei revised
+    public String alias;
     private Index index;
     private int scanCount;
     private boolean evaluatable;

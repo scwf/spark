@@ -27,14 +27,6 @@ import scala.collection.mutable.ListBuffer
 
     }
 
-    //copy from catalyst Sql Parser
-    protected def assignAliases(exprs: Seq[Expression]): Seq[NamedExpression] = {
-      exprs.zipWithIndex.map {
-        case (ne: NamedExpression, _) => ne
-        case (e, i) => Alias(e, s"c$i")()
-      }
-    }
-
     //parse the sample code :select name, age from emp
     def sql1(input:String):LogicalPlan=
     {
@@ -58,51 +50,6 @@ import scala.collection.mutable.ListBuffer
        sort
     }
 
-    //parse where
-    def sql2(input:String):LogicalPlan=
-    {
-      val h2SqlParser=new H2SqlParserAdapter();
-      h2SqlParser.setModel("Oracle");
-      h2SqlParser.initH2TableSchemaMapForTest();
-      val command: CommandContainer =h2SqlParser.getPreparedCommand(input).asInstanceOf[CommandContainer]
-      val prepared=command.prepared;
-
-      if(prepared.isInstanceOf[Select])
-      {
-        val select=prepared.asInstanceOf[Select];
-        val expressions=select.getExpressions();
-
-        val exprArray=new ListBuffer[UnresolvedAttribute]
-        for(i <- 0 to expressions.size()-1)
-        {
-          val expr=expressions.get(i);
-          val columnName=expr.getColumnName();
-          exprArray.append(UnresolvedAttribute(columnName))
-        }
-
-        val fullTableName=select.getTopTableFilter().toString();
-        val nameIndex=fullTableName.lastIndexOf(".")+1;
-        val tableName=fullTableName.substring(nameIndex);
-
-        val relation = UnresolvedRelation(None, tableName, None);
-
-        //parse where
-
-        val age=UnresolvedAttribute("AGE")
-        val ageFl= GreaterThan(age, Literal(1, IntegerType))
-
-        val name=UnresolvedAttribute("NAME")
-        val nameFl=EqualTo(name,Literal("bbb",StringType))
-
-        val and=And(ageFl, nameFl)
-
-        val filter=Filter(and, relation)
-
-        return Project(exprArray.toSeq,filter)
-      }
-      null;
-    }
-
     //parse integrate
     def sql3(input:String):LogicalPlan=
     {
@@ -112,54 +59,12 @@ import scala.collection.mutable.ListBuffer
       val command: CommandContainer =h2SqlParser.getPreparedCommand(input).asInstanceOf[CommandContainer]
       val prepared=command.prepared;
 
-      if(prepared.isInstanceOf[Select])
+      prepared match
       {
-        val select=prepared.asInstanceOf[Select];
-
-        // relation
-        val relation =if(select.topTableFilter==null) NoRelation else TableFilterParser(select.topTableFilter)
-
-        //filter
-        var conditionExpr:Expression=null;
-        if(select.condition !=null) {
-          val condition: Condition = select.condition.asInstanceOf[Condition]
-          conditionExpr=H2ExpressionParser(condition)
-        }
-        val filter= if(conditionExpr!=null)  Filter(conditionExpr, relation) else relation
-
-        //project and group
-        var project:UnaryNode=null
-        val expressions=select.getExpressions();
-        val projectExpressions = ExpressionsParser(expressions)
-        val groupExpr=select.groupExprForSpark
-        if(groupExpr!=null)
-        {
-          val groupingExpressions=GroupParser(groupExpr)
-          project=Aggregate(assignAliases(groupingExpressions), assignAliases(projectExpressions), filter)
-        }
-        else
-        {
-          project = Project(assignAliases(projectExpressions), filter)
-        }
-
-        //distinct
-        val distinct= if(select.distinct) Distinct(project) else project
-
-        //having
-        val havingExprCondition=select.havingExprForSpark
-        val having= if(havingExprCondition==null) distinct else Filter(H2ExpressionParser(havingExprCondition),distinct)
-
-        //sort order by
-        val sort= if(select.sort==null) having  else Sort(SortOrderParser(select.sort,expressions), having)
-
-        //limit (该逻辑计划不支持 offset的情况，即limit 10,20语法)
-        val limit=if(select.limitExpr!=null) Limit(H2ExpressionParser(select.limitExpr),sort) else sort
-
-        return limit
-      }
-      else
-      {
-        sys.error("UNSupported the h2 sql grammar parser!")
+        case select:Select =>
+          SelectParser(select)
+        case _ =>
+          sys.error("UNSupported the h2 sql grammar parser!")
       }
 
     }

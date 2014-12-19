@@ -5,7 +5,7 @@ import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.{SQLConf, SchemaRDD}
 import org.apache.spark.sql.hive.HiveContext
 import org.apache.spark.sql.hive.HiveQl
-
+import org.apache.spark.sql.catalyst.FISqlParser
 /**
  * wuwei add
  * Created by w00297350 on 2014/11/24.
@@ -18,6 +18,10 @@ class HContext(sc: SparkContext) extends HiveContext(sc)  {
   @transient
   protected[sql] val parserH22 = new H2SqlParser
   protected[sql] def parseH2Sql2(sql: String): LogicalPlan = parserH22(sql)
+
+  @transient
+  protected[sql] val parserFISql = new FISqlParser
+  protected[sql] def parseFISql(sql: String): LogicalPlan = parserFISql(sql)
 
   override def sql(sqlText: String): SchemaRDD = {
     // TODO: Create a framework for registering parsers instead of just hardcoding if statements.
@@ -35,7 +39,6 @@ class HContext(sc: SparkContext) extends HiveContext(sc)  {
 
       new SchemaRDD(this, HiveQl.parseSql(sqlText))
     } else if(dialect == "h2ql") {
-
       //call procedure
       if(sqlText.startsWith("call"))
       {
@@ -45,7 +48,11 @@ class HContext(sc: SparkContext) extends HiveContext(sc)  {
       }
 
       new SchemaRDD(this, parseH2Sql2(sqlText))
-
+    }
+    else if(dialect == "fisql")
+    {
+      val logicPlan=parseFISql(sqlText)
+      new SchemaRDD(this, logicPlan)
     }
     else {
       sys.error(s"Unsupported SQL dialect: $dialect.  Try 'sql' or 'hiveql' or 'h2ql'")
