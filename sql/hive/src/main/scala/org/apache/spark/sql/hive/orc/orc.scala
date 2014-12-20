@@ -21,23 +21,21 @@ import java.util.{Locale, Properties}
 import scala.collection.JavaConversions._
 
 import org.apache.hadoop.mapreduce.Job
+import org.apache.hadoop.mapreduce.InputFormat
 import org.apache.hadoop.io.{NullWritable, Writable}
-import org.apache.hadoop.mapred.JobConf
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.{Path, FileStatus, FileSystem}
-import org.apache.hadoop.hive.ql.io.orc.Reader
-import org.apache.hadoop.hive.ql.io.orc.{OrcFile, OrcInputFormat, OrcSerde}
+import org.apache.hadoop.fs.{Path, FileSystem}
+import org.apache.hadoop.hive.ql.io.orc._
 import org.apache.hadoop.hive.serde2.objectinspector.StructObjectInspector
 
-import org.apache.spark.sql.sources.{CatalystScan, BaseRelation, RelationProvider}
+import org.apache.spark.sql.sources.{PartitionFiles, CatalystScan, BaseRelation, RelationProvider}
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.Logging
 import org.apache.spark.sql.catalyst.types._
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.hive.{HiveShim, HadoopTableReader, HiveMetastoreTypes}
-import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.parquet.FileSystemHelper
+import org.apache.spark.rdd.{HadoopRDD, RDD}
 
 
 /**
@@ -57,7 +55,6 @@ class DefaultSource extends RelationProvider {
     OrcRelation(path)(sqlContext)
   }
 }
-private[orc] case class Partition(partitionValues: Map[String, Any], files: Seq[FileStatus])
 
 /**
  * Partitioning: Partitions are auto discovered and must be in the form of directories `key=value/`
@@ -80,6 +77,8 @@ private[orc] case class Partition(partitionValues: Map[String, Any], files: Seq[
 case class OrcRelation(path: String)(@transient val sqlContext: SQLContext)
   extends CatalystScan with Logging {
 
+  def sparkContext = sqlContext.sparkContext
+
   @transient
   lazy val serde: OrcSerde = initSerde
 
@@ -91,13 +90,11 @@ case class OrcRelation(path: String)(@transient val sqlContext: SQLContext)
     serde
   }
 
-  def sparkContext = sqlContext.sparkContext
-
   // Minor Hack: scala doesnt seem to respect @transient for vals declared via extraction
   @transient
   private var partitionKeys: Seq[String] = _
   @transient
-  private var partitions: Seq[Partition] = _
+  private var partitions: Seq[PartitionFiles] = _
   discoverPartitions()
 
   // TODO: Only finds the first partition, assumes the key is of type Integer...
@@ -105,10 +102,7 @@ case class OrcRelation(path: String)(@transient val sqlContext: SQLContext)
     val fs = FileSystem.get(new java.net.URI(path), sparkContext.hadoopConfiguration)
     val partValue = "([^=]+)=([^=]+)".r
 
-    val childrenOfPath = fs.listStatus(new Path(path))
-      .filterNot(_.getPath.getName.startsWith("_"))
-      .filterNot(_.getPath.getName.startsWith("."))
-
+    val childrenOfPath = fs.listStatus(new Path(path)).filterNot(_.getPath.getName.startsWith("_"))
     val childDirs = childrenOfPath.filter(s => s.isDir)
 
     if (childDirs.size > 0) {
@@ -132,25 +126,21 @@ case class OrcRelation(path: String)(@transient val sqlContext: SQLContext)
 
       partitionKeys = foundKeys.toSeq
       partitions = partitionFiles.zip(partitionPairs).map { case (files, (key, value)) =>
-        Partition(Map(key -> value.toInt), files)
+        PartitionFiles(Map(key -> value.toInt), files)
       }.toSeq
     } else {
       partitionKeys = Nil
-      partitions = Partition(Map.empty, childrenOfPath) :: Nil
+      partitions = PartitionFiles(Map.empty, childrenOfPath) :: Nil
     }
   }
+
 
   override val sizeInBytes = partitions.flatMap(_.files).map(_.getLen).sum
 
   private def getMetaDataReader(origPath: Path, configuration: Option[Configuration]): Reader = {
     val conf = configuration.getOrElse(new Configuration())
     val fs: FileSystem = origPath.getFileSystem(conf)
-    val orcFiles = FileSystemHelper.listFiles(origPath, conf, ".orc")
-    if (orcFiles == Seq.empty) {
-      // should return null when write to orc file
-      return null
-    }
-    OrcFile.createReader(fs, orcFiles(0))
+    OrcFile.createReader(fs, origPath)
   }
 
   private def orcSchema(
@@ -159,6 +149,7 @@ case class OrcRelation(path: String)(@transient val sqlContext: SQLContext)
       prop: Properties): StructType = {
     // get the schema info through ORC Reader
     val reader = getMetaDataReader(path, conf)
+    require(reader != null, "metadata reader is null!")
     if (reader == null) {
       // return empty seq when saveAsOrcFile
       return StructType(Seq.empty)
@@ -231,18 +222,52 @@ case class OrcRelation(path: String)(@transient val sqlContext: SQLContext)
       org.apache.hadoop.mapreduce.lib.input.FileInputFormat.setInputPaths(job, selectedFiles: _*)
     }
 
-    addColumnIds(output, schema.toAttributes, conf)
-    val inputClass = classOf[OrcInputFormat].asInstanceOf[
-      Class[_ <: org.apache.hadoop.mapred.InputFormat[NullWritable, Writable]]]
+    val addOutPut = if (!dataIncludesKey) {
+      output.filter(att => !partitionKeys.contains(att.name))
+    } else {
+      output
+    }
+
+    // The ordinal for the partition key in the result row, if requested.
+    val partitionKeyLocation =
+      partitionKeys
+        .headOption
+        .map(k => output.map(_.name).indexOf(k))
+
+
+    addColumnIds(addOutPut, schema.toAttributes, conf)
+    val inputClass =
+      classOf[OrcNewInputFormat].asInstanceOf[Class[_ <: InputFormat[NullWritable, OrcStruct]]]
 
     // use SpecificMutableRow to decrease GC garbage
     val mutableRow = new SpecificMutableRow(output.map(_.dataType))
-    val attrsWithIndex = output.zipWithIndex
-    val rowRdd = sc.hadoopRDD[NullWritable, Writable](conf.asInstanceOf[JobConf], inputClass,
-      classOf[NullWritable], classOf[Writable]).map(_._2).mapPartitions { iter =>
-      val deserializer = serde
-      HadoopTableReader.fillObject(iter, deserializer, attrsWithIndex, mutableRow)
-    }
+    val attrsWithIndex = addOutPut.zipWithIndex
+    val rowRdd =
+      new org.apache.spark.rdd.NewHadoopRDD(
+        sparkContext,
+        inputClass,
+        classOf[NullWritable],
+        classOf[OrcStruct],
+        conf).mapPartitionsWithInputSplit { (split, iter) =>
+        val partValue = "([^=]+)=([^=]+)".r
+        val partValues =
+          split.asInstanceOf[OrcNewSplit]
+            .getPath
+            .toString
+            .split("/")
+            .flatMap {
+            case partValue(key, value) => Some(key -> value)
+            case _ => None
+          }.toMap
+        val currentValue = partValues.values.head.toInt
+
+        val deserializer = serde
+        if (partitionKeyLocation.isEmpty || partitionKeyLocation.get == -1) {
+          HadoopTableReader.fillObject(iter.map(_._2), deserializer, attrsWithIndex, mutableRow)
+        } else {
+          HadoopTableReader.fillObject(iter.map(_._2), deserializer, attrsWithIndex, mutableRow, partitionKeyLocation, currentValue)
+        }
+      }
     rowRdd
   }
 
@@ -260,7 +285,7 @@ case class OrcRelation(path: String)(@transient val sqlContext: SQLContext)
       fieldIdMap.getOrElse(realName, -1)
     }.filter(_ >= 0).map(_.asInstanceOf[Integer])
 
-    assert(ids.size == names.size, "columns id and name length does not match!")
+    assert(ids.size == output.size, "columns id and name length does not match!")
     if (ids != null && !ids.isEmpty) {
       HiveShim.appendReadColumns(conf, ids, names)
     }

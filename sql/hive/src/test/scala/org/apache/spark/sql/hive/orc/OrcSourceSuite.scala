@@ -17,7 +17,8 @@
 
 package org.apache.spark.sql.hive.orc
 
-import org.apache.spark.sql.QueryTest
+import org.apache.spark.sql.{SQLConf, QueryTest}
+import org.apache.spark.sql.hive.test.TestHive
 import org.scalatest.BeforeAndAfterAll
 import java.io.File
 import org.apache.spark.sql.hive.test.TestHive._
@@ -28,8 +29,11 @@ case class OrcData(intField: Int, stringField: String)
 // The data that also includes the partitioning key
 case class OrcDataWithKey(p: Int, intField: Int, stringField: String)
 
+case class Record(key: Int, value: String)
+
+
 /**
- * A collection of tests for parquet data with various forms of partitioning.
+ * A collection of tests for orc data with various forms of partitioning.
  */
 abstract class OrcTest extends QueryTest with BeforeAndAfterAll {
   var partitionedTableDir: File = null
@@ -38,26 +42,26 @@ abstract class OrcTest extends QueryTest with BeforeAndAfterAll {
   override def beforeAll(): Unit = {
     super.beforeAll()
 
-    partitionedTableDir = File.createTempFile("parquettests", "sparksql")
+    // Hack: to prepare orc data files using hive external tables since
+    // now there is no sink api for orc
+    partitionedTableDir = File.createTempFile("orctests", "sparksql")
     partitionedTableDir.delete()
     partitionedTableDir.mkdir()
 
     (1 to 10).foreach { p =>
-      val partDir = new File(partitionedTableDir, s"p=$p")
       sparkContext.makeRDD(1 to 10)
         .map(i => OrcData(i, s"part-$p"))
-        .registerTempTable("orc_table_1")
+        .registerTempTable(s"orc_temp_table_$p")
     }
 
-    partitionedTableDirWithKey = File.createTempFile("parquettests", "sparksql")
+    partitionedTableDirWithKey = File.createTempFile("orctests", "sparksql")
     partitionedTableDirWithKey.delete()
     partitionedTableDirWithKey.mkdir()
 
     (1 to 10).foreach { p =>
-      val partDir = new File(partitionedTableDirWithKey, s"p=$p")
       sparkContext.makeRDD(1 to 10)
         .map(i => OrcDataWithKey(p, i, s"part-$p"))
-        .registerTempTable("orc_table_2")
+        .registerTempTable(s"orc_temp_table_key_$p")
     }
 
     sql(s"""
@@ -71,44 +75,34 @@ abstract class OrcTest extends QueryTest with BeforeAndAfterAll {
       location '${partitionedTableDir.getCanonicalPath}'
     """)
 
-    sql(s"""
-      create external table partitioned_orc_with_key
+    (1 to 10).foreach { p =>
+      sql(s"""
+      create external table orc_with_key_$p
       (
-        intField INT,
-        stringField STRING
-      )
-      PARTITIONED BY (p int)
-      STORED AS orc
-      location '${partitionedTableDirWithKey.getCanonicalPath}'
-    """)
-
-    sql(s"""
-      create external table normal_orc
-      (
+        p INT,
         intField INT,
         stringField STRING
       )
       STORED AS orc
-      location '${new File(partitionedTableDir, "p=1").getCanonicalPath}'
+      location '${new File(partitionedTableDirWithKey.getCanonicalPath, s"p=$p")}'
     """)
+    }
 
     (1 to 10).foreach { p =>
       sql(s"ALTER TABLE partitioned_orc ADD PARTITION (p=$p)")
     }
 
     (1 to 10).foreach { p =>
-      sql(s"ALTER TABLE partitioned_orc_with_key ADD PARTITION (p=$p)")
-    }
-    (1 to 10).foreach { p =>
       sql(s"""
       insert into table partitioned_orc PARTITION(p=$p)
-      select intField, stringField from orc_table_1
+      select intField, stringField from orc_temp_table_$p
     """)
     }
+
     (1 to 10).foreach { p =>
       sql(s"""
-      insert into table partitioned_orc_with_key PARTITION(p=$p)
-      select p, intField, stringField from orc_table_2
+      insert into table orc_with_key_$p
+      select p, intField, stringField from orc_temp_table_key_$p
     """)
     }
   }
@@ -118,10 +112,10 @@ abstract class OrcTest extends QueryTest with BeforeAndAfterAll {
     partitionedTableDir.delete()
   }
 
-  Seq("partitioned_orc", "partitioned_orc_with_key").foreach { table =>
+  Seq("partitioned_orc_source", "partitioned_orc_with_key_source").foreach { table =>
     test(s"project the partitioning column $table") {
       checkAnswer(
-        sql(s"SELECT p, count(*) FROM $table group by p"),
+        sql(s"SELECT p, count(*) FROM $table group by p order by p"),
         (1, 10) ::
           (2, 10) ::
           (3, 10) ::
@@ -137,7 +131,7 @@ abstract class OrcTest extends QueryTest with BeforeAndAfterAll {
 
     test(s"project partitioning and non-partitioning columns $table") {
       checkAnswer(
-        sql(s"SELECT stringField, p, count(intField) FROM $table GROUP BY p, stringField"),
+        sql(s"SELECT stringField, p, count(intField) FROM $table GROUP BY p, stringField order by p"),
         ("part-1", 1, 10) ::
           ("part-2", 2, 10) ::
           ("part-3", 3, 10) ::
@@ -192,7 +186,7 @@ abstract class OrcTest extends QueryTest with BeforeAndAfterAll {
 
   test("non-part select(*)") {
     checkAnswer(
-      sql("SELECT COUNT(*) FROM normal_orc"),
+      sql("SELECT COUNT(*) FROM normal_orc_source"),
       10)
   }
 }
@@ -200,9 +194,8 @@ abstract class OrcTest extends QueryTest with BeforeAndAfterAll {
 class OrcSourceSuite extends OrcTest {
   override def beforeAll(): Unit = {
     super.beforeAll()
-
     sql( s"""
-      create temporary table partitioned_orc
+      create temporary table partitioned_orc_source
       USING org.apache.spark.sql.hive.orc
       OPTIONS (
         path '${partitionedTableDir.getCanonicalPath}'
@@ -210,7 +203,7 @@ class OrcSourceSuite extends OrcTest {
     """)
 
     sql( s"""
-      create temporary table partitioned_orc_with_key
+      create temporary table partitioned_orc_with_key_source
       USING org.apache.spark.sql.hive.orc
       OPTIONS (
         path '${partitionedTableDirWithKey.getCanonicalPath}'
@@ -218,10 +211,10 @@ class OrcSourceSuite extends OrcTest {
     """)
 
     sql( s"""
-      create temporary table normal_orc
+      create temporary table normal_orc_source
       USING org.apache.spark.sql.hive.orc
       OPTIONS (
-        path '${new File(partitionedTableDir, "p=1").getCanonicalPath}'
+        path '${new File(partitionedTableDirWithKey, "p=1").getCanonicalPath}'
       )
     """)
   }

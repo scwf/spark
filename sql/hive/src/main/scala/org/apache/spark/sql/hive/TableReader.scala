@@ -265,7 +265,9 @@ private[hive] object HadoopTableReader extends HiveInspectors {
       iterator: Iterator[Writable],
       deserializer: Deserializer,
       nonPartitionKeyAttrs: Seq[(Attribute, Int)],
-      mutableRow: MutableRow): Iterator[Row] = {
+      mutableRow: MutableRow,
+      partitionKeyLocation: Option[Int] = None,
+      partitionKeyValue: Int = 0 ): Iterator[Row] = { // todo: add @param
 
     val soi = deserializer.getObjectInspector().asInstanceOf[StructObjectInspector]
     val (fieldRefs, fieldOrdinals) = nonPartitionKeyAttrs.map { case (attr, ordinal) =>
@@ -314,6 +316,9 @@ private[hive] object HadoopTableReader extends HiveInspectors {
     iterator.map { value =>
       val raw = deserializer.deserialize(value)
       var i = 0
+      partitionKeyLocation.map { loc =>
+        mutableRow.setInt(loc, partitionKeyValue)
+      }
       while (i < fieldRefs.length) {
         val fieldValue = soi.getStructFieldData(raw, fieldRefs(i))
         if (fieldValue == null) {

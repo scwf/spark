@@ -22,7 +22,6 @@ import org.apache.hadoop.fs.{FileStatus, FileSystem, Path}
 import org.apache.hadoop.conf.{Configurable, Configuration}
 import org.apache.hadoop.io.Writable
 import org.apache.hadoop.mapreduce.{JobContext, InputSplit, Job}
-import org.apache.spark.sql.catalyst.expressions.codegen.GeneratePredicate
 
 import parquet.hadoop.ParquetInputFormat
 import parquet.hadoop.util.ContextUtil
@@ -33,7 +32,7 @@ import org.apache.spark.rdd.{NewHadoopPartition, RDD}
 
 import org.apache.spark.sql.{SQLConf, Row, SQLContext}
 import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.sql.catalyst.types.{StringType, IntegerType, StructField, StructType}
+import org.apache.spark.sql.catalyst.types.{IntegerType, StructField, StructType}
 import org.apache.spark.sql.sources._
 
 import scala.collection.JavaConversions._
@@ -55,8 +54,6 @@ class DefaultSource extends RelationProvider {
     ParquetRelation2(path)(sqlContext)
   }
 }
-
-private[parquet] case class Partition(partitionValues: Map[String, Any], files: Seq[FileStatus])
 
 /**
  * An alternative to [[ParquetRelation]] that plugs in using the data sources API.  This class is
@@ -91,7 +88,7 @@ case class ParquetRelation2(path: String)(@transient val sqlContext: SQLContext)
   @transient
   private var partitionKeys: Seq[String] = _
   @transient
-  private var partitions: Seq[Partition] = _
+  private var partitions: Seq[PartitionFiles] = _
   discoverPartitions()
 
   // TODO: Only finds the first partition, assumes the key is of type Integer...
@@ -123,13 +120,14 @@ case class ParquetRelation2(path: String)(@transient val sqlContext: SQLContext)
 
       partitionKeys = foundKeys.toSeq
       partitions = partitionFiles.zip(partitionPairs).map { case (files, (key, value)) =>
-        Partition(Map(key -> value.toInt), files)
+        PartitionFiles(Map(key -> value.toInt), files)
       }.toSeq
     } else {
       partitionKeys = Nil
-      partitions = Partition(Map.empty, childrenOfPath) :: Nil
+      partitions = PartitionFiles(Map.empty, childrenOfPath) :: Nil
     }
   }
+
 
   override val sizeInBytes = partitions.flatMap(_.files).map(_.getLen).sum
 

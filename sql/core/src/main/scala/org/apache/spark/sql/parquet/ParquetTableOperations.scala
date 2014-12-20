@@ -45,7 +45,7 @@ import parquet.schema.MessageType
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.mapreduce.SparkHadoopMapReduceUtil
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.SQLConf
+import org.apache.spark.sql.{FileSystemHelper, SQLConf}
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression, Row, _}
 import org.apache.spark.sql.execution.{LeafNode, SparkPlan, UnaryNode}
 import org.apache.spark.{Logging, SerializableWritable, TaskContext}
@@ -287,8 +287,7 @@ case class InsertIntoParquetTable(
       if (overwrite) {
         1
       } else {
-        FileSystemHelper
-          .findMaxTaskId(
+        FileSystemHelper.findMaxTaskId(
             NewFileOutputFormat.getOutputPath(job).toString, job.getConfiguration, "parquet") + 1
       }
 
@@ -607,57 +606,4 @@ private[parquet] object FilteringParquetRowInputFormat {
     .maximumSize(20000)
     .expireAfterWrite(15, TimeUnit.MINUTES)  // Expire locations since HDFS files might move
     .build[FileStatus, Array[BlockLocation]]()
-}
-
-private[sql] object FileSystemHelper {
-  def listFiles(pathStr: String, conf: Configuration): Seq[Path] = {
-    val origPath = new Path(pathStr)
-    val fs = origPath.getFileSystem(conf)
-    if (fs == null) {
-      throw new IllegalArgumentException(
-        s"ParquetTableOperations: Path $origPath is incorrectly formatted")
-    }
-    val path = origPath.makeQualified(fs)
-    if (!fs.exists(path) || !fs.getFileStatus(path).isDir) {
-      throw new IllegalArgumentException(
-        s"ParquetTableOperations: path $path does not exist or is not a directory")
-    }
-    fs.listStatus(path).map(_.getPath)
-  }
-
-  /**
-   *  List files with special extension
-   */
-  def listFiles(origPath: Path, conf: Configuration, extension: String): Seq[Path] = {
-    val fs = origPath.getFileSystem(conf)
-    if (fs == null) {
-      throw new IllegalArgumentException(
-        s"Path $origPath is incorrectly formatted")
-    }
-    val path = origPath.makeQualified(fs)
-    if (fs.exists(path)) {
-      fs.listStatus(path).map(_.getPath).filter(p => p.getName.endsWith(extension))
-    } else {
-      Seq.empty
-    }
-  }
-
-  /**
-   * Finds the maximum taskid in the output file names at the given path.
-   */
-  def findMaxTaskId(pathStr: String, conf: Configuration, extension: String): Int = {
-    // filename pattern is part-r-<int>.$extension
-    require(Seq("orc", "parquet").contains(extension), s"Unsupported extension: $extension")
-    val nameP = new scala.util.matching.Regex(s"""part-r-(\\d{1,}).$extension""", "taskid")
-    val files = FileSystemHelper.listFiles(pathStr, conf)
-    val hiddenFileP = new scala.util.matching.Regex("_.*")
-    files.map(_.getName).map {
-      case nameP(taskid) => taskid.toInt
-      case hiddenFileP() => 0
-      case other: String =>
-        sys.error(s"ERROR: attempting to append to set of $extension files and found file" +
-          s"that does not match name pattern: $other")
-      case _ => 0
-    }.reduceLeft((a, b) => if (a < b) b else a)
-  }
 }
