@@ -264,13 +264,17 @@ private[hive] object HadoopTableReader extends HiveInspectors {
    * @param nonPartitionKeyAttrs Attributes that should be filled together with their corresponding
    *                             positions in the output schema
    * @param mutableRow A reusable `MutableRow` that should be filled
+   * @param partitionKeyLocation  The ordinal for the partition key in mutableRow
+   * @param partitionKeyValue    Value for the partition key
    * @return An `Iterator[Row]` transformed from `iterator`
    */
   def fillObject(
       iterator: Iterator[Writable],
       deserializer: Deserializer,
       nonPartitionKeyAttrs: Seq[(Attribute, Int)],
-      mutableRow: MutableRow): Iterator[Row] = {
+      mutableRow: MutableRow,
+      partitionKeyLocation: Option[Int] = None,
+      partitionKeyValue: Int = 0 ): Iterator[Row] = {
 
     val soi = deserializer.getObjectInspector().asInstanceOf[StructObjectInspector]
     val (fieldRefs, fieldOrdinals) = nonPartitionKeyAttrs.map { case (attr, ordinal) =>
@@ -319,6 +323,9 @@ private[hive] object HadoopTableReader extends HiveInspectors {
     iterator.map { value =>
       val raw = deserializer.deserialize(value)
       var i = 0
+      partitionKeyLocation.map { loc =>
+        mutableRow.setInt(loc, partitionKeyValue)
+      }
       while (i < fieldRefs.length) {
         val fieldValue = soi.getStructFieldData(raw, fieldRefs(i))
         if (fieldValue == null) {

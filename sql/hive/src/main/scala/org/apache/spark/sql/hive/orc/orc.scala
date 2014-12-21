@@ -14,34 +14,35 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.spark.sql.parquet
 
-import java.util.{List => JList}
+package org.apache.spark.sql.hive.orc
 
-import org.apache.hadoop.fs.{FileStatus, FileSystem, Path}
-import org.apache.hadoop.conf.{Configurable, Configuration}
-import org.apache.hadoop.io.Writable
-import org.apache.hadoop.mapreduce.{JobContext, InputSplit, Job}
-
-import parquet.hadoop.ParquetInputFormat
-import parquet.hadoop.util.ContextUtil
-
-import org.apache.spark.annotation.DeveloperApi
-import org.apache.spark.{Partition => SparkPartition, Logging}
-import org.apache.spark.rdd.{NewHadoopPartition, RDD}
-
-import org.apache.spark.sql.{SQLConf, Row, SQLContext}
-import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.sql.catalyst.types.{IntegerType, StructField, StructType}
-import org.apache.spark.sql.sources._
-
+import java.util.{Locale, Properties}
 import scala.collection.JavaConversions._
 
+import org.apache.hadoop.mapreduce.Job
+import org.apache.hadoop.mapreduce.InputFormat
+import org.apache.hadoop.io.{NullWritable, Writable}
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.{Path, FileSystem}
+import org.apache.hadoop.hive.ql.io.orc._
+import org.apache.hadoop.hive.serde2.objectinspector.StructObjectInspector
+
+import org.apache.spark.sql.sources.{PartitionFiles, CatalystScan, BaseRelation, RelationProvider}
+import org.apache.spark.sql.SQLContext
+import org.apache.spark.annotation.DeveloperApi
+import org.apache.spark.Logging
+import org.apache.spark.sql.catalyst.types._
+import org.apache.spark.sql.catalyst.expressions._
+import org.apache.spark.sql.hive.{HiveShim, HadoopTableReader, HiveMetastoreTypes}
+import org.apache.spark.rdd.{HadoopRDD, RDD}
+
+
 /**
- * Allows creation of parquet based tables using the syntax
- * `CREATE TEMPORARY TABLE ... USING org.apache.spark.sql.parquet`.  Currently the only option 
- * required is `path`, which should be the location of a collection of, optionally partitioned,
- * parquet files.
+ * Allows creation of orc based tables using the syntax
+ * `CREATE TEMPORARY TABLE ... USING org.apache.spark.sql.orc`.
+ * Currently the only option required is `path`, which should be the location of a collection of,
+ * optionally partitioned, orc files.
  */
 class DefaultSource extends RelationProvider {
   /** Returns a new base relation with the given parameters. */
@@ -49,19 +50,13 @@ class DefaultSource extends RelationProvider {
       sqlContext: SQLContext,
       parameters: Map[String, String]): BaseRelation = {
     val path =
-      parameters.getOrElse("path", sys.error("'path' must be specified for parquet tables."))
+      parameters.getOrElse("path", sys.error("'path' must be specified for orc tables."))
 
-    ParquetRelation2(path)(sqlContext)
+    OrcRelation(path)(sqlContext)
   }
 }
 
 /**
- * An alternative to [[ParquetRelation]] that plugs in using the data sources API.  This class is
- * currently not intended as a full replacement of the parquet support in Spark SQL though it is
- * likely that it will eventually subsume the existing physical plan implementation.
- *
- * Compared with the current implementation, this class has the following notable differences:
- *
  * Partitioning: Partitions are auto discovered and must be in the form of directories `key=value/`
  * located at `path`.  Currently only a single partitioning column is supported and it must
  * be an integer.  This class supports both fully self-describing data, which contains the partition
@@ -69,7 +64,7 @@ class DefaultSource extends RelationProvider {
  * of the partitioning key in the data is also auto-detected.  The `null` partition is not yet
  * supported.
  *
- * Metadata: The metadata is automatically discovered by reading the first parquet file present.
+ * Metadata: The metadata is automatically discovered by reading the first orc file present.
  * There is currently no support for working with files that have different schema.  Additionally,
  * when parquet metadata caching is turned on, the FileStatus objects for all data will be cached
  * to improve the speed of interactive querying.  When data is added to a table it must be dropped
@@ -79,10 +74,21 @@ class DefaultSource extends RelationProvider {
  * discovery.
  */
 @DeveloperApi
-case class ParquetRelation2(path: String)(@transient val sqlContext: SQLContext)
+case class OrcRelation(path: String)(@transient val sqlContext: SQLContext)
   extends CatalystScan with Logging {
 
   def sparkContext = sqlContext.sparkContext
+
+  @transient
+  lazy val serde: OrcSerde = initSerde
+
+  val prop: Properties = new Properties
+
+  private def initSerde(): OrcSerde = {
+    val serde = new OrcSerde
+    serde.initialize(null, prop)
+    serde
+  }
 
   // Minor Hack: scala doesnt seem to respect @transient for vals declared via extraction
   @transient
@@ -131,11 +137,41 @@ case class ParquetRelation2(path: String)(@transient val sqlContext: SQLContext)
 
   override val sizeInBytes = partitions.flatMap(_.files).map(_.getLen).sum
 
-  val dataSchema = StructType.fromAttributes( // TODO: Parquet code should not deal with attributes.
-    ParquetTypesConverter.readSchemaFromFile(
+  private def getMetaDataReader(origPath: Path, configuration: Option[Configuration]): Reader = {
+    val conf = configuration.getOrElse(new Configuration())
+    val fs: FileSystem = origPath.getFileSystem(conf)
+    OrcFile.createReader(fs, origPath)
+  }
+
+  private def orcSchema(
+      path: Path,
+      conf: Option[Configuration],
+      prop: Properties): StructType = {
+    // get the schema info through ORC Reader
+    val reader = getMetaDataReader(path, conf)
+    require(reader != null, "metadata reader is null!")
+    if (reader == null) {
+      // return empty seq when saveAsOrcFile
+      return StructType(Seq.empty)
+    }
+    val inspector = reader.getObjectInspector.asInstanceOf[StructObjectInspector]
+    // data types that is inspected by this inspector
+    val schema = inspector.getTypeName
+    // set prop here, initial OrcSerde need it
+    val fields = inspector.getAllStructFieldRefs
+    val (columns, columnTypes) = fields.map { f =>
+      f.getFieldName -> f.getFieldObjectInspector.getTypeName
+    }.unzip
+    prop.setProperty("columns", columns.mkString(","))
+    prop.setProperty("columns.types", columnTypes.mkString(":"))
+
+    HiveMetastoreTypes.toDataType(schema).asInstanceOf[StructType]
+  }
+
+  val dataSchema = orcSchema(
       partitions.head.files.head.getPath,
       Some(sparkContext.hadoopConfiguration),
-      sqlContext.isParquetBinaryAsString))
+      prop)
 
   val dataIncludesKey =
     partitionKeys.headOption.map(dataSchema.fieldNames.contains(_)).getOrElse(true)
@@ -148,15 +184,9 @@ case class ParquetRelation2(path: String)(@transient val sqlContext: SQLContext)
     }
 
   override def buildScan(output: Seq[Attribute], predicates: Seq[Expression]): RDD[Row] = {
-    // This is mostly a hack so that we can use the existing parquet filter code.
-    val requiredColumns = output.map(_.name)
-
-    val job = new Job(sparkContext.hadoopConfiguration)
-    ParquetInputFormat.setReadSupportClass(job, classOf[RowReadSupport])
-    val jobConf: Configuration = ContextUtil.getConfiguration(job)
-
-    val requestedSchema = StructType(requiredColumns.map(schema(_)))
-
+    val sc = sparkContext
+    val job = new Job(sc.hadoopConfiguration)
+    val conf: Configuration = job.getConfiguration
     val partitionKeySet = partitionKeys.toSet
     val rawPredicate =
       predicates
@@ -192,81 +222,36 @@ case class ParquetRelation2(path: String)(@transient val sqlContext: SQLContext)
       org.apache.hadoop.mapreduce.lib.input.FileInputFormat.setInputPaths(job, selectedFiles: _*)
     }
 
-    // Push down filters when possible
-    predicates
-      .reduceOption(And)
-      .flatMap(ParquetFilters.createFilter)
-      .filter(_ => sqlContext.parquetFilterPushDown)
-      .foreach(ParquetInputFormat.setFilterPredicate(jobConf, _))
-
-    def percentRead = selectedPartitions.size.toDouble / partitions.size.toDouble * 100
-    logInfo(s"Reading $percentRead% of $path partitions")
-
-    // Store both requested and original schema in `Configuration`
-    jobConf.set(
-      RowReadSupport.SPARK_ROW_REQUESTED_SCHEMA,
-      ParquetTypesConverter.convertToString(requestedSchema.toAttributes))
-    jobConf.set(
-      RowWriteSupport.SPARK_ROW_SCHEMA,
-      ParquetTypesConverter.convertToString(schema.toAttributes))
-
-    // Tell FilteringParquetRowInputFormat whether it's okay to cache Parquet and FS metadata
-    val useCache = sqlContext.getConf(SQLConf.PARQUET_CACHE_METADATA, "true").toBoolean
-    jobConf.set(SQLConf.PARQUET_CACHE_METADATA, useCache.toString)
-
-    val baseRDD =
-      new org.apache.spark.rdd.NewHadoopRDD(
-          sparkContext,
-          classOf[FilteringParquetRowInputFormat],
-          classOf[Void],
-          classOf[Row],
-          jobConf) {
-        val cacheMetadata = useCache
-
-        @transient
-        val cachedStatus = selectedPartitions.flatMap(_.files)
-
-        // Overridden so we can inject our own cached files statuses.
-        override def getPartitions: Array[SparkPartition] = {
-          val inputFormat =
-            if (cacheMetadata) {
-              new FilteringParquetRowInputFormat {
-                override def listStatus(jobContext: JobContext): JList[FileStatus] = cachedStatus
-              }
-            } else {
-              new FilteringParquetRowInputFormat
-            }
-
-          inputFormat match {
-            case configurable: Configurable =>
-              configurable.setConf(getConf)
-            case _ =>
-          }
-          val jobContext = newJobContext(getConf, jobId)
-          val rawSplits = inputFormat.getSplits(jobContext).toArray
-          val result = new Array[SparkPartition](rawSplits.size)
-          for (i <- 0 until rawSplits.size) {
-            result(i) =
-              new NewHadoopPartition(id, i, rawSplits(i).asInstanceOf[InputSplit with Writable])
-          }
-          result
-        }
-      }
+    val addOutPut = if (!dataIncludesKey) {
+      output.filter(att => !partitionKeys.contains(att.name))
+    } else {
+      output
+    }
 
     // The ordinal for the partition key in the result row, if requested.
     val partitionKeyLocation =
       partitionKeys
         .headOption
-        .map(requiredColumns.indexOf(_))
-        .getOrElse(-1)
+        .map(k => output.map(_.name).indexOf(k))
 
-    // When the data does not include the key and the key is requested then we must fill it in
-    // based on information from the input split.
-    if (!dataIncludesKey && partitionKeyLocation != -1) {
-      baseRDD.mapPartitionsWithInputSplit { case (split, iter) =>
+
+    addColumnIds(addOutPut, schema.toAttributes, conf)
+    val inputClass =
+      classOf[OrcNewInputFormat].asInstanceOf[Class[_ <: InputFormat[NullWritable, OrcStruct]]]
+
+    // use SpecificMutableRow to decrease GC garbage
+    val mutableRow = new SpecificMutableRow(output.map(_.dataType))
+    val attrsWithIndex = addOutPut.zipWithIndex
+    val rowRdd =
+      new org.apache.spark.rdd.NewHadoopRDD(
+        sparkContext,
+        inputClass,
+        classOf[NullWritable],
+        classOf[OrcStruct],
+        conf).mapPartitionsWithInputSplit { (split, iter) =>
         val partValue = "([^=]+)=([^=]+)".r
         val partValues =
-          split.asInstanceOf[parquet.hadoop.ParquetInputSplit]
+          split.asInstanceOf[OrcNewSplit]
             .getPath
             .toString
             .split("/")
@@ -274,16 +259,41 @@ case class ParquetRelation2(path: String)(@transient val sqlContext: SQLContext)
             case partValue(key, value) => Some(key -> value)
             case _ => None
           }.toMap
-
         val currentValue = partValues.values.head.toInt
-        iter.map { pair =>
-          val res = pair._2.asInstanceOf[SpecificMutableRow]
-          res.setInt(partitionKeyLocation, currentValue)
-          res
+
+        val deserializer = serde
+        if (partitionKeyLocation.isEmpty || partitionKeyLocation.get == -1) {
+          HadoopTableReader.fillObject(iter.map(_._2), deserializer, attrsWithIndex, mutableRow)
+        } else {
+          HadoopTableReader.fillObject(
+            iter.map(_._2),
+            deserializer,
+            attrsWithIndex,
+            mutableRow,
+            partitionKeyLocation,
+            currentValue)
         }
       }
-    } else {
-      baseRDD.map(_._2)
+    rowRdd
+  }
+
+  /**
+   * add column ids and names
+   * @param output
+   * @param relationOutput
+   * @param conf
+   */
+  def addColumnIds(output: Seq[Attribute], relationOutput: Seq[Attribute], conf: Configuration) {
+    val names = output.map(_.name)
+    val fieldIdMap = relationOutput.map(_.name).zipWithIndex.toMap
+    val ids = output.map { att =>
+      val realName = att.name.toLowerCase(Locale.ENGLISH)
+      fieldIdMap.getOrElse(realName, -1)
+    }.filter(_ >= 0).map(_.asInstanceOf[Integer])
+
+    assert(ids.size == output.size, "columns id and name length does not match!")
+    if (ids != null && !ids.isEmpty) {
+      HiveShim.appendReadColumns(conf, ids, names)
     }
   }
 }
