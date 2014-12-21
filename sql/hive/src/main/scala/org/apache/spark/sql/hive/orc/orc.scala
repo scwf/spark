@@ -265,7 +265,13 @@ case class OrcRelation(path: String)(@transient val sqlContext: SQLContext)
         if (partitionKeyLocation.isEmpty || partitionKeyLocation.get == -1) {
           HadoopTableReader.fillObject(iter.map(_._2), deserializer, attrsWithIndex, mutableRow)
         } else {
-          HadoopTableReader.fillObject(iter.map(_._2), deserializer, attrsWithIndex, mutableRow, partitionKeyLocation, currentValue)
+          HadoopTableReader.fillObject(
+            iter.map(_._2),
+            deserializer,
+            attrsWithIndex,
+            mutableRow,
+            partitionKeyLocation,
+            currentValue)
         }
       }
     rowRdd
