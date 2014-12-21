@@ -30,7 +30,7 @@ import scala.util.Try
 
 import com.google.common.cache.CacheBuilder
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.{BlockLocation, FileStatus, Path}
+import org.apache.hadoop.fs.{FileSystem, BlockLocation, FileStatus, Path}
 import org.apache.hadoop.mapreduce._
 import org.apache.hadoop.mapreduce.lib.input.{FileInputFormat => NewFileInputFormat}
 import org.apache.hadoop.mapreduce.lib.output.{FileOutputCommitter, FileOutputFormat => NewFileOutputFormat}
@@ -287,8 +287,8 @@ case class InsertIntoParquetTable(
       if (overwrite) {
         1
       } else {
-        FileSystemHelper
-          .findMaxTaskId(NewFileOutputFormat.getOutputPath(job).toString, job.getConfiguration) + 1
+        FileSystemHelper.findMaxTaskId(
+            NewFileOutputFormat.getOutputPath(job).toString, job.getConfiguration) + 1
       }
 
     def writeShard(context: TaskContext, iter: Iterator[Row]): Int = {
