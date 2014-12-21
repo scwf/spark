@@ -75,8 +75,8 @@ in the `spark-defaults.conf` file.
 
 The application web UI at `http://<driver>:4040` lists Spark properties in the "Environment" tab.
 This is a useful place to check to make sure that your properties have been set correctly. Note
-that only values explicitly specified through either `spark-defaults.conf` or SparkConf will
-appear. For all other configuration properties, you can assume the default value is used.
+that only values explicitly specified through `spark-defaults.conf`, `SparkConf`, or the command
+line will appear. For all other configuration properties, you can assume the default value is used.
 
 ## Available Properties
 
@@ -310,7 +310,7 @@ Apart from these, the following properties are also available, and may be useful
   <td>(none)</td>
   <td>
     Add the environment variable specified by <code>EnvironmentVariableName</code> to the Executor
-    process. The user can specify multiple of these and to set multiple environment variables.
+    process. The user can specify multiple of these to set multiple environment variables.
   </td>
 </tr>
 <tr>
@@ -1004,6 +1004,67 @@ Apart from these, the following properties are also available, and may be useful
     Enables Spark to run certain jobs, such as first() or take() on the driver, without sending
     tasks to the cluster. This can make certain jobs execute very quickly, but may require
     shipping a whole partition of data to the driver.
+  </td>
+</tr>
+</table>
+
+#### Dynamic allocation
+<table class="table">
+<tr><th>Property Name</th><th>Default</th><th>Meaning</th></tr>
+<tr>
+  <td><code>spark.dynamicAllocation.enabled</code></td>
+  <td>false</td>
+  <td>
+    Whether to use dynamic resource allocation, which scales the number of executors registered
+    with this application up and down based on the workload. Note that this is currently only
+    available on YARN mode. For more detail, see the description
+    <a href="job-scheduling.html#dynamic-resource-allocation">here</a>.
+    <br><br>
+    This requires the following configurations to be set:
+    <code>spark.dynamicAllocation.minExecutors</code>,
+    <code>spark.dynamicAllocation.maxExecutors</code>, and
+    <code>spark.shuffle.service.enabled</code>
+  </td>
+</tr>
+<tr>
+  <td><code>spark.dynamicAllocation.minExecutors</code></td>
+  <td>(none)</td>
+  <td>
+    Lower bound for the number of executors if dynamic allocation is enabled (required).
+  </td>
+</tr>
+<tr>
+  <td><code>spark.dynamicAllocation.maxExecutors</code></td>
+  <td>(none)</td>
+  <td>
+    Upper bound for the number of executors if dynamic allocation is enabled (required).
+  </td>
+</tr>
+<tr>
+  <td><code>spark.dynamicAllocation.schedulerBacklogTimeout</code></td>
+  <td>60</td>
+  <td>
+    If dynamic allocation is enabled and there have been pending tasks backlogged for more than
+    this duration (in seconds), new executors will be requested. For more detail, see this
+    <a href="job-scheduling.html#resource-allocation-policy">description</a>.
+  </td>
+</tr>
+<tr>
+  <td><code>spark.dynamicAllocation.sustainedSchedulerBacklogTimeout</code></td>
+  <td><code>schedulerBacklogTimeout</code></td>
+  <td>
+    Same as <code>spark.dynamicAllocation.schedulerBacklogTimeout</code>, but used only for
+    subsequent executor requests. For more detail, see this
+    <a href="job-scheduling.html#resource-allocation-policy">description</a>.
+  </td>
+</tr>
+<tr>
+  <td><code>spark.dynamicAllocation.executorIdleTimeout</code></td>
+  <td>600</td>
+  <td>
+    If dynamic allocation is enabled and an executor has been idle for more than this duration
+    (in seconds), the executor will be removed. For more detail, see this
+    <a href="job-scheduling.html#resource-allocation-policy">description</a>.
   </td>
 </tr>
 </table>

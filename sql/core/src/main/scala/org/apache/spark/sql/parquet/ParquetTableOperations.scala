@@ -45,7 +45,7 @@ import parquet.schema.MessageType
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.mapreduce.SparkHadoopMapReduceUtil
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{FileSystemHelper, SQLConf}
+import org.apache.spark.sql.SQLConf
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression, Row, _}
 import org.apache.spark.sql.execution.{LeafNode, SparkPlan, UnaryNode}
 import org.apache.spark.{Logging, SerializableWritable, TaskContext}
@@ -288,7 +288,7 @@ case class InsertIntoParquetTable(
         1
       } else {
         FileSystemHelper.findMaxTaskId(
-            NewFileOutputFormat.getOutputPath(job).toString, job.getConfiguration, "parquet") + 1
+            NewFileOutputFormat.getOutputPath(job).toString, job.getConfiguration) + 1
       }
 
     def writeShard(context: TaskContext, iter: Iterator[Row]): Int = {
@@ -606,4 +606,41 @@ private[parquet] object FilteringParquetRowInputFormat {
     .maximumSize(20000)
     .expireAfterWrite(15, TimeUnit.MINUTES)  // Expire locations since HDFS files might move
     .build[FileStatus, Array[BlockLocation]]()
+}
+
+private[parquet] object FileSystemHelper {
+  def listFiles(pathStr: String, conf: Configuration): Seq[Path] = {
+    val origPath = new Path(pathStr)
+    val fs = origPath.getFileSystem(conf)
+    if (fs == null) {
+      throw new IllegalArgumentException(
+        s"ParquetTableOperations: Path $origPath is incorrectly formatted")
+    }
+    val path = origPath.makeQualified(fs)
+    if (!fs.exists(path) || !fs.getFileStatus(path).isDir) {
+      throw new IllegalArgumentException(
+        s"ParquetTableOperations: path $path does not exist or is not a directory")
+    }
+    fs.globStatus(path)
+      .flatMap { status => if(status.isDir) fs.listStatus(status.getPath) else List(status) }
+      .map(_.getPath)
+  }
+
+    /**
+     * Finds the maximum taskid in the output file names at the given path.
+     */
+  def findMaxTaskId(pathStr: String, conf: Configuration): Int = {
+    val files = FileSystemHelper.listFiles(pathStr, conf)
+    // filename pattern is part-r-<int>.parquet
+    val nameP = new scala.util.matching.Regex("""part-r-(\d{1,}).parquet""", "taskid")
+    val hiddenFileP = new scala.util.matching.Regex("_.*")
+    files.map(_.getName).map {
+      case nameP(taskid) => taskid.toInt
+      case hiddenFileP() => 0
+      case other: String =>
+        sys.error("ERROR: attempting to append to set of Parquet files and found file" +
+          s"that does not match name pattern: $other")
+      case _ => 0
+    }.reduceLeft((a, b) => if (a < b) b else a)
+  }
 }
