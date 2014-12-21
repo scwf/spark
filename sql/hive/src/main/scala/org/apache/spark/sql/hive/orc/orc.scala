@@ -20,8 +20,7 @@ package org.apache.spark.sql.hive.orc
 import java.util.{Locale, Properties}
 import scala.collection.JavaConversions._
 
-import org.apache.hadoop.mapreduce.Job
-import org.apache.hadoop.mapreduce.InputFormat
+import org.apache.hadoop.mapred.{JobConf, InputFormat, FileInputFormat, FileSplit}
 import org.apache.hadoop.io.{NullWritable, Writable}
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{Path, FileSystem}
@@ -31,7 +30,7 @@ import org.apache.hadoop.hive.serde2.objectinspector.StructObjectInspector
 import org.apache.spark.sql.sources.{PartitionFiles, CatalystScan, BaseRelation, RelationProvider}
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.annotation.DeveloperApi
-import org.apache.spark.Logging
+import org.apache.spark.{SerializableWritable, Logging}
 import org.apache.spark.sql.catalyst.types._
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.hive.{HiveShim, HadoopTableReader, HiveMetastoreTypes}
@@ -185,8 +184,7 @@ case class OrcRelation(path: String)(@transient val sqlContext: SQLContext)
 
   override def buildScan(output: Seq[Attribute], predicates: Seq[Expression]): RDD[Row] = {
     val sc = sparkContext
-    val job = new Job(sc.hadoopConfiguration)
-    val conf: Configuration = job.getConfiguration
+    val conf: Configuration = sc.hadoopConfiguration
     val partitionKeySet = partitionKeys.toSet
     val rawPredicate =
       predicates
@@ -215,11 +213,13 @@ case class OrcRelation(path: String)(@transient val sqlContext: SQLContext)
         partitions
       }
 
-    val fs = FileSystem.get(new java.net.URI(path), sparkContext.hadoopConfiguration)
+    val fs = FileSystem.get(new java.net.URI(path), conf)
     val selectedFiles = selectedPartitions.flatMap(_.files).map(f => fs.makeQualified(f.getPath))
-    // FileInputFormat cannot handle empty lists.
-    if (selectedFiles.nonEmpty) {
-      org.apache.hadoop.mapreduce.lib.input.FileInputFormat.setInputPaths(job, selectedFiles: _*)
+
+    val setInputPathsFunc: Option[JobConf => Unit] = if (selectedFiles.nonEmpty) {
+       Some((jobConf: JobConf) => FileInputFormat.setInputPaths(jobConf, path))
+    } else {
+      None
     }
 
     val addOutPut = if (!dataIncludesKey) {
@@ -237,21 +237,25 @@ case class OrcRelation(path: String)(@transient val sqlContext: SQLContext)
 
     addColumnIds(addOutPut, schema.toAttributes, conf)
     val inputClass =
-      classOf[OrcNewInputFormat].asInstanceOf[Class[_ <: InputFormat[NullWritable, OrcStruct]]]
+      classOf[OrcInputFormat].asInstanceOf[Class[_ <: InputFormat[NullWritable, Writable]]]
 
     // use SpecificMutableRow to decrease GC garbage
     val mutableRow = new SpecificMutableRow(output.map(_.dataType))
     val attrsWithIndex = addOutPut.zipWithIndex
+    val confBroadcast = sc.broadcast(new SerializableWritable(conf))
+
     val rowRdd =
-      new org.apache.spark.rdd.NewHadoopRDD(
-        sparkContext,
+      new HadoopRDD(
+        sc,
+        confBroadcast,
+        setInputPathsFunc,
         inputClass,
         classOf[NullWritable],
-        classOf[OrcStruct],
-        conf).mapPartitionsWithInputSplit { (split, iter) =>
+        classOf[Writable],
+        sc.defaultMinPartitions).mapPartitionsWithInputSplit { (split, iter) =>
         val partValue = "([^=]+)=([^=]+)".r
         val partValues =
-          split.asInstanceOf[OrcNewSplit]
+          split.asInstanceOf[FileSplit]
             .getPath
             .toString
             .split("/")
