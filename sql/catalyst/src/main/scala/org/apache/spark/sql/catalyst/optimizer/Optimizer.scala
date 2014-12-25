@@ -404,11 +404,11 @@ object ConditionSimplification extends Rule[LogicalPlan] {
       // do optimize like : (a || b || c)  && a => a, here a, b , c is a condition
       case origin @ CombinePredicate(left: CombinePredicate, right) =>
         val leftOptimized = left.toOptimized
-        val rightOptimized = if (right.isCombinePredicate)
+        val rightOptimized = if (right.isCombinePredicate) {
           right.toCombinePredicate.toOptimized
-        else
+        } else {
           right
-
+        }
         if (!isSame(left, leftOptimized) || !isSame(right, rightOptimized)) {
             origin.build(leftOptimized, rightOptimized).toOptimized
         } else {
