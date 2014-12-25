@@ -112,7 +112,30 @@ case class InSet(value: Expression, hset: Set[Any])
   }
 }
 
-case class And(left: Expression, right: Expression) extends BinaryPredicate {
+abstract class CombinePredicate extends BinaryPredicate {
+  self: Product =>
+}
+
+// This is used to extract expressions in And/Or and build up a And/Or predicate.
+object CombinePredicate {
+  def apply(left: Expression, right: Expression, isOr: Boolean): CombinePredicate = {
+    if (isOr) {
+      Or(left, right)
+    } else {
+      And(left, right)
+    }
+  }
+
+  def unapply(bp: CombinePredicate): Option[(Expression, Expression)] = {
+    if (bp.isInstanceOf[Or] || bp.isInstanceOf[And]) {
+      Some((bp.left, bp.right))
+    } else {
+      None
+    }
+  }
+}
+
+case class And(left: Expression, right: Expression) extends CombinePredicate {
   def symbol = "&&"
 
   override def eval(input: Row): Any = {
@@ -134,7 +157,7 @@ case class And(left: Expression, right: Expression) extends BinaryPredicate {
   }
 }
 
-case class Or(left: Expression, right: Expression) extends BinaryPredicate {
+case class Or(left: Expression, right: Expression) extends CombinePredicate {
   def symbol = "||"
 
   override def eval(input: Row): Any = {
@@ -158,6 +181,49 @@ case class Or(left: Expression, right: Expression) extends BinaryPredicate {
 
 abstract class BinaryComparison extends BinaryPredicate {
   self: Product =>
+}
+
+object BinaryComparison {
+
+  object LiteralComparison {
+    // Exchange the child position when left child is Literal,
+    // this only processes `BinaryComparison` whose children are
+    // `AttributeReference` and Literal, ignore `Cast`
+    def unapply(expr: BinaryComparison): Option[BinaryComparison] = expr match {
+      case LessThan(left: Literal, right: AttributeReference) =>
+        Some(GreaterThan(right, left))
+
+      case LessThanOrEqual(left: Literal, right: AttributeReference) =>
+        Some(GreaterThanOrEqual(right, left))
+
+      case EqualTo(left: Literal, right: AttributeReference) =>
+        Some(EqualTo(right, left))
+
+      case EqualNullSafe(left: Literal, right: AttributeReference) =>
+        Some(EqualNullSafe(right, left))
+
+      case GreaterThan(left: Literal, right: AttributeReference) =>
+        Some(LessThan(right, left))
+
+      case GreaterThanOrEqual(left: Literal, right: AttributeReference) =>
+        Some(LessThanOrEqual(right, left))
+
+      case BinaryComparison(_: AttributeReference, _: Literal) =>
+        Some(expr)
+
+      case _ =>
+        None
+    }
+  }
+
+  def unapply(expr: Expression): Option[(Expression, Expression)] = {
+    expr match {
+      case bc: BinaryComparison =>
+        Some((bc.left, bc.right))
+      case _ =>
+        None
+    }
+  }
 }
 
 case class EqualTo(left: Expression, right: Expression) extends BinaryComparison {
