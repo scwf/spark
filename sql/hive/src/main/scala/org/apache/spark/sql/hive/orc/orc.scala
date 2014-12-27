@@ -78,18 +78,10 @@ case class OrcRelation(path: String)(@transient val sqlContext: SQLContext)
 
   def sparkContext = sqlContext.sparkContext
 
-  @transient
-  lazy val serde: OrcSerde = initSerde
+  var columnsNames: String = _
+  var columnsTypes: String = _
 
-  val prop: Properties = new Properties
-
-  private def initSerde(): OrcSerde = {
-    val serde = new OrcSerde
-    serde.initialize(null, prop)
-    serde
-  }
-
-  // Minor Hack: scala doesnt seem to respect @transient for vals declared via extraction
+  // Minor Hack: scala does not seem to respect @transient for vals declared via extraction
   @transient
   private var partitionKeys: Seq[String] = _
   @transient
@@ -144,8 +136,7 @@ case class OrcRelation(path: String)(@transient val sqlContext: SQLContext)
 
   private def orcSchema(
       path: Path,
-      conf: Option[Configuration],
-      prop: Properties): StructType = {
+      conf: Option[Configuration]): StructType = {
     // get the schema info through ORC Reader
     val reader = getMetaDataReader(path, conf)
     require(reader != null, "metadata reader is null!")
@@ -161,16 +152,15 @@ case class OrcRelation(path: String)(@transient val sqlContext: SQLContext)
     val (columns, columnTypes) = fields.map { f =>
       f.getFieldName -> f.getFieldObjectInspector.getTypeName
     }.unzip
-    prop.setProperty("columns", columns.mkString(","))
-    prop.setProperty("columns.types", columnTypes.mkString(":"))
+    columnsNames = columns.mkString(",")
+    columnsTypes = columnTypes.mkString(":")
 
     HiveMetastoreTypes.toDataType(schema).asInstanceOf[StructType]
   }
 
   val dataSchema = orcSchema(
       partitions.head.files.head.getPath,
-      Some(sparkContext.hadoopConfiguration),
-      prop)
+      Some(sparkContext.hadoopConfiguration))
 
   val dataIncludesKey =
     partitionKeys.headOption.map(dataSchema.fieldNames.contains(_)).getOrElse(true)
@@ -265,7 +255,15 @@ case class OrcRelation(path: String)(@transient val sqlContext: SQLContext)
           }.toMap
         val currentValue = partValues.values.head.toInt
 
-        val deserializer = serde
+        val deserializer = {
+          val prop: Properties = new Properties
+          prop.setProperty("columns", columnsNames)
+          prop.setProperty("columns.types", columnsTypes)
+
+          val serde = new OrcSerde
+          serde.initialize(null, prop)
+          serde
+        }
         if (partitionKeyLocation.isEmpty || partitionKeyLocation.get == -1) {
           HadoopTableReader.fillObject(iter.map(_._2), deserializer, attrsWithIndex, mutableRow)
         } else {
