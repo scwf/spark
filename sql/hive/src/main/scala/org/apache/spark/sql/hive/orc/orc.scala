@@ -253,7 +253,6 @@ case class OrcRelation(path: String)(@transient val sqlContext: SQLContext)
             case partValue(key, value) => Some(key -> value)
             case _ => None
           }.toMap
-        val currentValue = partValues.values.head.toInt
 
         val deserializer = {
           val prop: Properties = new Properties
@@ -267,6 +266,7 @@ case class OrcRelation(path: String)(@transient val sqlContext: SQLContext)
         if (partitionKeyLocation.isEmpty || partitionKeyLocation.get == -1) {
           HadoopTableReader.fillObject(iter.map(_._2), deserializer, attrsWithIndex, mutableRow)
         } else {
+          val currentValue = partValues.values.head.toInt
           HadoopTableReader.fillObject(
             iter.map(_._2),
             deserializer,
