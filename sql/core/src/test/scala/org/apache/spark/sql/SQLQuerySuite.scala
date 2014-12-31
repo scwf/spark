@@ -272,6 +272,21 @@ class SQLQuerySuite extends QueryTest with BeforeAndAfterAll {
       mapData.collect().take(1).toSeq)
   }
 
+  test("Support top in select") {
+    checkAnswer(
+      sql(
+        "SELECT top 5 key FROM testData"),
+      (1 to 5).map(Row(_)).toSeq)
+
+    checkAnswer(
+      sql("SELECT top 5 * FROM testData"),
+      (1 to 5).map(i => Row(i, i.toString)).toSeq)
+
+    checkAnswer(
+      sql("SELECT top 5 key FROM testData where key < 10 order by key desc"),
+      (5 to 9).map(Row(_)).reverse.toSeq)
+  }
+
   test("average") {
     checkAnswer(
       sql("SELECT AVG(a) FROM testData2"),

@@ -101,6 +101,7 @@ class SqlParser extends AbstractSparkSQLParser {
   protected val TABLE = Keyword("TABLE")
   protected val THEN = Keyword("THEN")
   protected val TIMESTAMP = Keyword("TIMESTAMP")
+  protected val TOP = Keyword("TOP")
   protected val TRUE = Keyword("TRUE")
   protected val UNION = Keyword("UNION")
   protected val UPPER = Keyword("UPPER")
@@ -134,27 +135,40 @@ class SqlParser extends AbstractSparkSQLParser {
     | insert
     )
 
-  protected lazy val select: Parser[LogicalPlan] =
-    SELECT ~> DISTINCT.? ~
+  protected lazy val select: Parser[LogicalPlan] = {
+    val common = DISTINCT.? ~
       repsep(projection, ",") ~
       (FROM   ~> relations).? ~
       (WHERE  ~> expression).? ~
       (GROUP  ~  BY ~> rep1sep(expression, ",")).? ~
       (HAVING ~> expression).? ~
-      sortType.? ~
-      (LIMIT  ~> expression).? ^^ {
-        case d ~ p ~ r ~ f ~ g ~ h ~ o ~ l  =>
-          val base = r.getOrElse(NoRelation)
-          val withFilter = f.map(Filter(_, base)).getOrElse(base)
-          val withProjection = g
-            .map(Aggregate(_, assignAliases(p), withFilter))
-            .getOrElse(Project(assignAliases(p), withFilter))
-          val withDistinct = d.map(_ => Distinct(withProjection)).getOrElse(withProjection)
-          val withHaving = h.map(Filter(_, withDistinct)).getOrElse(withDistinct)
-          val withOrder = o.map(_(withHaving)).getOrElse(withHaving)
-          val withLimit = l.map(Limit(_, withOrder)).getOrElse(withOrder)
-          withLimit
-      }
+      sortType.? ^^ {
+      case d ~ p ~ r ~ f ~ g ~ h ~ o  =>
+        val base = r.getOrElse(NoRelation)
+        val withFilter = f.map(Filter(_, base)).getOrElse(base)
+        val withProjection = g
+          .map(Aggregate(_, assignAliases(p), withFilter))
+          .getOrElse(Project(assignAliases(p), withFilter))
+        val withDistinct = d.map(_ => Distinct(withProjection)).getOrElse(withProjection)
+        val withHaving = h.map(Filter(_, withDistinct)).getOrElse(withDistinct)
+        val withOrder = o.map(_(withHaving)).getOrElse(withHaving)
+        withOrder
+    }
+
+    val top = (TOP ~> expression) ~ common ^^ {
+      case t ~ c  =>
+        val withTop = Limit(t, c)
+        withTop
+    }
+
+    val limit = common ~ (LIMIT  ~> expression).? ^^ {
+      case c ~ l  =>
+        val withLimit = l.map(Limit(_, c)).getOrElse(c)
+        withLimit
+    }
+
+    SELECT ~> (top | limit)
+  }
 
   protected lazy val insert: Parser[LogicalPlan] =
     INSERT ~> OVERWRITE.? ~ (INTO ~> relation) ~ select ^^ {
