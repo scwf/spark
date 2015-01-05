@@ -181,3 +181,20 @@ case class DescribeCommand(
       child.output.map(field => Row(field.name, field.dataType.toString, null))
   }
 }
+
+/**
+ * :: DeveloperApi ::
+ */
+@DeveloperApi
+case class WithCommand(tmpTables: Map[String, LogicalPlan]) extends RunnableCommand {
+  override def run(sqlContext: SQLContext) = {
+    tmpTables.foreach(meta => {
+      val (name, table) = meta
+      if (sqlContext.catalog.tableExists(None, name)) {
+        sqlContext.dropTempTable(name)
+      }
+      sqlContext.catalog.registerTable(None, name, table)
+    })
+    Seq.empty[Row]
+  }
+}

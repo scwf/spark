@@ -323,6 +323,9 @@ private[sql] abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
       case logical.UncacheTableCommand(tableName) =>
         Seq(ExecutedCommand(
           execution.UncacheTableCommand(tableName)))
+      case logical.WithCommand(tables) =>
+        Seq(ExecutedCommand(
+          execution.WithCommand(tables)))
       case _ => Nil
     }
   }

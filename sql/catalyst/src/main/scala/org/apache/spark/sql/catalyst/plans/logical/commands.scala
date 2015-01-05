@@ -73,3 +73,9 @@ case class DescribeCommand(
     AttributeReference("data_type", StringType, nullable = false)(),
     AttributeReference("comment", StringType, nullable = false)())
 }
+
+/**
+ * Returned for the "With <table_name>[(col_1,col_2,...,col_n)] AS (SELECT ...)" command
+ * @param tables table name and table `LogicalPlan` pairs
+ */
+case class WithCommand(tables: Map[String, LogicalPlan]) extends Command

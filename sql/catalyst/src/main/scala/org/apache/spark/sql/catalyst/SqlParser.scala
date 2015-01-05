@@ -106,6 +106,7 @@ class SqlParser extends AbstractSparkSQLParser {
   protected val UPPER = Keyword("UPPER")
   protected val WHEN = Keyword("WHEN")
   protected val WHERE = Keyword("WHERE")
+  protected val WITH    = Keyword("WITH")
 
   // Use reflection to find the reserved words defined in this class.
   protected val reservedWords =
@@ -132,6 +133,7 @@ class SqlParser extends AbstractSparkSQLParser {
       | UNION ~ DISTINCT.? ^^^ { (q1: LogicalPlan, q2: LogicalPlan) => Distinct(Union(q1, q2)) }
       )
     | insert
+    | withParser
     )
 
   protected lazy val select: Parser[LogicalPlan] =
@@ -160,6 +162,20 @@ class SqlParser extends AbstractSparkSQLParser {
     INSERT ~> OVERWRITE.? ~ (INTO ~> relation) ~ select ^^ {
       case o ~ r ~ s => InsertIntoTable(r, Map.empty[String, Option[String]], s, o.isDefined)
     }
+
+  protected lazy val withParser: Parser[LogicalPlan] = {
+    val commonExpr = ident ~
+      (("(" ~> repsep(projection, ",") <~ ")").? <~ AS) ~
+      ("(" ~> start <~ ")") ^^ {
+      case i ~ p ~ s =>
+        p.map(e => i -> Project(assignAliases(e), s)).getOrElse(i -> s)
+    }
+
+    WITH ~> rep1sep(commonExpr, ",") ^^ {
+      case c  =>
+        WithCommand(c.toMap)
+    }
+  }
 
   protected lazy val projection: Parser[Expression] =
     expression ~ (AS.? ~> ident.?) ^^ {

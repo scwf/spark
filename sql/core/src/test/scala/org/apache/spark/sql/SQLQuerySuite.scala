@@ -202,6 +202,37 @@ class SQLQuerySuite extends QueryTest with BeforeAndAfterAll {
       Seq(Seq("1")))
   }
 
+  test("WITH") {
+    sql("WITH tmp(key, value) AS (SELECT * FROM testData LIMIT 5)").collect
+
+    checkAnswer(
+      sql("SELECT count(*) FROM tmp"),
+      Row(5) :: Nil
+    )
+
+    sql("WITH tmp1(key) AS (SELECT * FROM testData LIMIT 5)").collect
+
+    checkAnswer(
+      sql("SELECT key FROM tmp1"),
+      (1 to 5).map(Row(_)).toSeq
+    )
+
+    sql("""
+        |WITH tmp2(key) AS (SELECT * FROM testData ORDER BY key DESC LIMIT 5),
+        |tmp3 AS (SELECT * FROM negativeData ORDER BY key LIMIT 5)
+      """.stripMargin).collect
+
+    checkAnswer(
+      sql("SELECT key FROM tmp2"),
+      (96 to 100).reverse.map(Row(_)).toSeq
+    )
+
+    checkAnswer(
+      sql("SELECT key FROM tmp3"),
+      (96 to 100).reverse.map(i => Row(-i)).toSeq
+    )
+  }
+
   def sortTest() = {
     checkAnswer(
       sql("SELECT * FROM testData2 ORDER BY a ASC, b ASC"),
