@@ -98,7 +98,11 @@ abstract class BinaryArithmetic extends BinaryExpression {
 case class Add(left: Expression, right: Expression) extends BinaryArithmetic {
   def symbol = "+"
 
-  override def eval(input: Row): Any = n2(input, left, right, _.plus(_, _))
+  left.dataType match {
+    case date: DataType => d1(input, left, right)
+    case _ => n2(input, left, right, _.plus(_, _))
+  }
+  
 }
 
 case class Subtract(left: Expression, right: Expression) extends BinaryArithmetic {
