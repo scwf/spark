@@ -70,9 +70,9 @@ abstract class Expression extends TreeNode[Expression] {
 
   protected final def d1(i: Row, e1: Expression, e2: Expression): Any  = {
     val evalE1 = e1.eval(i)
-	if(evalE1 == null) {
-	    null
-	}
+    if(evalE1 == null) {
+        null
+    }
     else {
         val evalE2 = e2.eval(i)
         if(evalE2 == null) {
@@ -80,8 +80,8 @@ abstract class Expression extends TreeNode[Expression] {
         }
         else {
             val currentDate = evalE1.asInstanceOf[java.sql.Date]
-            new Date(currentDate.getTime + evalE2.asInstanceOf[Long] * 24 * 3600* 1000)			
-         }
+            new Date(currentDate.getTime + evalE2.asInstanceOf[Long] * 24 * 3600* 1000)	
+        }
     }
   }	
   
