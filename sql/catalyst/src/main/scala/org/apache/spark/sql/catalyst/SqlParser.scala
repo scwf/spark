@@ -146,9 +146,11 @@ class SqlParser extends AbstractSparkSQLParser {
       case d ~ p ~ r ~ f ~ g ~ h ~ o  =>
         val base = r.getOrElse(NoRelation)
         val withFilter = f.map(Filter(_, base)).getOrElse(base)
+        // if there is no projection expression, set to `Star`
+        val checkedProjection = if (p.isEmpty) Seq(Star(None)) else p
         val withProjection = g
-          .map(Aggregate(_, assignAliases(p), withFilter))
-          .getOrElse(Project(assignAliases(p), withFilter))
+          .map(Aggregate(_, assignAliases(checkedProjection), withFilter))
+          .getOrElse(Project(assignAliases(checkedProjection), withFilter))
         val withDistinct = d.map(_ => Distinct(withProjection)).getOrElse(withProjection)
         val withHaving = h.map(Filter(_, withDistinct)).getOrElse(withDistinct)
         val withOrder = o.map(_(withHaving)).getOrElse(withHaving)

@@ -285,6 +285,10 @@ class SQLQuerySuite extends QueryTest with BeforeAndAfterAll {
     checkAnswer(
       sql("SELECT top 5 key FROM testData where key < 10 order by key desc"),
       (5 to 9).map(Row(_)).reverse.toSeq)
+
+    checkAnswer(
+      sql("SELECT top 5 FROM testData where key < 10 order by key desc"),
+      (5 to 9).map(i => Row(i, i.toString)).reverse.toSeq)
   }
 
   test("average") {
