@@ -82,8 +82,8 @@ abstract class Expression extends TreeNode[Expression] {
         val dayToMillisecond: Long = 24 * 3600* 1000
         val currentDate = evalE1.asInstanceOf[java.sql.Date]
         symbol match {
-          case "+" => new Date(date1.getTime + evalE2.asInstanceOf[Integer].toLong * dayToMillisecond)
-          case "-" => new Date(date1.getTime - evalE2.asInstanceOf[Integer].toLong * dayToMillisecond)
+          case "+" => new Date(currentDate.getTime + evalE2.asInstanceOf[Integer].toLong * dayToMillisecond)
+          case "-" => new Date(currentDate.getTime - evalE2.asInstanceOf[Integer].toLong * dayToMillisecond)
           case _ =>  sys.error(s"Type $other does not support date operations")
         }
       }

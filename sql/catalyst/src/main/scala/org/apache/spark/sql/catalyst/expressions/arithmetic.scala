@@ -19,7 +19,6 @@ package org.apache.spark.sql.catalyst.expressions
 
 import org.apache.spark.sql.catalyst.analysis.UnresolvedException
 import org.apache.spark.sql.catalyst.types._
-import org.apache.spark.sql.api.java.DateType
 
 case class UnaryMinus(child: Expression) extends UnaryExpression {
   type EvaluatedType = Any
@@ -102,7 +101,7 @@ case class Add(left: Expression, right: Expression) extends BinaryArithmetic {
   
   def dataType = left.dataType 
   override def eval(input: Row): Any = {
-    dateType match {
+    dataType match {
       case DateType() => d1(input, left, right, symbol)
       case _ => n2(input, left, right, _.plus(_, _))
     } 
@@ -114,7 +113,7 @@ case class Subtract(left: Expression, right: Expression) extends BinaryArithmeti
   
   def dataType = left.dataType
   override def eval(input: Row): Any = {
-    dateType match {
+    dataType match {
       case DateType() => d1(input, left, right, symbol)
       case _ => n2(input, left, right, _.minus(_, _))
     } 
