@@ -94,7 +94,7 @@ class HiveContext(sc: SparkContext) extends SQLContext(sc) {
       new SchemaRDD(this, ddlParser(sqlText).getOrElse(HiveQl.parseSql(sqlText)))
     } else if (dialect == "shareql") {
       try {
-        super.sql(sqlText)
+        new SchemaRDD(this, super.parseSql(sqlText))
       } catch {
         case e: Exception =>
           new SchemaRDD(this, ddlParser(sqlText).getOrElse(HiveQl.parseSql(sqlText)))
