@@ -79,7 +79,7 @@ abstract class Expression extends TreeNode[Expression] {
         null
       }
       else {
-		val dayToMillisecond: Long = 24 * 3600* 1000
+        val dayToMillisecond: Long = 24 * 3600* 1000
         val currentDate = evalE1.asInstanceOf[java.sql.Date]]
         symbol match {
           case "+" => new Date(date1.getTime + evalE2.asInstanceOf[Integer].toLong * dayToMillisecond)
