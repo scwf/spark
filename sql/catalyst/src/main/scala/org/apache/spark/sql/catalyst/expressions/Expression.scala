@@ -84,7 +84,7 @@ abstract class Expression extends TreeNode[Expression] {
         symbol match {
           case "+" => new Date(currentDate.getTime + evalE2.asInstanceOf[Integer].toLong * dayToMillisecond)
           case "-" => new Date(currentDate.getTime - evalE2.asInstanceOf[Integer].toLong * dayToMillisecond)
-          case _ =>  sys.error(s"Type $other does not support date operations")
+          case other =>  sys.error(s"Type $other does not support date operations")
         }
       }
     }
