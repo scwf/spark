@@ -92,7 +92,14 @@ class HiveContext(sc: SparkContext) extends SQLContext(sc) {
       super.sql(sqlText)
     } else if (dialect == "hiveql") {
       new SchemaRDD(this, ddlParser(sqlText).getOrElse(HiveQl.parseSql(sqlText)))
-    }  else {
+    } else if (dialect == "shareql") {
+      try {
+        super.sql(sqlText)
+      } catch {
+        case e: Exception =>
+          new SchemaRDD(this, ddlParser(sqlText).getOrElse(HiveQl.parseSql(sqlText)))
+      }
+    } else {
       sys.error(s"Unsupported SQL dialect: $dialect.  Try 'sql' or 'hiveql'")
     }
   }
