@@ -116,7 +116,7 @@ case class Subtract(left: Expression, right: Expression) extends BinaryArithmeti
   override def eval(input: Row): Any = {
     dateType match {
       case DateType() => d1(input, left, right, symbol)
-      case _ => n2(input, left, right, _.plus(_, _))
+      case _ => n2(input, left, right, _.minus(_, _))
     } 
   }
 }

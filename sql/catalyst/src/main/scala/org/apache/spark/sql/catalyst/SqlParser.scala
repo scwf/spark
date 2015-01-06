@@ -321,8 +321,8 @@ class SqlParser extends AbstractSparkSQLParser {
     CAST ~ "(" ~> expression ~ (AS ~> dataType) <~ ")" ^^ { case exp ~ t => Cast(exp, t) }
 
   protected lazy val literal: Parser[Literal] =
-    ( numericLiteral
-	| daysLiteral
+    (daysLiteral
+    |numericLiteral
     | booleanLiteral
     | stringLit ^^ {case s => Literal(s, StringType) }
     | NULL ^^^ Literal(null, NullType)

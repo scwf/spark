@@ -68,28 +68,25 @@ abstract class Expression extends TreeNode[Expression] {
    */
   def childrenResolved = !children.exists(!_.resolved)
 
-  protected final def d1(i: Row, e1: Expression, e2: Expression): Any  = {
+  protected final def d1(i: Row, e1: Expression, e2: Expression, symbol: String): Any  = {
     val evalE1 = e1.eval(i)
     if(evalE1 == null) {
-        null
+      null
     }
     else {
-        val evalE2 = e2.eval(i)
-        if(evalE2 == null) {
-            null
+      val evalE2 = e2.eval(i)
+      if(evalE2 == null) {
+        null
+      }
+      else {
+		val dayToMillisecond: Long = 24 * 3600* 1000
+        val currentDate = evalE1.asInstanceOf[java.sql.Date]]
+        symbol match {
+          case "+" => new Date(date1.getTime + evalE2.asInstanceOf[Integer].toLong * dayToMillisecond)
+          case "-" => new Date(date1.getTime - evalE2.asInstanceOf[Integer].toLong * dayToMillisecond)
+          case _ =>  sys.error(s"Type $other does not support date operations")
         }
-        else {
-		    val dayToMillisecond: Long = 24 * 3600* 1000
-            val currentDate = evalE1.asInstanceOf[java.sql.Date]]
-            if(symbol == "+")
-            {
-                new Date(date1.getTime + evalE2.asInstanceOf[Integer].toLong * dayToMillisecond)
-            }
-            else if(symbol == "-")
-            {
-                new Date(date1.getTime - evalE2.asInstanceOf[Integer].toLong * dayToMillisecond)
-            }
-        }
+      }
     }
   }	
   
