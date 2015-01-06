@@ -99,7 +99,7 @@ abstract class BinaryArithmetic extends BinaryExpression {
 case class Add(left: Expression, right: Expression) extends BinaryArithmetic {
   def symbol = "+"
   
-  def dataType = left.dataType 
+  override def dataType = left.dataType 
   override def eval(input: Row): Any = {
     dataType match {
       case _ if dataType == DateType => d1(input, left, right, symbol)
@@ -111,7 +111,7 @@ case class Add(left: Expression, right: Expression) extends BinaryArithmetic {
 case class Subtract(left: Expression, right: Expression) extends BinaryArithmetic {
   def symbol = "-"
   
-  def dataType = left.dataType
+  override def dataType = left.dataType
   override def eval(input: Row): Any = {
     dataType match {
       case _ if dataType == DateType => d1(input, left, right, symbol)
