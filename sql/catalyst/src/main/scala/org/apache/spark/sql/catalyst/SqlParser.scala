@@ -106,7 +106,8 @@ class SqlParser extends AbstractSparkSQLParser {
   protected val UPPER = Keyword("UPPER")
   protected val WHEN = Keyword("WHEN")
   protected val WHERE = Keyword("WHERE")
-
+  protected val DAYS = Keyword("DAYS")
+  
   // Use reflection to find the reserved words defined in this class.
   protected val reservedWords =
     this
@@ -316,11 +317,15 @@ class SqlParser extends AbstractSparkSQLParser {
     CAST ~ "(" ~> expression ~ (AS ~> dataType) <~ ")" ^^ { case exp ~ t => Cast(exp, t) }
 
   protected lazy val literal: Parser[Literal] =
-    ( numericLiteral
+    ( daysLiteral
+    | numericLiteral
     | booleanLiteral
     | stringLit ^^ {case s => Literal(s, StringType) }
     | NULL ^^^ Literal(null, NullType)
     )
+
+  protected lazy val daysLiteral: Parser[Literal] =
+    numericLit <~ DAYS ^^ {case n => Literal(toNarrowestIntegerType(n)) }
 
   protected lazy val booleanLiteral: Parser[Literal] =
     ( TRUE ^^^ Literal(true, BooleanType)
