@@ -82,14 +82,15 @@ abstract class Expression extends TreeNode[Expression] {
         val dayToMillisecond: Long = 24 * 3600* 1000
         val currentDate = evalE1.asInstanceOf[java.sql.Date]
         symbol match {
-          case "+" => new Date(currentDate.getTime + evalE2.asInstanceOf[Integer].toLong * dayToMillisecond)
-          case "-" => new Date(currentDate.getTime - evalE2.asInstanceOf[Integer].toLong * dayToMillisecond)
+          case "+" => new Date(currentDate.getTime + 
+                               evalE2.asInstanceOf[Integer].toLong * dayToMillisecond)
+          case "-" => new Date(currentDate.getTime -
+                               evalE2.asInstanceOf[Integer].toLong * dayToMillisecond)
           case other =>  sys.error(s"Type $other does not support date operations")
         }
       }
     }
-  }	
-  
+  }
   /**
    * A set of helper functions that return the correct descendant of `scala.math.Numeric[T]` type
    * and do any casting necessary of child evaluation.

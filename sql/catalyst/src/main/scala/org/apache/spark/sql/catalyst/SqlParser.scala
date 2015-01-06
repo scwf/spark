@@ -329,8 +329,8 @@ class SqlParser extends AbstractSparkSQLParser {
     )
 
   protected lazy val daysLiteral: Parser[Literal] =
-    numericLit <~ DAYS ^^ {case n => Literal(toNarrowestIntegerType(n)) }
-	
+    numericLit <~ DAYS ^^ {case n => Literal(toNarrowestIntegerType(n)) }	
+
   protected lazy val booleanLiteral: Parser[Literal] =
     ( TRUE ^^^ Literal(true, BooleanType)
     | FALSE ^^^ Literal(false, BooleanType)
