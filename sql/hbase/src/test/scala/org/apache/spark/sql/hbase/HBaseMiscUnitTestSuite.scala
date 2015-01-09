@@ -17,34 +17,13 @@
 
 package org.apache.spark.sql.hbase
 
-import org.apache.hadoop.hbase.util.Bytes
-import org.apache.spark.rdd.ShuffledRDD
-import org.apache.spark.sql.hbase.util.InsertWappers._
+import org.apache.spark.sql.catalyst.expressions._
+import org.apache.spark.sql.catalyst.types._
+import org.apache.spark.sql.hbase.util.{HBaseKVHelper, BytesUtils}
 
-class HBasePartitionerSuite extends HBaseIntegrationTestBase {
-  test("test hbase partitioner") {
-    val data = (1 to 40).map { r =>
-      val rowKey = Bytes.toBytes(r)
-      val rowKeyWritable = new ImmutableBytesWritableWrapper(rowKey)
-      (rowKeyWritable, r)
-    }
-    val rdd = sc.parallelize(data, 4)
-    val splitKeys = (1 to 40).filter(_ % 5 == 0).filter(_ != 40).map { r =>
-      new ImmutableBytesWritableWrapper(Bytes.toBytes(r))
-    }
-    val partitioner = new HBasePartitioner(splitKeys.toArray)
-    val shuffled =
-      new ShuffledRDD[ImmutableBytesWritableWrapper, Int, Int](rdd, partitioner)
+import scala.collection.mutable.ArrayBuffer
 
-    val groups = shuffled.mapPartitionsWithIndex { (idx, iter) =>
-      iter.map(x => (x._2, idx))
-    }.collect()
-    assert(groups.size == 40)
-    assert(groups.map(_._2).toSet.size == 8)
-    groups.foreach { r =>
-      assert(r._1 > 5 * r._2 && r._1 <= 5 * (1 + r._2))
-    }
-  }
+class HBaseMiscUnitTestSuite extends HBaseIntegrationTestBase {
 
   test("row key encode / decode") {
     val rowkey = HBaseKVHelper.encodingRawKeyColumns(
@@ -71,15 +50,13 @@ class HBasePartitionerSuite extends HBaseIntegrationTestBase {
     val family1 = "family1"
     val family2 = "family2"
 
-    val hbaseContext = new HBaseSQLContext(sparkContext)
-
     var allColumns = List[AbstractColumn]()
     allColumns = allColumns :+ KeyColumn("column1", IntegerType, 0)
     allColumns = allColumns :+ KeyColumn("column2", IntegerType, 1)
     allColumns = allColumns :+ NonKeyColumn("column3", FloatType, family2, "qualifier2")
     allColumns = allColumns :+ NonKeyColumn("column4", BooleanType, family1, "qualifier1")
 
-    val relation = HBaseRelation(tableName, namespace, hbaseTableName, allColumns)(hbaseContext)
+    val relation = HBaseRelation(tableName, namespace, hbaseTableName, allColumns)(hbc)
 
     val lll = relation.output.find(_.name == "column2").get
     val llr = Literal(8, IntegerType)
@@ -173,15 +150,13 @@ class HBasePartitionerSuite extends HBaseIntegrationTestBase {
     val family1 = "family1"
     val family2 = "family2"
 
-    val hbaseContext = new HBaseSQLContext(sparkContext)
-
     var allColumns = List[AbstractColumn]()
     allColumns = allColumns :+ KeyColumn("column1", IntegerType, 0)
     allColumns = allColumns :+ KeyColumn("column2", IntegerType, 1)
     allColumns = allColumns :+ NonKeyColumn("column3", FloatType, family2, "qualifier2")
     allColumns = allColumns :+ NonKeyColumn("column4", BooleanType, family1, "qualifier1")
 
-    val relation = HBaseRelation(tableName, namespace, hbaseTableName, allColumns)(hbaseContext)
+    val relation = HBaseRelation(tableName, namespace, hbaseTableName, allColumns)(hbc)
 
     val lll = relation.output.find(_.name == "column1").get
     val llr = Literal(8, IntegerType)
@@ -206,15 +181,13 @@ class HBasePartitionerSuite extends HBaseIntegrationTestBase {
     val family1 = "family1"
     val family2 = "family2"
 
-    val hbaseContext = new HBaseSQLContext(sparkContext)
-
     var allColumns = List[AbstractColumn]()
     allColumns = allColumns :+ KeyColumn("column1", IntegerType, 0)
     allColumns = allColumns :+ KeyColumn("column2", IntegerType, 1)
     allColumns = allColumns :+ NonKeyColumn("column3", FloatType, family2, "qualifier2")
     allColumns = allColumns :+ NonKeyColumn("column4", BooleanType, family1, "qualifier1")
 
-    val relation = HBaseRelation(tableName, namespace, hbaseTableName, allColumns)(hbaseContext)
+    val relation = HBaseRelation(tableName, namespace, hbaseTableName, allColumns)(hbc)
 
     val lll = relation.output.find(_.name == "column1").get
     val llr = Literal(8, IntegerType)
