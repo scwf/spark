@@ -32,5 +32,4 @@ class ExperimentalMethods protected[sql](sqlContext: SQLContext) {
    */
   @Experimental
   var extraStrategies: Seq[Strategy] = Nil
-
 }

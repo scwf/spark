@@ -51,7 +51,6 @@ class HBasePartitionerSuite extends HBaseIntegrationTestBase {
     }
   }
 
-
   test("row key encode / decode") {
     val rowkey = HBaseKVHelper.encodingRawKeyColumns(
       Seq((BytesUtils.create(DoubleType).toBytes(123.456), DoubleType),
