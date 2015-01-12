@@ -19,9 +19,20 @@ package org.apache.spark.sql.hbase
 
 import org.apache.hadoop.hbase.util.Bytes
 import org.apache.spark.rdd.ShuffledRDD
+import org.apache.spark.sql.catalyst.expressions._
+import org.apache.spark.sql.catalyst.types._
 import org.apache.spark.sql.hbase.util.InsertWappers._
+import org.apache.spark.sql.hbase.util.{BytesUtils, HBaseKVHelper}
+import org.scalatest.BeforeAndAfterAll
 
-class HBasePartitionerSuite extends HBaseIntegrationTestBase {
+import scala.collection.mutable.ArrayBuffer
+
+class HBasePartitionerSuite extends QueryTest with BeforeAndAfterAll {
+  val sc = {
+    HBaseMainTest.setupData(true)
+    HBaseMainTest.sc
+  }
+
   test("test hbase partitioner") {
     val data = (1 to 40).map { r =>
       val rowKey = Bytes.toBytes(r)
@@ -71,7 +82,7 @@ class HBasePartitionerSuite extends HBaseIntegrationTestBase {
     val family1 = "family1"
     val family2 = "family2"
 
-    val hbaseContext = new HBaseSQLContext(sparkContext)
+    val hbaseContext = new HBaseSQLContext(sc)
 
     var allColumns = List[AbstractColumn]()
     allColumns = allColumns :+ KeyColumn("column1", IntegerType, 0)
@@ -153,17 +164,41 @@ class HBasePartitionerSuite extends HBaseIntegrationTestBase {
     val predicate2 = p2.computePredicate(relation)
     assert(predicate2.toString == "Some(false)")
 
-    val predicate3 = p3.computePredicate(relation)
-    assert(predicate3.toString == "Some((((column2#1 = 8) || (column2#1 = 2048)) && (column1#0 = 32)))")
+    def checkEqualToNode(x: Expression, leftExpected: String, rightExpected: String): Boolean = {
+      x match {
+        case EqualTo(left, right) => (left.asInstanceOf[AttributeReference].name.equals(leftExpected)
+          && right.toString.equals(rightExpected))
+        case _ => false
+      }
+    }
 
-    val predicate4 = p4.computePredicate(relation)
-    assert(predicate4.toString == "Some((((column2#1 = 8) || (column2#1 = 2048)) && (column1#0 = 32)))")
+    val predicate3 = p3.computePredicate(relation).get
+    assert(predicate3.isInstanceOf[And])
+    assert(predicate3.asInstanceOf[And].left.isInstanceOf[Or])
+    assert(checkEqualToNode(predicate3.asInstanceOf[And].left.asInstanceOf[Or].left, "column2", "8"))
+    assert(checkEqualToNode(predicate3.asInstanceOf[And].left.asInstanceOf[Or].right, "column2", "2048"))
+    assert(checkEqualToNode(predicate3.asInstanceOf[And].right, "column1", "32"))
 
-    val predicate5 = p5.computePredicate(relation)
-    assert(predicate5.toString == "Some((((column2#1 = 8) || (column2#1 = 2048)) && (column1#0 = 1024)))")
+    val predicate4 = p4.computePredicate(relation).get
+    assert(predicate4.isInstanceOf[And])
+    assert(predicate4.asInstanceOf[And].left.isInstanceOf[Or])
+    assert(checkEqualToNode(predicate4.asInstanceOf[And].left.asInstanceOf[Or].left, "column2", "8"))
+    assert(checkEqualToNode(predicate4.asInstanceOf[And].left.asInstanceOf[Or].right, "column2", "2048"))
+    assert(checkEqualToNode(predicate4.asInstanceOf[And].right, "column1", "32"))
 
-    val predicate6 = p6.computePredicate(relation)
-    assert(predicate6.toString == "Some((((column2#1 = 8) || (column2#1 = 2048)) && (column1#0 = 1024)))")
+    val predicate5 = p5.computePredicate(relation).get
+    assert(predicate5.isInstanceOf[And])
+    assert(predicate5.asInstanceOf[And].left.isInstanceOf[Or])
+    assert(checkEqualToNode(predicate5.asInstanceOf[And].left.asInstanceOf[Or].left, "column2", "8"))
+    assert(checkEqualToNode(predicate5.asInstanceOf[And].left.asInstanceOf[Or].right, "column2", "2048"))
+    assert(checkEqualToNode(predicate5.asInstanceOf[And].right, "column1", "1024"))
+
+    val predicate6 = p6.computePredicate(relation).get
+    assert(predicate6.isInstanceOf[And])
+    assert(predicate6.asInstanceOf[And].left.isInstanceOf[Or])
+    assert(checkEqualToNode(predicate6.asInstanceOf[And].left.asInstanceOf[Or].left, "column2", "8"))
+    assert(checkEqualToNode(predicate6.asInstanceOf[And].left.asInstanceOf[Or].right, "column2", "2048"))
+    assert(checkEqualToNode(predicate6.asInstanceOf[And].right, "column1", "1024"))
   }
 
   test("test k = 8 OR k > 8 (k is int)") {
@@ -173,7 +208,7 @@ class HBasePartitionerSuite extends HBaseIntegrationTestBase {
     val family1 = "family1"
     val family2 = "family2"
 
-    val hbaseContext = new HBaseSQLContext(sparkContext)
+    val hbaseContext = new HBaseSQLContext(sc)
 
     var allColumns = List[AbstractColumn]()
     allColumns = allColumns :+ KeyColumn("column1", IntegerType, 0)
@@ -206,7 +241,7 @@ class HBasePartitionerSuite extends HBaseIntegrationTestBase {
     val family1 = "family1"
     val family2 = "family2"
 
-    val hbaseContext = new HBaseSQLContext(sparkContext)
+    val hbaseContext = new HBaseSQLContext(sc)
 
     var allColumns = List[AbstractColumn]()
     allColumns = allColumns :+ KeyColumn("column1", IntegerType, 0)
