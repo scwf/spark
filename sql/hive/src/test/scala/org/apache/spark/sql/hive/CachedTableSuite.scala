@@ -20,8 +20,10 @@ package org.apache.spark.sql.hive
 import org.apache.spark.sql.columnar.{InMemoryColumnarTableScan, InMemoryRelation}
 import org.apache.spark.sql.hive.test.TestHive
 import org.apache.spark.sql.hive.test.TestHive._
-import org.apache.spark.sql.{QueryTest, SchemaRDD}
+import org.apache.spark.sql.{Row, QueryTest, SchemaRDD}
 import org.apache.spark.storage.RDDBlockId
+import org.apache.spark.rdd.RDD
+import java.util.UUID
 
 class CachedTableSuite extends QueryTest {
   /**
@@ -66,6 +68,33 @@ class CachedTableSuite extends QueryTest {
 
     uncacheTable("src")
     assertCached(sql("SELECT * FROM src"), 0)
+  }
+
+  test("wfwfwf") {
+
+    def getRDD(sqlText: String): RDD[Row] = {
+      val name: String = UUID.randomUUID.toString
+      val rdd: SchemaRDD = sql(sqlText)
+      rdd.registerTempTable(name)
+      cacheTable(name)
+      rdd
+    }
+
+    val rdd1 = getRDD("select f1,f2,f3,lable from admission")
+    //  println("rdd 1 count : " + rdd1.count())
+
+    val zippedRDD1 = rdd1.zipWithIndex()
+    println("zipped count : " + zippedRDD1.count())
+
+    val mapedRDD1 = zippedRDD1.map(_.swap)
+
+    val rdd2 = getRDD("select f1 as f11,f2 as f22,f3 as f33,lable as labelx from admission")
+      .zipWithIndex().map(_.swap)
+
+    println("rdd 2 count : " + rdd2.count())
+    val rdd3 = mapedRDD1.join(rdd2)
+
+    rdd3.foreach(println)
   }
 
   test("cache invalidation") {
