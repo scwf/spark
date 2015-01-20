@@ -41,7 +41,7 @@ class HBaseSQLContext(sc: SparkContext) extends SQLContext(sc) {
 
   @transient
   override protected[sql] lazy val catalog: HBaseCatalog =
-    new HBaseCatalog(this, configuration) with OverrideCatalog
+  new HBaseCatalog(this, configuration) with OverrideCatalog
 
   experimental.extraStrategies = Seq((new SparkPlanner with HBaseStrategies).HBaseDataSource)
 }
