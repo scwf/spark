@@ -163,11 +163,11 @@ case class BulkLoadIntoTableCommand(
      delimiter: Option[String]) extends RunnableCommand with Logging {
 
   private[hbase] def makeBulkLoadRDD(
-                                      splitKeys: Array[HBaseRawType],
-                                      hadoopReader: HadoopReader,
-                                      job: Job,
-                                      tmpPath: String,
-                                      relation: HBaseRelation) = {
+       splitKeys: Array[HBaseRawType],
+       hadoopReader: HadoopReader,
+       job: Job,
+       tmpPath: String,
+       relation: HBaseRelation) = {
     val rdd = hadoopReader.makeBulkLoadRDDFromTextFile
     val partitioner = new HBasePartitioner(splitKeys)
     val ordering = Ordering[HBaseRawType]

@@ -25,25 +25,24 @@ import org.apache.spark.sql.hbase.util.HBaseKVHelper
  * Helper class for scanning files stored in Hadoop - e.g., to read text file when bulk loading.
  */
 private[hbase] class HadoopReader(
-                                   @transient sc: SparkContext,
-                                   path: String,
-                                   delimiter: Option[String])(baseRelation: HBaseRelation) {
+     @transient sc: SparkContext,
+     path: String,
+     delimiter: Option[String])(baseRelation: HBaseRelation) {
   /** make RDD[(SparkImmutableBytesWritable, SparkKeyValue)] from text file. */
   private[hbase] def makeBulkLoadRDDFromTextFile = {
     val rdd = sc.textFile(path)
     val splitRegex = delimiter.getOrElse(",")
     val relation = baseRelation
-    // todo(wf): we should not reuse the buffer in bulk-loading otherwise it will lead to
-    // corrupted as we are reusing same buffer
+
     rdd.mapPartitions { iter =>
-
-      val lineBuffer = HBaseKVHelper.createLineBuffer(relation.output)
-
       iter.map { line =>
-      // If the last column in the text file is null, the java parser will
-      // return a String[] containing only the non-null text values.
-      // In this case we need to append another element (null) to
-      // the array returned by line.split(splitRegex).
+        // we should not reuse the buffer in bulk-loading otherwise it will lead to
+        // corrupted as we are reusing same buffer
+        val lineBuffer = HBaseKVHelper.createLineBuffer(relation.output)
+        // If the last column in the text file is null, the java parser will
+        // return a String[] containing only the non-null text values.
+        // In this case we need to append another element (null) to
+        // the array returned by line.split(splitRegex).
         val keyBytes = new Array[(HBaseRawType, DataType)](relation.keyColumns.size)
         val valueBytes = new Array[HBaseRawType](relation.nonKeyColumns.size)
         var textValueArray = line.split(splitRegex)
