@@ -24,6 +24,7 @@ import org.apache.spark.sql.catalyst.errors.TreeNodeException
 import org.apache.spark.sql.catalyst.expressions.Row
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.hbase.TestData._
+import org.apache.spark.sql.types._
 
 class HBaseSQLQuerySuite extends HBaseIntegrationTestBase {
   // Make sure the tables are loaded.
@@ -73,7 +74,7 @@ class HBaseSQLQuerySuite extends HBaseIntegrationTestBase {
   }
 
   test("aggregation with codegen") {
-    val originalValue = codegenEnabled
+    val originalValue = TestHbase.conf.codegenEnabled
     setConf(SQLConf.CODEGEN_ENABLED, "true")
     val result = sql("SELECT k FROM testData GROUP BY k").collect()
     assert(result.size == testData.collect().size, s"aggregation with codegen test failed on size")
@@ -579,7 +580,7 @@ class HBaseSQLQuerySuite extends HBaseIntegrationTestBase {
   }
 
   test("SET commands semantics using sql()") {
-    clear()
+    TestHbase.conf.clear()
     val testKey = "test.k.0"
     val testVal = "test.val.0"
     val nonexistentKey = "nonexistent"
@@ -611,7 +612,7 @@ class HBaseSQLQuerySuite extends HBaseIntegrationTestBase {
       sql(s"SET $nonexistentKey"),
       Seq(Seq(s"$nonexistentKey=<undefined>"))
     )
-    clear()
+    TestHbase.conf.clear()
   }
 
   test("apply schema") {
@@ -727,7 +728,7 @@ class HBaseSQLQuerySuite extends HBaseIntegrationTestBase {
     val metadata = new MetadataBuilder()
       .putString(docKey, docValue)
       .build()
-    val schemaWithMeta = new StructType(Seq(
+    val schemaWithMeta = new StructType(Array(
       schema("id"), schema("name").copy(metadata = metadata), schema("age")))
     val personWithMeta = applySchema(person, schemaWithMeta)
     def validateMetadata(rdd: SchemaRDD): Unit = {
@@ -744,7 +745,7 @@ class HBaseSQLQuerySuite extends HBaseIntegrationTestBase {
   }
 
   test("SPARK-3371 Renaming a function expression with group by gives error") {
-    registerFunction("len", (s: String) => s.length)
+    TestHbase.udf.register("len", (s: String) => s.length)
     checkAnswer(
       sql("SELECT len(v) as temp FROM testData WHERE k = 1 group by len(v)"), 1)
   }

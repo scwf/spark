@@ -16,7 +16,7 @@
  */
 package org.apache.spark.sql.hbase.catalyst.types
 
-import org.apache.spark.sql.catalyst.types._
+import org.apache.spark.sql.types._
 
 import scala.reflect.runtime.universe.TypeTag
 

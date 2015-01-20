@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hbase
 
 import org.apache.spark.SparkContext
-import org.apache.spark.sql.catalyst.types._
+import org.apache.spark.sql.types._
 import org.apache.spark.sql.hbase.util.HBaseKVHelper
 import org.apache.spark.sql.hbase.util.InsertWrappers._
 

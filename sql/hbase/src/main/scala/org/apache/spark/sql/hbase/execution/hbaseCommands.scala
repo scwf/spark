@@ -31,14 +31,13 @@ import org.apache.spark.mapreduce.SparkHadoopMapReduceUtil
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Row}
 import org.apache.spark.sql.catalyst.plans.logical.Subquery
-import org.apache.spark.sql.catalyst.types.DataType
+import org.apache.spark.sql.types._
 import org.apache.spark.sql.execution.RunnableCommand
 import org.apache.spark.sql.hbase._
 import org.apache.spark.sql.hbase.util.{HBaseKVHelper, Util}
 import org.apache.spark.sql.sources.LogicalRelation
 import org.apache.spark.{Logging, SerializableWritable, SparkEnv, TaskContext}
 import org.apache.spark.sql.hbase.util.InsertWrappers._
-import org.apache.spark.sql.catalyst.types.StringType
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable.ArrayBuffer
@@ -130,7 +129,7 @@ case class DescribeTableCommand(tableName: String) extends RunnableCommand {
 case class InsertValueIntoTableCommand(tableName: String, valueSeq: Seq[String])
   extends RunnableCommand {
   override def run(sqlContext: SQLContext) = {
-    val solvedRelation = sqlContext.catalog.lookupRelation(None, tableName, None)
+    val solvedRelation = sqlContext.catalog.lookupRelation(Seq("", tableName))
     val relation: HBaseRelation = solvedRelation.asInstanceOf[Subquery]
       .child.asInstanceOf[LogicalRelation]
       .relation.asInstanceOf[HBaseRelation]
@@ -226,7 +225,7 @@ case class BulkLoadIntoTableCommand(
   }
 
   override def run(sqlContext: SQLContext) = {
-    val solvedRelation = sqlContext.catalog.lookupRelation(None, tableName, None)
+    val solvedRelation = sqlContext.catalog.lookupRelation(Seq("", tableName))
     val relation: HBaseRelation = solvedRelation.asInstanceOf[Subquery]
       .child.asInstanceOf[LogicalRelation]
       .relation.asInstanceOf[HBaseRelation]
@@ -379,7 +378,7 @@ case class ParallelizedBulkLoadIntoTableCommand(
   }
 
   override def run(sqlContext: SQLContext) = {
-    val solvedRelation = sqlContext.catalog.lookupRelation(None, tableName, None)
+    val solvedRelation = sqlContext.catalog.lookupRelation(Seq("", tableName))
     val relation: HBaseRelation = solvedRelation.asInstanceOf[Subquery]
       .child.asInstanceOf[LogicalRelation]
       .relation.asInstanceOf[HBaseRelation]

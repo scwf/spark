@@ -20,7 +20,7 @@ package org.apache.spark.sql.hbase
 import org.apache.hadoop.hbase.util.Bytes
 import org.apache.spark.rdd.ShuffledRDD
 import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.sql.catalyst.types._
+import org.apache.spark.sql.types._
 import org.apache.spark.sql.hbase.util.InsertWrappers._
 import org.apache.spark.sql.hbase.util.{BytesUtils, HBaseKVHelper}
 

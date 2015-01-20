@@ -18,7 +18,7 @@ package org.apache.spark.sql.hbase
 
 import org.apache.spark._
 import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.sql.catalyst.types._
+import org.apache.spark.sql.types._
 import org.apache.spark.sql.hbase.util.{BytesUtils, HBaseKVHelper}
 import org.scalatest.{BeforeAndAfterAll, FunSuite}
 

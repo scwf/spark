@@ -17,7 +17,7 @@
 package org.apache.spark.sql.hbase.util
 
 import org.apache.hadoop.hbase.util.Bytes
-import org.apache.spark.sql._
+import org.apache.spark.sql.types._
 import org.apache.spark.sql.hbase._
 
 object BytesUtils {

@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hbase.catalyst.types
 
-import org.apache.spark.sql.catalyst.types.{NativeType, PrimitiveType}
+import org.apache.spark.sql.types._
 
 import scala.reflect.runtime.universe.typeTag
 

@@ -19,7 +19,7 @@ package org.apache.spark.sql.hbase.catalyst.types
 import java.sql.Timestamp
 
 import org.apache.spark.sql.catalyst.expressions.Expression
-import org.apache.spark.sql.catalyst.types._
+import org.apache.spark.sql.types._
 
 import scala.collection.immutable.HashMap
 import scala.language.implicitConversions

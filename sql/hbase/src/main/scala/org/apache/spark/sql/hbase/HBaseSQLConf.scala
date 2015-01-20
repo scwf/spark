@@ -28,7 +28,7 @@ private[hbase] object HBaseSQLConf {
  * A trait that enables the setting and getting of mutable config parameters/hints.
  *
  */
-private[hbase] trait HBaseSQLConf extends SQLConf {
+private[hbase] class HBaseSQLConf extends SQLConf {
   import org.apache.spark.sql.hbase.HBaseSQLConf._
 
   /** The expiration of cached partition (i.e., region) info; defaults to 10 minutes . */

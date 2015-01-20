@@ -22,9 +22,8 @@ import java.io.{ByteArrayOutputStream, DataOutputStream}
 import org.apache.hadoop.hbase._
 import org.apache.hadoop.hbase.client._
 import org.apache.hadoop.hbase.util.Bytes
-import org.apache.spark.Logging
 import org.apache.spark.sql.catalyst.expressions.{GenericRow, Row}
-import org.apache.spark.sql.catalyst.types._
+import org.apache.spark.sql.types._
 import org.apache.spark.sql.hbase.util.{DataTypeUtils, HBaseKVHelper, BytesUtils}
 
 /**

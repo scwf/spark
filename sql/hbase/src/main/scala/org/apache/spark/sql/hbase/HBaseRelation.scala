@@ -25,7 +25,7 @@ import org.apache.spark.Partition
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.sql.catalyst.types._
+import org.apache.spark.sql.types._
 import org.apache.spark.sql.hbase.catalyst.NotPusher
 import org.apache.spark.sql.hbase.catalyst.types.PartitionRange
 import org.apache.spark.sql.hbase.util.{DataTypeUtils, HBaseKVHelper, BytesUtils, Util}
@@ -176,7 +176,8 @@ private[hbase] case class HBaseRelation(
   /**
    * partitions are updated per table lookup to keep the info reasonably updated
    */
-  @transient lazy val partitionExpiration = context.partitionExpiration * 1000
+  @transient lazy val partitionExpiration =
+    context.conf.asInstanceOf[HBaseSQLConf].partitionExpiration * 1000
   @transient var partitionTS: Long = _
 
   private[hbase] def fetchPartitions(): Unit = {
@@ -216,7 +217,7 @@ private[hbase] case class HBaseRelation(
 
   @transient private[hbase] lazy val dimSize = keyColumns.size
 
-  val scannerFetchSize = context.scannerFetchSize
+  val scannerFetchSize = context.conf.asInstanceOf[HBaseSQLConf].scannerFetchSize
 
   private[hbase] def generateRange(partition: HBasePartition, pred: Expression,
                                    index: Int): PartitionRange[_] = {
@@ -518,7 +519,7 @@ private[hbase] case class HBaseRelation(
     else Some(filters(0))
     new HBaseSQLReaderRDD(
       this,
-      context.codegenEnabled,
+      context.conf.codegenEnabled,
       requiredColumns,
       filterPredicate, // PartitionPred : Option[Expression]
       None, // coprocSubPlan: SparkPlan

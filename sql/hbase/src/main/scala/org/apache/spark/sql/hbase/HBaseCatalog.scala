@@ -27,7 +27,7 @@ import org.apache.log4j.Logger
 import org.apache.spark.Logging
 import org.apache.spark.sql.catalyst.analysis.{Catalog, OverrideCatalog}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Subquery}
-import org.apache.spark.sql.catalyst.types._
+import org.apache.spark.sql.types._
 import org.apache.spark.sql.hbase.HBaseCatalog._
 
 import scala.collection.mutable
@@ -255,9 +255,9 @@ private[hbase] class HBaseCatalog(@transient hbaseContext: HBaseSQLContext,
     tables.toSeq
   }
 
-  def lookupRelation(databaseName: Option[String],
-                     tableName: String,
+  def lookupRelation(tableIdentifier: Seq[String],
                      alias: Option[String] = None): LogicalPlan = {
+    val tableName = tableIdentifier(1)
     val hbaseRelation = getTable(tableName)
     if (hbaseRelation.isEmpty) {
       sys.error(s"Table Not Found: $tableName")
@@ -312,7 +312,8 @@ private[hbase] class HBaseCatalog(@transient hbaseContext: HBaseSQLContext,
     }
   }
 
-  override def tableExists(db: Option[String], tableName: String): Boolean = {
+  override def tableExists(tableIdentifier: Seq[String]): Boolean = {
+    val tableName = tableIdentifier(1)
     checkLogicalTableExist(tableName)
   }
 
@@ -368,18 +369,11 @@ private[hbase] class HBaseCatalog(@transient hbaseContext: HBaseSQLContext,
    * UNIMPLEMENTED: It needs to be decided how we will persist in-memory tables to the metastore.
    * For now, if this functionality is desired mix in the in-memory [[OverrideCatalog]].
    */
-  override def registerTable(
-                              databaseName: Option[String], tableName: String,
-                              plan: LogicalPlan): Unit = ???
+  override def registerTable(tableIdentifier: Seq[String], plan: LogicalPlan): Unit = {}
 
-  /**
-   * UNIMPLEMENTED: It needs to be decided how we will persist in-memory tables to the metastore.
-   * For now, if this functionality is desired mix in the in-memory [[OverrideCatalog]].
-   */
-  override def unregisterTable(
-                                databaseName: Option[String], tableName: String): Unit = ???
+  override def unregisterTable(tableIdentifier: Seq[String]): Unit = {}
 
-  override def unregisterAllTables() = {}
+  override def unregisterAllTables(): Unit = {}
 }
 
 object HBaseCatalog {

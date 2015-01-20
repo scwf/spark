@@ -20,7 +20,7 @@ import org.apache.hadoop.hbase._
 import org.apache.hadoop.hbase.client.HBaseAdmin
 import org.apache.spark.sql.catalyst.expressions.GenericRow
 import org.apache.spark.sql.catalyst.plans.logical.Subquery
-import org.apache.spark.sql.catalyst.types._
+import org.apache.spark.sql.types._
 import org.apache.spark.sql.hbase.util.HBaseKVHelper
 import org.apache.spark.sql.sources.LogicalRelation
 
@@ -82,7 +82,7 @@ class CatalogTestSuite extends HBaseIntegrationTestBase {
     assert(result.nonKeyColumns(0).dataType === FloatType)
     assert(result.nonKeyColumns(1).dataType === BooleanType)
 
-    val relation = catalog.lookupRelation(None, tableName)
+    val relation = catalog.lookupRelation(Seq("", tableName))
     val subquery = relation.asInstanceOf[Subquery]
     val hbRelation = subquery.child.asInstanceOf[LogicalRelation].relation.asInstanceOf[HBaseRelation]
     assert(hbRelation.nonKeyColumns.map(_.family) == List("family2", "family1"))

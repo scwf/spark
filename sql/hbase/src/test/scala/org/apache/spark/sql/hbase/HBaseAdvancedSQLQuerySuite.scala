@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hbase
 
 import org.apache.spark.sql.{SQLConf, _}
+import org.apache.spark.sql.types._
 
 class HBaseAdvancedSQLQuerySuite extends HBaseIntegrationTestBase {
   // Make sure the tables are loaded.
@@ -27,7 +28,7 @@ class HBaseAdvancedSQLQuerySuite extends HBaseIntegrationTestBase {
   import org.apache.spark.sql.hbase.TestHbase._
 
   test("aggregation with codegen") {
-    val originalValue = codegenEnabled
+    val originalValue = TestHbase.conf.codegenEnabled
     setConf(SQLConf.CODEGEN_ENABLED, "true")
     val result = sql("SELECT col1 FROM ta GROUP BY col1").collect()
     assert(result.size == 14, s"aggregation with codegen test failed on size")
@@ -52,7 +53,7 @@ class HBaseAdvancedSQLQuerySuite extends HBaseIntegrationTestBase {
     val metadata = new MetadataBuilder()
       .putString(docKey, docValue)
       .build()
-    val schemaWithMeta = new StructType(Seq(
+    val schemaWithMeta = new StructType(Array(
       schema("col7"), schema("col1").copy(metadata = metadata), schema("col3")))
     val personWithMeta = applySchema(tableA, schemaWithMeta)
     def validateMetadata(rdd: SchemaRDD): Unit = {
