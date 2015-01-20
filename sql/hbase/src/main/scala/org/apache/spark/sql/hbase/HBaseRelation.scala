@@ -30,7 +30,6 @@ import org.apache.spark.sql.hbase.catalyst.NotPusher
 import org.apache.spark.sql.hbase.catalyst.types.PartitionRange
 import org.apache.spark.sql.hbase.util.{DataTypeUtils, HBaseKVHelper, BytesUtils, Util}
 import org.apache.spark.sql.sources.{BaseRelation, CatalystScan, LogicalRelation, RelationProvider}
-import org.apache.spark.sql.hbase.util.InsertWrappers._
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
@@ -38,8 +37,8 @@ import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 class HBaseSource extends RelationProvider {
   // Returns a new HBase relation with the given parameters
   override def createRelation(
-                               sqlContext: SQLContext,
-                               parameters: Map[String, String]): BaseRelation = {
+       sqlContext: SQLContext,
+       parameters: Map[String, String]): BaseRelation = {
     val context = sqlContext.asInstanceOf[HBaseSQLContext]
     val catalog = context.catalog
 
@@ -87,11 +86,10 @@ class HBaseSource extends RelationProvider {
  */
 @SerialVersionUID(1529873946227428789L)
 private[hbase] case class HBaseRelation(
-                                         tableName: String,
-                                         hbaseNamespace: String,
-                                         hbaseTableName: String,
-                                         allColumns: Seq[AbstractColumn])
-                                       (@transient var context: HBaseSQLContext)
+     tableName: String,
+     hbaseNamespace: String,
+     hbaseTableName: String,
+     allColumns: Seq[AbstractColumn])(@transient var context: HBaseSQLContext)
   extends CatalystScan with Serializable {
 
   @transient lazy val logger = Logger.getLogger(getClass.getName)
@@ -249,14 +247,14 @@ private[hbase] case class HBaseRelation(
    * as a list of SparkImmutableBytesWritable.
    */
   def getRegionStartKeys = {
-    val byteKeys: Array[Array[Byte]] = htable.getStartKeys
-    val ret = ArrayBuffer[ImmutableBytesWritableWrapper]()
+    val byteKeys: Array[HBaseRawType] = htable.getStartKeys
+    val ret = ArrayBuffer[HBaseRawType]()
 
     // Since the size of byteKeys will be 1 if there is only one partition in the table,
     // we need to omit the that null element.
     if (!(byteKeys.length == 1 && byteKeys(0).length == 0)) {
       for (byteKey <- byteKeys) {
-        ret += new ImmutableBytesWritableWrapper(byteKey)
+        ret += byteKey
       }
     }
 
@@ -264,8 +262,8 @@ private[hbase] case class HBaseRelation(
   }
 
   def buildFilter(
-                   projList: Seq[NamedExpression],
-                   pred: Option[Expression]): (Option[FilterList], Option[Expression]) = {
+       projList: Seq[NamedExpression],
+       pred: Option[Expression]): (Option[FilterList], Option[Expression]) = {
     var distinctProjList = projList.distinct
     if (pred.isDefined) {
       distinctProjList = distinctProjList.filterNot(_.references.subsetOf(pred.get.references))

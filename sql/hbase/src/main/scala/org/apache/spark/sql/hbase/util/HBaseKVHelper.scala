@@ -87,7 +87,7 @@ object HBaseKVHelper {
                 relation: HBaseRelation,
                 lineBuffer: Array[BytesUtils],
                 keyBytes: Array[(Array[Byte], DataType)],
-                valueBytes: Array[(Array[Byte], Array[Byte], Array[Byte])]) = {
+                valueBytes: Array[HBaseRawType]) = {
     assert(values.length == relation.output.length,
       s"values length ${values.length} not equals columns length ${relation.output.length}")
 
@@ -98,12 +98,10 @@ object HBaseKVHelper {
     })
     for (i <- 0 until relation.nonKeyColumns.size) {
       val nkc = relation.nonKeyColumns(i)
-      val family = nkc.familyRaw
-      val qualifier = nkc.qualifierRaw
       val bytes = if (values(nkc.ordinal) != null) {
         string2Bytes(values(nkc.ordinal), lineBuffer(nkc.ordinal))
       } else null
-      valueBytes(i) = (family, qualifier, bytes)
+      valueBytes(i) = bytes
     }
   }
 

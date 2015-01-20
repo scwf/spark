@@ -20,8 +20,7 @@ package org.apache.spark.sql.hbase
 import org.apache.hadoop.hbase.util.Bytes
 import org.apache.spark.rdd.ShuffledRDD
 import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.sql.types._
-import org.apache.spark.sql.hbase.util.InsertWrappers._
+import org.apache.spark.sql.catalyst.types._
 import org.apache.spark.sql.hbase.util.{BytesUtils, HBaseKVHelper}
 
 import scala.collection.mutable.ArrayBuffer
@@ -32,16 +31,15 @@ class HBasePartitionerSuite extends HBaseIntegrationTestBase {
   test("test hbase partitioner") {
     val data = (1 to 40).map { r =>
       val rowKey = Bytes.toBytes(r)
-      val rowKeyWritable = new ImmutableBytesWritableWrapper(rowKey)
-      (rowKeyWritable, r)
+      (rowKey, r)
     }
     val rdd = TestHbase.sparkContext.parallelize(data, 4)
     val splitKeys = (1 to 40).filter(_ % 5 == 0).filter(_ != 40).map { r =>
-      new ImmutableBytesWritableWrapper(Bytes.toBytes(r))
+      Bytes.toBytes(r)
     }
     val partitioner = new HBasePartitioner(splitKeys.toArray)
     val shuffled =
-      new ShuffledRDD[ImmutableBytesWritableWrapper, Int, Int](rdd, partitioner)
+      new ShuffledRDD[HBaseRawType, Int, Int](rdd, partitioner)
 
     val groups = shuffled.mapPartitionsWithIndex { (idx, iter) =>
       iter.map(x => (x._2, idx))

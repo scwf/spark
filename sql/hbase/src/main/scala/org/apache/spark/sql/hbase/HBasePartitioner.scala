@@ -19,14 +19,21 @@ package org.apache.spark.sql.hbase
 
 import java.io.{IOException, ObjectInputStream, ObjectOutputStream}
 
+import org.apache.hadoop.hbase.util.Bytes
 import org.apache.spark.serializer.JavaSerializer
 import org.apache.spark.util.{CollectionsUtils, Utils}
 import org.apache.spark.{Partitioner, SparkEnv}
-import org.apache.spark.sql.hbase.util.InsertWrappers._
 
-class HBasePartitioner (var splitKeys: Array[ImmutableBytesWritableWrapper]) extends Partitioner {
+object HBasePartitioner {
+  implicit object HBaseRawOrdering extends Ordering[HBaseRawType] {
+    def compare(a: HBaseRawType, b: HBaseRawType) = Bytes.compareTo(a, b)
+  }
+}
 
-  type t = ImmutableBytesWritableWrapper
+class HBasePartitioner (var splitKeys: Array[HBaseRawType]) extends Partitioner {
+  import HBasePartitioner.HBaseRawOrdering
+
+  type t = HBaseRawType
 
   def numPartitions = splitKeys.length + 1
 
@@ -97,7 +104,7 @@ class HBasePartitioner (var splitKeys: Array[ImmutableBytesWritableWrapper]) ext
       case _ =>
         val ser = sfactory.newInstance()
         Utils.deserializeViaNestedStream(in, ser) { ds =>
-          splitKeys = ds.readObject[Array[ImmutableBytesWritableWrapper]]()
+          splitKeys = ds.readObject[Array[HBaseRawType]]()
         }
     }
   }

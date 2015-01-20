@@ -188,4 +188,3 @@ class BasicQueriesSuite extends QueriesSuiteBase {
     logInfo(s"Test $testnm completed successfully")
   }
 }
-

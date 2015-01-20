@@ -22,10 +22,12 @@ import java.util.Date
 import org.apache.hadoop.conf.{Configurable, Configuration}
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.hbase._
-import org.apache.hadoop.hbase.client.{HTable, Put}
+import org.apache.hadoop.hbase.client.Put
 import org.apache.hadoop.hbase.io.ImmutableBytesWritable
 import org.apache.hadoop.hbase.mapreduce.{HFileOutputFormat2, LoadIncrementalHFiles}
+import org.apache.hadoop.hbase.util.Bytes
 import org.apache.hadoop.mapreduce.{Job, RecordWriter}
+
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.mapreduce.SparkHadoopMapReduceUtil
 import org.apache.spark.sql._
@@ -34,10 +36,10 @@ import org.apache.spark.sql.catalyst.plans.logical.Subquery
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.execution.RunnableCommand
 import org.apache.spark.sql.hbase._
+import org.apache.spark.sql.hbase.HBasePartitioner.HBaseRawOrdering
 import org.apache.spark.sql.hbase.util.{HBaseKVHelper, Util}
 import org.apache.spark.sql.sources.LogicalRelation
 import org.apache.spark.{Logging, SerializableWritable, SparkEnv, TaskContext}
-import org.apache.spark.sql.hbase.util.InsertWrappers._
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable.ArrayBuffer
@@ -129,22 +131,22 @@ case class DescribeTableCommand(tableName: String) extends RunnableCommand {
 case class InsertValueIntoTableCommand(tableName: String, valueSeq: Seq[String])
   extends RunnableCommand {
   override def run(sqlContext: SQLContext) = {
-    val solvedRelation = sqlContext.catalog.lookupRelation(Seq(tableName))
+    val solvedRelation = sqlContext.catalog.lookupRelation(None, tableName, None)
     val relation: HBaseRelation = solvedRelation.asInstanceOf[Subquery]
       .child.asInstanceOf[LogicalRelation]
       .relation.asInstanceOf[HBaseRelation]
     val keyBytes = new Array[(Array[Byte], DataType)](relation.keyColumns.size)
-    val valueBytes = new Array[(Array[Byte], Array[Byte],
-                                Array[Byte])](relation.nonKeyColumns.size)
+    val valueBytes = new Array[HBaseRawType](relation.nonKeyColumns.size)
     val lineBuffer = HBaseKVHelper.createLineBuffer(relation.output)
     HBaseKVHelper.string2KV(valueSeq, relation, lineBuffer, keyBytes, valueBytes)
     val rowKey = HBaseKVHelper.encodingRawKeyColumns(keyBytes)
     val put = new Put(rowKey)
-    valueBytes.foreach {
-      case (_, _, null)  =>
-      // Do not create an HBase Put for a null column value.
-      case (family, qualifier, value) =>
-        put.add(family, qualifier, value)
+    for (i <- 0 until valueBytes.length) {
+      val value = valueBytes(i)
+      if (value != null) {
+        val nkc = relation.nonKeyColumns(i)
+        put.add(nkc.familyRaw, nkc.qualifierRaw, value)
+      }
     }
     relation.htable.put(put)
     Seq.empty[Row]
@@ -155,61 +157,61 @@ case class InsertValueIntoTableCommand(tableName: String, valueSeq: Seq[String])
 
 @DeveloperApi
 case class BulkLoadIntoTableCommand(
-    path: String,
-    tableName: String,
-    isLocal: Boolean,
-    delimiter: Option[String]) extends RunnableCommand with Logging {
+                                     path: String,
+                                     tableName: String,
+                                     isLocal: Boolean,
+                                     delimiter: Option[String]) extends RunnableCommand with Logging {
 
   private[hbase] def makeBulkLoadRDD(
-      splitKeys: Array[ImmutableBytesWritableWrapper],
-      hadoopReader: HadoopReader,
-      job: Job,
-      tmpPath: String,
-      relation: HBaseRelation) = {
+                                      splitKeys: Array[HBaseRawType],
+                                      hadoopReader: HadoopReader,
+                                      job: Job,
+                                      tmpPath: String,
+                                      relation: HBaseRelation) = {
     val rdd = hadoopReader.makeBulkLoadRDDFromTextFile
     val partitioner = new HBasePartitioner(splitKeys)
-    val ordering = Ordering[ImmutableBytesWritableWrapper]
+    val ordering = Ordering[HBaseRawType]
     val shuffled =
       new HBaseShuffledRDD(rdd, partitioner, relation.partitions).setKeyOrdering(ordering)
     val bulkLoadRDD = shuffled.mapPartitions { iter =>
-      // the rdd now already sort by key, to sort by value
+    // the rdd now already sort by key, to sort by value
       val map = new java.util.TreeSet[KeyValue](KeyValue.COMPARATOR)
-      var preKV: (ImmutableBytesWritableWrapper, PutWrapper) = null
-      var nowKV: (ImmutableBytesWritableWrapper, PutWrapper) = null
+      var preKV: (HBaseRawType, Array[HBaseRawType]) = null
+      var nowKV: (HBaseRawType, Array[HBaseRawType]) = null
       val ret = new ArrayBuffer[(ImmutableBytesWritable, KeyValue)]()
       if (iter.hasNext) {
         preKV = iter.next()
-        var cellsIter = preKV._2.toPut.getFamilyCellMap.values().iterator()
-        while (cellsIter.hasNext) {
-          cellsIter.next().foreach { cell =>
-            val kv = KeyValueUtil.ensureKeyValue(cell)
+        for (i <- 0 until preKV._2.size) {
+          val nkc = relation.nonKeyColumns(i)
+          if (preKV._2(i) != null) {
+            val kv = new KeyValue(preKV._1, nkc.familyRaw, nkc.qualifierRaw, preKV._2(i))
             map.add(kv)
           }
         }
         while (iter.hasNext) {
           nowKV = iter.next()
-          if (0 == (nowKV._1 compareTo preKV._1)) {
-            cellsIter = nowKV._2.toPut.getFamilyCellMap.values().iterator()
-            while (cellsIter.hasNext) {
-              cellsIter.next().foreach { cell =>
-                val kv = KeyValueUtil.ensureKeyValue(cell)
+          if (Bytes.equals(nowKV._1, preKV._1)) {
+            for (i <- 0 until nowKV._2.size) {
+              val nkc = relation.nonKeyColumns(i)
+              if (preKV._2(i) != null) {
+                val kv = new KeyValue(preKV._1, nkc.familyRaw, nkc.qualifierRaw, nowKV._2(i))
                 map.add(kv)
               }
             }
           } else {
-            ret ++= map.iterator().map((preKV._1.toImmutableBytesWritable, _))
+            ret ++= map.iterator().map((new ImmutableBytesWritable(preKV._1), _))
             preKV = nowKV
             map.clear()
-            cellsIter = preKV._2.toPut.getFamilyCellMap.values().iterator()
-            while (cellsIter.hasNext) {
-              cellsIter.next().foreach { cell =>
-                val kv = KeyValueUtil.ensureKeyValue(cell)
+            for (i <- 0 until preKV._2.size) {
+              val nkc = relation.nonKeyColumns(i)
+              if (preKV._2(i) != null) {
+                val kv = new KeyValue(nowKV._1, nkc.familyRaw, nkc.qualifierRaw, nowKV._2(i))
                 map.add(kv)
               }
             }
           }
         }
-        ret ++= map.iterator().map((preKV._1.toImmutableBytesWritable, _))
+        ret ++= map.iterator().map((new ImmutableBytesWritable(preKV._1), _))
         map.clear()
         ret.iterator
       } else {
@@ -225,7 +227,7 @@ case class BulkLoadIntoTableCommand(
   }
 
   override def run(sqlContext: SQLContext) = {
-    val solvedRelation = sqlContext.catalog.lookupRelation(Seq(tableName))
+    val solvedRelation = sqlContext.catalog.lookupRelation(None, tableName, None)
     val relation: HBaseRelation = solvedRelation.asInstanceOf[Subquery]
       .child.asInstanceOf[LogicalRelation]
       .relation.asInstanceOf[HBaseRelation]
@@ -259,60 +261,61 @@ case class BulkLoadIntoTableCommand(
 
 @DeveloperApi
 case class ParallelizedBulkLoadIntoTableCommand(
-     path: String,
-     tableName: String,
-     isLocal: Boolean,
-     delimiter: Option[String]) extends RunnableCommand with SparkHadoopMapReduceUtil {
+                                                 path: String,
+                                                 tableName: String,
+                                                 isLocal: Boolean,
+                                                 delimiter: Option[String]) extends RunnableCommand with SparkHadoopMapReduceUtil {
 
   private[hbase] def makeBulkLoadRDD(
-      splitKeys: Array[ImmutableBytesWritableWrapper],
-      hadoopReader: HadoopReader,
-      wrappedConf: SerializableWritable[Configuration],
-      tmpPath: String)(relation: HBaseRelation) = {
+                                      splitKeys: Array[HBaseRawType],
+                                      hadoopReader: HadoopReader,
+                                      wrappedConf: SerializableWritable[Configuration],
+                                      tmpPath: String)(relation: HBaseRelation) = {
     val rdd = hadoopReader.makeBulkLoadRDDFromTextFile
     val partitioner = new HBasePartitioner(splitKeys)
-    val ordering = Ordering[ImmutableBytesWritableWrapper]
+    val ordering = Ordering[HBaseRawType]
     val shuffled =
       new HBaseShuffledRDD(rdd, partitioner, relation.partitions).setKeyOrdering(ordering)
     val bulkLoadRDD = shuffled.mapPartitions { iter =>
     // the rdd now already sort by key, to sort by value
       val map = new java.util.TreeSet[KeyValue](KeyValue.COMPARATOR)
-      var preKV: (ImmutableBytesWritableWrapper, PutWrapper) = null
-      var nowKV: (ImmutableBytesWritableWrapper, PutWrapper) = null
-      val ret = new ArrayBuffer[(ImmutableBytesWritable, KeyValue)]()
+      var preKV: (HBaseRawType, Array[HBaseRawType]) = null
+      var nowKV: (HBaseRawType, Array[HBaseRawType]) = null
+      val ret = new ArrayBuffer[(HBaseRawType, KeyValue)]()
       if (iter.hasNext) {
         preKV = iter.next()
-        var cellsIter = preKV._2.toPut.getFamilyCellMap.values().iterator()
-        while (cellsIter.hasNext) {
-          cellsIter.next().foreach { cell =>
-            val kv = KeyValueUtil.ensureKeyValue(cell)
+        for (i <- 0 until preKV._2.size) {
+          val nkc = relation.nonKeyColumns(i)
+          if (preKV._2(i) != null) {
+            val kv = new KeyValue(preKV._1, nkc.familyRaw, nkc.qualifierRaw, preKV._2(i))
             map.add(kv)
           }
         }
+
         while (iter.hasNext) {
           nowKV = iter.next()
-          if (0 == (nowKV._1 compareTo preKV._1)) {
-            cellsIter = nowKV._2.toPut.getFamilyCellMap.values().iterator()
-            while (cellsIter.hasNext) {
-              cellsIter.next().foreach { cell =>
-                val kv = KeyValueUtil.ensureKeyValue(cell)
+          if (Bytes.equals(nowKV._1, preKV._1)) {
+            for (i <- 0 until nowKV._2.size) {
+              val nkc = relation.nonKeyColumns(i)
+              if (preKV._2(i) != null) {
+                val kv = new KeyValue(nowKV._1, nkc.familyRaw, nkc.qualifierRaw, nowKV._2(i))
                 map.add(kv)
               }
             }
           } else {
-            ret ++= map.iterator().map((preKV._1.toImmutableBytesWritable, _))
+            ret ++= map.iterator().map((preKV._1, _))
             preKV = nowKV
             map.clear()
-            cellsIter = preKV._2.toPut.getFamilyCellMap.values().iterator()
-            while (cellsIter.hasNext) {
-              cellsIter.next().foreach { cell =>
-                val kv = KeyValueUtil.ensureKeyValue(cell)
+            for (i <- 0 until preKV._2.size) {
+              val nkc = relation.nonKeyColumns(i)
+              if (preKV._2(i) != null) {
+                val kv = new KeyValue(nowKV._1, nkc.familyRaw, nkc.qualifierRaw, nowKV._2(i))
                 map.add(kv)
               }
             }
           }
         }
-        ret ++= map.iterator().map((preKV._1.toImmutableBytesWritable, _))
+        ret ++= map.iterator().map((preKV._1, _))
         map.clear()
         ret.iterator
       } else {
@@ -342,7 +345,7 @@ case class ParallelizedBulkLoadIntoTableCommand(
       val jobtrackerID = formatter.format(new Date())
       val stageId = bulkLoadRDD.id
 
-      def writeShard(iterator: Iterator[(ImmutableBytesWritable, KeyValue)]) = {
+      def writeShard(iterator: Iterator[(HBaseRawType, KeyValue)]) = {
         // Hadoop wants a 32-bit task attempt ID, so if ours is bigger than Int.MaxValue, roll it
         // around by taking a mod. We expect that no task will be attempted 2 billion times.
         val attemptNumber = (context.attemptId % Int.MaxValue).toInt
@@ -357,11 +360,13 @@ case class ParallelizedBulkLoadIntoTableCommand(
         committer.setupJob(hadoopContext)
         val writer = jobFormat.getRecordWriter(hadoopContext).
           asInstanceOf[RecordWriter[ImmutableBytesWritable, KeyValue]]
+        val bytesWritable = new ImmutableBytesWritable
         try {
           var recordsWritten = 0L
           while (iterator.hasNext) {
             val pair = iterator.next()
-            writer.write(pair._1, pair._2)
+            bytesWritable.set(pair._1)
+            writer.write(bytesWritable, pair._2)
             recordsWritten += 1
           }
         } finally {
@@ -378,7 +383,7 @@ case class ParallelizedBulkLoadIntoTableCommand(
   }
 
   override def run(sqlContext: SQLContext) = {
-    val solvedRelation = sqlContext.catalog.lookupRelation(Seq(tableName))
+    val solvedRelation = sqlContext.catalog.lookupRelation(None, tableName, None)
     val relation: HBaseRelation = solvedRelation.asInstanceOf[Subquery]
       .child.asInstanceOf[LogicalRelation]
       .relation.asInstanceOf[HBaseRelation]
