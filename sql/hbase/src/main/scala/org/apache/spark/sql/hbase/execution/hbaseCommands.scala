@@ -174,7 +174,8 @@ case class BulkLoadIntoTableCommand(
     val shuffled =
       new HBaseShuffledRDD(rdd, partitioner, relation.partitions).setKeyOrdering(ordering)
     val bulkLoadRDD = shuffled.mapPartitions { iter =>
-    // the rdd now already sort by key, to sort by value
+      // the rdd now already sort by key, to sort by value
+      logDebug(s"after shuffle, sort by value, begin: ${System.currentTimeMillis()}")
       val map = new java.util.TreeSet[KeyValue](KeyValue.COMPARATOR)
       var preKV: (HBaseRawType, Array[HBaseRawType]) = null
       var nowKV: (HBaseRawType, Array[HBaseRawType]) = null
@@ -213,17 +214,20 @@ case class BulkLoadIntoTableCommand(
         }
         ret ++= map.iterator().map((new ImmutableBytesWritable(preKV._1), _))
         map.clear()
+        logDebug(s"after shuffle,sort by value,finish: ${System.currentTimeMillis()}")
         ret.iterator
       } else {
+        logDebug(s"after shuffle,finish sort by value, finish: ${System.currentTimeMillis()}")
         Iterator.empty
       }
     }
-
+    logDebug(s"save as hfile, begin: ${System.currentTimeMillis()}")
     job.setOutputKeyClass(classOf[ImmutableBytesWritable])
     job.setOutputValueClass(classOf[KeyValue])
     job.setOutputFormatClass(classOf[HFileOutputFormat2])
     job.getConfiguration.set("mapred.output.dir", tmpPath)
     bulkLoadRDD.saveAsNewAPIHadoopDataset(job.getConfiguration)
+    logDebug(s"save as hfile, finish: ${System.currentTimeMillis()}")
   }
 
   override def run(sqlContext: SQLContext) = {
@@ -247,11 +251,11 @@ case class BulkLoadIntoTableCommand(
     // tmp path for storing HFile
     val tmpPath = Util.getTempFilePath(conf, relation.tableName)
     val splitKeys = relation.getRegionStartKeys.toArray
-    logDebug(s"Starting makeBulkLoad on table ${relation.htable.getName} ...")
+    logDebug(s"start BulkLoad on table ${relation.htable.getName}: ${System.currentTimeMillis()}")
     makeBulkLoadRDD(splitKeys, hadoopReader, job, tmpPath, relation)
     val tablePath = new Path(tmpPath)
     val load = new LoadIncrementalHFiles(conf)
-    logDebug(s"Starting doBulkLoad on table ${relation.htable.getName} ...")
+    logDebug(s"finish BulkLoad on table ${relation.htable.getName}: ${System.currentTimeMillis()}")
     load.doBulkLoad(tablePath, relation.htable)
     Seq.empty[Row]
   }
@@ -267,17 +271,18 @@ case class ParallelizedBulkLoadIntoTableCommand(
     delimiter: Option[String]) extends RunnableCommand with SparkHadoopMapReduceUtil {
 
   private[hbase] def makeBulkLoadRDD(
-                                      splitKeys: Array[HBaseRawType],
-                                      hadoopReader: HadoopReader,
-                                      wrappedConf: SerializableWritable[Configuration],
-                                      tmpPath: String)(relation: HBaseRelation) = {
+       splitKeys: Array[HBaseRawType],
+       hadoopReader: HadoopReader,
+       wrappedConf: SerializableWritable[Configuration],
+       tmpPath: String)(relation: HBaseRelation) = {
     val rdd = hadoopReader.makeBulkLoadRDDFromTextFile
     val partitioner = new HBasePartitioner(splitKeys)
     val ordering = Ordering[HBaseRawType]
     val shuffled =
       new HBaseShuffledRDD(rdd, partitioner, relation.partitions).setKeyOrdering(ordering)
     val bulkLoadRDD = shuffled.mapPartitions { iter =>
-    // the rdd now already sort by key, to sort by value
+      // the rdd now already sort by key, to sort by value
+      logDebug(s"after shuffle, sort by value, begin: ${System.currentTimeMillis()}")
       val map = new java.util.TreeSet[KeyValue](KeyValue.COMPARATOR)
       var preKV: (HBaseRawType, Array[HBaseRawType]) = null
       var nowKV: (HBaseRawType, Array[HBaseRawType]) = null
@@ -317,13 +322,17 @@ case class ParallelizedBulkLoadIntoTableCommand(
         }
         ret ++= map.iterator().map((preKV._1, _))
         map.clear()
+        logDebug(s"after shuffle,sort by value,finish: ${System.currentTimeMillis()}")
         ret.iterator
       } else {
+        logDebug(s"after shuffle,sort by value,finish: ${System.currentTimeMillis()}")
         Iterator.empty
       }
     }
 
     bulkLoadRDD.mapPartitionsWithIndex { (index, iter)  =>
+      logDebug(s"save as hfile, begin: ${System.currentTimeMillis()}")
+
       var config = wrappedConf.value
       config.set("mapred.output.dir", tmpPath + index)
 
@@ -361,8 +370,8 @@ case class ParallelizedBulkLoadIntoTableCommand(
         val writer = jobFormat.getRecordWriter(hadoopContext).
           asInstanceOf[RecordWriter[ImmutableBytesWritable, KeyValue]]
         val bytesWritable = new ImmutableBytesWritable
+        var recordsWritten = 0L
         try {
-          var recordsWritten = 0L
           while (iterator.hasNext) {
             val pair = iterator.next()
             bytesWritable.set(pair._1)
@@ -375,6 +384,8 @@ case class ParallelizedBulkLoadIntoTableCommand(
         committer.commitTask(hadoopContext)
         committer.commitJob(hadoopContext)
         var path = new Path(tmpPath + index)
+        logDebug(s"save as hfile, finish: ${System.currentTimeMillis()}, " +
+          s"written $recordsWritten records")
         // return the output path
         Seq(path.getFileSystem(config).makeQualified(path).toString).toIterator
       }
@@ -403,18 +414,20 @@ case class ParallelizedBulkLoadIntoTableCommand(
     val splitKeys = relation.getRegionStartKeys.toArray
     val htableName = relation.htable.getName.getNameAsString
     val wrappedConf = new SerializableWritable(conf)
-    logDebug(s"Starting makeBulkLoad on table ${relation.htable.getName} ...")
     makeBulkLoadRDD(
       splitKeys,
       hadoopReader,
       wrappedConf,
       tmpPath)(relation).foreachPartition { iter =>
+      logDebug(s"start BulkLoad : ${System.currentTimeMillis()}")
       val conf = wrappedConf.value
       val load = new LoadIncrementalHFiles(conf)
       val htable = relation.htable
       if (iter.hasNext) {
         load.doBulkLoad(new Path(iter.next()), htable)
       }
+      logDebug(s"finished BulkLoad : ${System.currentTimeMillis()}")
+
     }
     logDebug(s"Starting doBulkLoad on table ${relation.htable.getName} ...")
     Seq.empty[Row]
