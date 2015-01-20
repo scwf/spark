@@ -20,7 +20,6 @@ package org.apache.spark.sql.hbase
 import org.apache.spark.SparkContext
 import org.apache.spark.sql.catalyst.types._
 import org.apache.spark.sql.hbase.util.HBaseKVHelper
-import org.apache.spark.sql.hbase.util.InsertWrappers._
 
 /**
  * Helper class for scanning files stored in Hadoop - e.g., to read text file when bulk loading.
@@ -37,35 +36,23 @@ private[hbase] class HadoopReader(
     // todo(wf): we should not reuse the buffer in bulk-loading otherwise it will lead to
     // corrupted as we are reusing same buffer
     rdd.mapPartitions { iter =>
-      val keyBytes = new Array[(Array[Byte], DataType)](relation.keyColumns.size)
-      val valueBytes =
-        new Array[(Array[Byte], Array[Byte],Array[Byte])](relation.nonKeyColumns.size)
+
       val lineBuffer = HBaseKVHelper.createLineBuffer(relation.output)
 
-      var textValueArray: Array[String] = null
-      var rowKeyData: HBaseRawType = null
-      var rowKey: ImmutableBytesWritableWrapper = null
-      var put: PutWrapper = null
       iter.map { line =>
         // If the last column in the text file is null, the java parser will
         // return a String[] containing only the non-null text values.
         // In this case we need to append another element (null) to
         // the array returned by line.split(splitRegex).
-        textValueArray = line.split(splitRegex)
+        val keyBytes = new Array[(HBaseRawType, DataType)](relation.keyColumns.size)
+        val valueBytes = new Array[HBaseRawType](relation.nonKeyColumns.size)
+        var textValueArray = line.split(splitRegex)
         if(textValueArray.length == relation.output.length -1) {
           textValueArray = textValueArray :+ null
         }
         HBaseKVHelper.string2KV(textValueArray, relation, lineBuffer, keyBytes, valueBytes)
-        rowKeyData = HBaseKVHelper.encodingRawKeyColumns(keyBytes)
-        rowKey = new ImmutableBytesWritableWrapper(rowKeyData)
-        put = new PutWrapper(rowKeyData)
-        valueBytes.foreach {
-          case (_, _, null)  =>
-            // Do not create an HBase Put for a null column value.
-          case (family, qualifier, value) =>
-            put.add(family, qualifier, value.clone())
-        }
-        (rowKey, put)
+        val rowKeyData = HBaseKVHelper.encodingRawKeyColumns(keyBytes)
+        (rowKeyData, valueBytes)
       }
     }
   }

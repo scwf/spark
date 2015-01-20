@@ -25,8 +25,8 @@ import org.apache.spark.rdd.ShuffledRDD
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.types.IntegerType
 import org.apache.spark.sql.hbase.execution._
-import org.apache.spark.sql.hbase.util.InsertWrappers._
 import org.apache.spark.sql.hbase.util.{BytesUtils, Util}
+import org.apache.spark.sql.hbase.HBasePartitioner.HBaseRawOrdering
 import org.apache.spark.{SerializableWritable, SparkContext}
 
 import scala.collection.mutable.ArrayBuffer
@@ -92,7 +92,7 @@ class BulkLoadIntoTableSuite extends HBaseIntegrationTestBase {
       isLocal = true, Option(","))
     val splitKeys = (1 to 40).filter(_ % 5 == 0).map { r =>
       val bytesUtils = BytesUtils.create(IntegerType)
-      new ImmutableBytesWritableWrapper(bytesUtils.toBytes(r))
+      bytesUtils.toBytes(r)
     }
     val conf = TestHbase.sparkContext.hadoopConfiguration
 
@@ -119,7 +119,7 @@ class BulkLoadIntoTableSuite extends HBaseIntegrationTestBase {
         Option(","))
     val splitKeys = (1 to 40).filter(_ % 5 == 0).map { r =>
       val bytesUtils = BytesUtils.create(IntegerType)
-      new ImmutableBytesWritableWrapper(bytesUtils.toBytes(r))
+      bytesUtils.toBytes(r)
     }
     val conf = TestHbase.sparkContext.hadoopConfiguration
 
@@ -143,28 +143,24 @@ class BulkLoadIntoTableSuite extends HBaseIntegrationTestBase {
     val splitRegex = ","
     val conf = TestHbase.sparkContext.hadoopConfiguration
     val inputFile = sparkHome + "/sql/hbase/src/test/resources/test.txt"
+    val family = Bytes.toBytes("cf")
+    val qualifier = Bytes.toBytes("c1")
 
     FileSystem.get(conf).delete(new Path("./hfileoutput"), true)
 
     val rdd = sc.textFile(inputFile, 1).mapPartitions { iter =>
       val keyBytes = new Array[(Array[Byte], DataType)](1)
-      val valueBytes = new Array[(Array[Byte], Array[Byte], Array[Byte])](1)
+      val valueBytes = new Array[HBaseRawType](1)
       val bytesUtils = BytesUtils.create(IntegerType)
-      val family = Bytes.toBytes("cf")
-      val qualifier = Bytes.toBytes("c1")
+
 
       iter.map { line =>
         val splits = line.split(splitRegex)
         keyBytes(0) = (bytesUtils.toBytes(splits(0).toInt), IntegerType)
-        valueBytes(0) = (family, qualifier, bytesUtils.toBytes(splits(1).toInt))
+        valueBytes(0) = bytesUtils.toBytes(splits(1).toInt)
         val rowKeyData = bytesUtils.toBytes(splits(0).toInt)
 
-        val rowKey = new ImmutableBytesWritableWrapper(rowKeyData)
-        val put = new PutWrapper(rowKeyData)
-        valueBytes.foreach { case (fam, qual, value) =>
-          put.add(fam, qual, value)
-        }
-        (rowKey, put)
+        (rowKeyData, valueBytes)
       }
     }
 
@@ -175,54 +171,52 @@ class BulkLoadIntoTableSuite extends HBaseIntegrationTestBase {
 
     val splitKeys = (1 to 40).filter(_ % 5 == 0).map { r =>
       val bytesUtils = BytesUtils.create(IntegerType)
-      new ImmutableBytesWritableWrapper(bytesUtils.toBytes(r))
+      bytesUtils.toBytes(r)
     }
     //    splitKeys += (new ImmutableBytesWritableWrapper(Bytes.toBytes(100)))
-    val ordering = implicitly[Ordering[ImmutableBytesWritableWrapper]]
+    val ordering = implicitly[Ordering[HBaseRawType]]
     val partitioner = new HBasePartitioner(splitKeys.toArray)
     val shuffled =
-      new ShuffledRDD[ImmutableBytesWritableWrapper, PutWrapper, PutWrapper](rdd, partitioner)
+      new ShuffledRDD[HBaseRawType, Array[HBaseRawType], Array[HBaseRawType]](rdd, partitioner)
         .setKeyOrdering(ordering)
 
     val bulkLoadRDD = shuffled.mapPartitions { iter =>
       // the rdd now already sort by key, to sort by value
       val map = new java.util.TreeSet[KeyValue](KeyValue.COMPARATOR)
-      var preKV: (ImmutableBytesWritableWrapper, PutWrapper) = null
-      var nowKV: (ImmutableBytesWritableWrapper, PutWrapper) = null
+      var preKV: (HBaseRawType, Array[HBaseRawType]) = null
+      var nowKV: (HBaseRawType, Array[HBaseRawType]) = null
       val ret = new ArrayBuffer[(ImmutableBytesWritable, KeyValue)]()
       if (iter.hasNext) {
         preKV = iter.next()
-        var cellsIter = preKV._2.toPut.getFamilyCellMap.values().iterator()
-        while (cellsIter.hasNext) {
-          cellsIter.next().foreach { cell =>
-            val kv = KeyValueUtil.ensureKeyValue(cell)
+        for (i <- 0 until preKV._2.size) {
+          if (preKV._2 != null) {
+            val kv = new KeyValue(preKV._1, family, qualifier, preKV._2(i))
             map.add(kv)
           }
         }
+
         while (iter.hasNext) {
           nowKV = iter.next()
-          if (0 == (nowKV._1 compareTo preKV._1)) {
-            cellsIter = nowKV._2.toPut.getFamilyCellMap.values().iterator()
-            while (cellsIter.hasNext) {
-              cellsIter.next().foreach { cell =>
-                val kv = KeyValueUtil.ensureKeyValue(cell)
+          if (Bytes.equals(nowKV._1, preKV._1)) {
+            for (i <- 0 until nowKV._2.size) {
+              if (preKV._2 != null) {
+                val kv = new KeyValue(nowKV._1, family, qualifier, nowKV._2(i))
                 map.add(kv)
               }
             }
           } else {
-            ret ++= map.iterator().map((preKV._1.toImmutableBytesWritable, _))
+            ret ++= map.iterator().map((new ImmutableBytesWritable(preKV._1), _))
             preKV = nowKV
             map.clear()
-            cellsIter = preKV._2.toPut.getFamilyCellMap.values().iterator()
-            while (cellsIter.hasNext) {
-              cellsIter.next().foreach { cell =>
-                val kv = KeyValueUtil.ensureKeyValue(cell)
+            for (i <- 0 until preKV._2.size) {
+              if (preKV._2 != null) {
+                val kv = new KeyValue(nowKV._1, family, qualifier, nowKV._2(i))
                 map.add(kv)
               }
             }
           }
         }
-        ret ++= map.iterator().map((preKV._1.toImmutableBytesWritable, _))
+        ret ++= map.iterator().map((new ImmutableBytesWritable(preKV._1), _))
         map.clear()
         ret.iterator
       } else {

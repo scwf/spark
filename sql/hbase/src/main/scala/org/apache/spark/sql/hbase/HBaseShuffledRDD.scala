@@ -19,10 +19,9 @@ package org.apache.spark.sql.hbase
 
 import org.apache.spark._
 import org.apache.spark.rdd.{RDD, ShuffledRDD, ShuffledRDDPartition}
-import org.apache.spark.sql.hbase.util.InsertWrappers._
 
 class HBaseShuffledRDD (
-    prevRdd: RDD[(ImmutableBytesWritableWrapper, PutWrapper)],
+    prevRdd: RDD[(HBaseRawType, Array[HBaseRawType])],
     part: Partitioner,
     @transient hbPartitions: Seq[HBasePartition] = Nil) extends ShuffledRDD(prevRdd, part){
 
