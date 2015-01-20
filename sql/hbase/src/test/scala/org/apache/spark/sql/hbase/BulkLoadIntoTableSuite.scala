@@ -23,7 +23,7 @@ import org.apache.hadoop.hbase.util.Bytes
 import org.apache.hadoop.mapreduce.Job
 import org.apache.spark.rdd.ShuffledRDD
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
-import org.apache.spark.sql.catalyst.types.IntegerType
+import org.apache.spark.sql.types._
 import org.apache.spark.sql.hbase.execution._
 import org.apache.spark.sql.hbase.util.{BytesUtils, Util}
 import org.apache.spark.sql.hbase.HBasePartitioner.HBaseRawOrdering
@@ -139,7 +139,6 @@ class BulkLoadIntoTableSuite extends HBaseIntegrationTestBase {
   }
 
   test("hfile output format, delete me when ready") {
-    import org.apache.spark.sql.catalyst.types._
     val splitRegex = ","
     val conf = TestHbase.sparkContext.hadoopConfiguration
     val inputFile = sparkHome + "/sql/hbase/src/test/resources/test.txt"

@@ -131,7 +131,7 @@ case class DescribeTableCommand(tableName: String) extends RunnableCommand {
 case class InsertValueIntoTableCommand(tableName: String, valueSeq: Seq[String])
   extends RunnableCommand {
   override def run(sqlContext: SQLContext) = {
-    val solvedRelation = sqlContext.catalog.lookupRelation(None, tableName, None)
+    val solvedRelation = sqlContext.catalog.lookupRelation(Seq(tableName))
     val relation: HBaseRelation = solvedRelation.asInstanceOf[Subquery]
       .child.asInstanceOf[LogicalRelation]
       .relation.asInstanceOf[HBaseRelation]
@@ -157,10 +157,10 @@ case class InsertValueIntoTableCommand(tableName: String, valueSeq: Seq[String])
 
 @DeveloperApi
 case class BulkLoadIntoTableCommand(
-                                     path: String,
-                                     tableName: String,
-                                     isLocal: Boolean,
-                                     delimiter: Option[String]) extends RunnableCommand with Logging {
+     path: String,
+     tableName: String,
+     isLocal: Boolean,
+     delimiter: Option[String]) extends RunnableCommand with Logging {
 
   private[hbase] def makeBulkLoadRDD(
                                       splitKeys: Array[HBaseRawType],
@@ -227,7 +227,7 @@ case class BulkLoadIntoTableCommand(
   }
 
   override def run(sqlContext: SQLContext) = {
-    val solvedRelation = sqlContext.catalog.lookupRelation(None, tableName, None)
+    val solvedRelation = sqlContext.catalog.lookupRelation(Seq(tableName))
     val relation: HBaseRelation = solvedRelation.asInstanceOf[Subquery]
       .child.asInstanceOf[LogicalRelation]
       .relation.asInstanceOf[HBaseRelation]
@@ -261,10 +261,10 @@ case class BulkLoadIntoTableCommand(
 
 @DeveloperApi
 case class ParallelizedBulkLoadIntoTableCommand(
-                                                 path: String,
-                                                 tableName: String,
-                                                 isLocal: Boolean,
-                                                 delimiter: Option[String]) extends RunnableCommand with SparkHadoopMapReduceUtil {
+    path: String,
+    tableName: String,
+    isLocal: Boolean,
+    delimiter: Option[String]) extends RunnableCommand with SparkHadoopMapReduceUtil {
 
   private[hbase] def makeBulkLoadRDD(
                                       splitKeys: Array[HBaseRawType],
@@ -383,7 +383,7 @@ case class ParallelizedBulkLoadIntoTableCommand(
   }
 
   override def run(sqlContext: SQLContext) = {
-    val solvedRelation = sqlContext.catalog.lookupRelation(None, tableName, None)
+    val solvedRelation = sqlContext.catalog.lookupRelation(Seq(tableName))
     val relation: HBaseRelation = solvedRelation.asInstanceOf[Subquery]
       .child.asInstanceOf[LogicalRelation]
       .relation.asInstanceOf[HBaseRelation]
