@@ -18,8 +18,8 @@
 package org.apache.spark.sql.hbase.util
 
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Row}
-import org.apache.spark.sql.types._
 import org.apache.spark.sql.hbase._
+import org.apache.spark.sql.types._
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -99,6 +99,8 @@ object HBaseKVHelper {
     for (i <- 0 until relation.nonKeyColumns.size) {
       val nkc = relation.nonKeyColumns(i)
       val bytes = if (values(nkc.ordinal) != null) {
+        // we should not use the same buffer in bulk-loading otherwise it will lead to corrupted
+        lineBuffer(nkc.ordinal) = BytesUtils.create(lineBuffer(nkc.ordinal).dataType)
         string2Bytes(values(nkc.ordinal), lineBuffer(nkc.ordinal))
       } else null
       valueBytes(i) = bytes
