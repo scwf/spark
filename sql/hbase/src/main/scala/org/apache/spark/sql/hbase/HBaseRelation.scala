@@ -17,6 +17,7 @@
 package org.apache.spark.sql.hbase
 
 import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.hbase._
 import org.apache.hadoop.hbase.HBaseConfiguration
 import org.apache.hadoop.hbase.client.{Get, HTable, Put, Result, Scan}
 import org.apache.hadoop.hbase.filter._
@@ -97,8 +98,16 @@ private[hbase] case class HBaseRelation(
   @transient lazy val keyColumns = allColumns.filter(_.isInstanceOf[KeyColumn])
     .asInstanceOf[Seq[KeyColumn]].sortBy(_.order)
 
+  // The sorting is by the ordering of the Column Family and Qualifier. This is for avoidance
+  // to sort cells per row, as needed in bulk loader
   @transient lazy val nonKeyColumns = allColumns.filter(_.isInstanceOf[NonKeyColumn])
-    .asInstanceOf[Seq[NonKeyColumn]]
+    .asInstanceOf[Seq[NonKeyColumn]].sortWith(
+      (a: NonKeyColumn, b: NonKeyColumn) => {
+        val empty = new HBaseRawType(0)
+        KeyValue.COMPARATOR.compareRows(new KeyValue(empty, a.familyRaw, a.qualifierRaw, empty),
+          new KeyValue(empty, b.familyRaw, b.qualifierRaw, empty)) < 0
+      }
+    )
 
   lazy val partitionKeys = keyColumns.map(col =>
     logicalRelation.output.find(_.name == col.sqlName).get)

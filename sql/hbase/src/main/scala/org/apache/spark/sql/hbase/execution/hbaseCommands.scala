@@ -283,51 +283,19 @@ case class ParallelizedBulkLoadIntoTableCommand(
     val bulkLoadRDD = shuffled.mapPartitions { iter =>
       // the rdd now already sort by key, to sort by value
       logDebug(s"after shuffle, sort by value, begin: ${System.currentTimeMillis()}")
-      val map = new java.util.TreeSet[KeyValue](KeyValue.COMPARATOR)
-      var preKV: (HBaseRawType, Array[HBaseRawType]) = null
-      var nowKV: (HBaseRawType, Array[HBaseRawType]) = null
+      var kv: (HBaseRawType, Array[HBaseRawType]) = null
       val ret = new ArrayBuffer[(HBaseRawType, KeyValue)]()
-      if (iter.hasNext) {
-        preKV = iter.next()
-        for (i <- 0 until preKV._2.size) {
+      while (iter.hasNext) {
+        kv = iter.next()
+        for (i <- 0 until kv._2.size) {
           val nkc = relation.nonKeyColumns(i)
-          if (preKV._2(i) != null) {
-            val kv = new KeyValue(preKV._1, nkc.familyRaw, nkc.qualifierRaw, preKV._2(i))
-            map.add(kv)
+          if (kv._2(i) != null) {
+            ret += ((kv._1, new KeyValue(kv._1, nkc.familyRaw, nkc.qualifierRaw, kv._2(i))))
           }
         }
-
-        while (iter.hasNext) {
-          nowKV = iter.next()
-          if (Bytes.equals(nowKV._1, preKV._1)) {
-            for (i <- 0 until nowKV._2.size) {
-              val nkc = relation.nonKeyColumns(i)
-              if (preKV._2(i) != null) {
-                val kv = new KeyValue(nowKV._1, nkc.familyRaw, nkc.qualifierRaw, nowKV._2(i))
-                map.add(kv)
-              }
-            }
-          } else {
-            ret ++= map.iterator().map((preKV._1, _))
-            preKV = nowKV
-            map.clear()
-            for (i <- 0 until preKV._2.size) {
-              val nkc = relation.nonKeyColumns(i)
-              if (preKV._2(i) != null) {
-                val kv = new KeyValue(nowKV._1, nkc.familyRaw, nkc.qualifierRaw, nowKV._2(i))
-                map.add(kv)
-              }
-            }
-          }
-        }
-        ret ++= map.iterator().map((preKV._1, _))
-        map.clear()
-        logDebug(s"after shuffle,sort by value,finish: ${System.currentTimeMillis()}")
-        ret.iterator
-      } else {
-        logDebug(s"after shuffle,sort by value,finish: ${System.currentTimeMillis()}")
-        Iterator.empty
       }
+      logDebug(s"after shuffle,sort by value,finish: ${System.currentTimeMillis()}")
+      ret.iterator
     }
 
     bulkLoadRDD.mapPartitionsWithIndex { (index, iter)  =>
