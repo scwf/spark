@@ -25,7 +25,6 @@ import org.apache.hadoop.hbase._
 import org.apache.hadoop.hbase.client.Put
 import org.apache.hadoop.hbase.io.ImmutableBytesWritable
 import org.apache.hadoop.hbase.mapreduce.{HFileOutputFormat2, LoadIncrementalHFiles}
-import org.apache.hadoop.hbase.util.Bytes
 import org.apache.hadoop.mapreduce.{Job, RecordWriter}
 
 import org.apache.spark.annotation.DeveloperApi
@@ -41,7 +40,6 @@ import org.apache.spark.sql.hbase.util.{HBaseKVHelper, Util}
 import org.apache.spark.sql.sources.LogicalRelation
 import org.apache.spark.{Logging, SerializableWritable, SparkEnv, TaskContext}
 
-import scala.collection.JavaConversions._
 import scala.collection.mutable.ArrayBuffer
 
 @DeveloperApi
@@ -57,11 +55,12 @@ case class AlterDropColCommand(tableName: String, columnName: String) extends Ru
 }
 
 @DeveloperApi
-case class AlterAddColCommand(tableName: String,
-                              colName: String,
-                              colType: String,
-                              colFamily: String,
-                              colQualifier: String) extends RunnableCommand {
+case class AlterAddColCommand(
+    tableName: String,
+    colName: String,
+    colType: String,
+    colFamily: String,
+    colQualifier: String) extends RunnableCommand {
 
   def run(sqlContext: SQLContext): Seq[Row] = {
     val context = sqlContext.asInstanceOf[HBaseSQLContext]
@@ -157,10 +156,10 @@ case class InsertValueIntoTableCommand(tableName: String, valueSeq: Seq[String])
 
 @DeveloperApi
 case class BulkLoadIntoTableCommand(
-     path: String,
-     tableName: String,
-     isLocal: Boolean,
-     delimiter: Option[String]) extends RunnableCommand with Logging {
+    path: String,
+    tableName: String,
+    isLocal: Boolean,
+    delimiter: Option[String]) extends RunnableCommand with Logging {
 
   private[hbase] def makeBulkLoadRDD(
        splitKeys: Array[HBaseRawType],
@@ -177,49 +176,19 @@ case class BulkLoadIntoTableCommand(
       // the rdd now already sort by key, to sort by value
       logDebug(s"after shuffle, sort by value, begin: ${System.currentTimeMillis()}")
       val map = new java.util.TreeSet[KeyValue](KeyValue.COMPARATOR)
-      var preKV: (HBaseRawType, Array[HBaseRawType]) = null
-      var nowKV: (HBaseRawType, Array[HBaseRawType]) = null
+      var kv: (HBaseRawType, Array[HBaseRawType]) = null
       val ret = new ArrayBuffer[(ImmutableBytesWritable, KeyValue)]()
-      if (iter.hasNext) {
-        preKV = iter.next()
-        for (i <- 0 until preKV._2.size) {
+      while (iter.hasNext) {
+        kv = iter.next()
+        for (i <- 0 until kv._2.size) {
           val nkc = relation.nonKeyColumns(i)
-          if (preKV._2(i) != null) {
-            val kv = new KeyValue(preKV._1, nkc.familyRaw, nkc.qualifierRaw, preKV._2(i))
-            map.add(kv)
+          if (kv._2(i) != null) {
+            ret += ((new ImmutableBytesWritable(kv._1), new KeyValue(kv._1, nkc.familyRaw, nkc.qualifierRaw, kv._2(i))))
           }
         }
-        while (iter.hasNext) {
-          nowKV = iter.next()
-          if (Bytes.equals(nowKV._1, preKV._1)) {
-            for (i <- 0 until nowKV._2.size) {
-              val nkc = relation.nonKeyColumns(i)
-              if (preKV._2(i) != null) {
-                val kv = new KeyValue(preKV._1, nkc.familyRaw, nkc.qualifierRaw, nowKV._2(i))
-                map.add(kv)
-              }
-            }
-          } else {
-            ret ++= map.iterator().map((new ImmutableBytesWritable(preKV._1), _))
-            preKV = nowKV
-            map.clear()
-            for (i <- 0 until preKV._2.size) {
-              val nkc = relation.nonKeyColumns(i)
-              if (preKV._2(i) != null) {
-                val kv = new KeyValue(nowKV._1, nkc.familyRaw, nkc.qualifierRaw, nowKV._2(i))
-                map.add(kv)
-              }
-            }
-          }
-        }
-        ret ++= map.iterator().map((new ImmutableBytesWritable(preKV._1), _))
-        map.clear()
-        logDebug(s"after shuffle,sort by value,finish: ${System.currentTimeMillis()}")
-        ret.iterator
-      } else {
-        logDebug(s"after shuffle,finish sort by value, finish: ${System.currentTimeMillis()}")
-        Iterator.empty
       }
+      logDebug(s"after shuffle,sort by value,finish: ${System.currentTimeMillis()}")
+      ret.iterator
     }
     logDebug(s"save as hfile, begin: ${System.currentTimeMillis()}")
     job.setOutputKeyClass(classOf[ImmutableBytesWritable])
@@ -325,7 +294,7 @@ case class ParallelizedBulkLoadIntoTableCommand(
       def writeShard(iterator: Iterator[(HBaseRawType, KeyValue)]) = {
         // Hadoop wants a 32-bit task attempt ID, so if ours is bigger than Int.MaxValue, roll it
         // around by taking a mod. We expect that no task will be attempted 2 billion times.
-        val attemptNumber = (context.taskAttemptId % Int.MaxValue).toInt
+        val attemptNumber = (context.attemptId % Int.MaxValue).toInt
         /* "reduce task" <split #> <attempt # = spark task #> */
         val attemptId = newTaskAttemptID(jobtrackerID, stageId, isMap = true, 0, 0)
         val hadoopContext = newTaskAttemptContext(config, attemptId)
