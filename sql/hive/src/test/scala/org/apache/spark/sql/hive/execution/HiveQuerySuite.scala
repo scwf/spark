@@ -508,6 +508,10 @@ class HiveQuerySuite extends HiveComparisonTest with BeforeAndAfter {
     assert(sql("select key from src having key > 490").collect().size < 100)
   }
 
+  test("Sfsd") {
+    sql("select value, count(*) from src group by value, 1").collect().foreach(println)
+  }
+
   test("Query Hive native command execution result") {
     val tableName = "test_native_commands"
 

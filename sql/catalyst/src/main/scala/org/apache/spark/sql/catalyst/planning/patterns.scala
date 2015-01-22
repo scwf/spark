@@ -153,13 +153,20 @@ object PartialAggregation {
             partialEvaluations(new TreeNodeRef(e)).finalEvaluation
 
           case e: Expression =>
+            val x = new TreeNodeRef(e)
+            val y = partialEvaluations.contains(new TreeNodeRef(e))
             // Should trim aliases around `GetField`s. These aliases are introduced while
             // resolving struct field accesses, because `GetField` is not a `NamedExpression`.
             // (Should we just turn `GetField` into a `NamedExpression`?)
             namedGroupingExpressions
-              .get(e.transform { case Alias(g: GetField, _) => g })
-              .map(_.toAttribute)
-              .getOrElse(e)
+              .get(
+                e.transform {
+                  case Alias(g: GetField, _) => g
+                })
+              .map { _ match {
+              case Alias(ll: Literal, _) => ll
+              case o => o.toAttribute}
+            }.getOrElse(e)
         }).asInstanceOf[Seq[NamedExpression]]
 
         val partialComputation =
