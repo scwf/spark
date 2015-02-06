@@ -72,16 +72,31 @@ class SQLQuerySuite extends QueryTest with BeforeAndAfterAll {
   }
 
   test("show tables") {
-    sql("show tables").collect().foreach(println)
-//    checkAnswer(
-//      sql("show tables"),
-//      Row("people") :: Row("animals") :: Nil)
-//
-//    dropTempTable("animals")
-//
-//    checkAnswer(
-//      sql("show tables"),
-//      Row("people") :: Nil)
+    checkAnswer(
+      sql("show tables"),
+      Seq(
+        "allNulls",
+        "arrayData",
+        "binaryData",
+        "complexData",
+        "decimalData",
+        "largeAndSmallInts",
+        "lowerCaseData",
+        "mapData",
+        "negativeData",
+        "nullInts",
+        "nullStrings",
+        "nullableRepeatedData",
+        "person",
+        "repeatedData",
+        "salary",
+        "tableName",
+        "testData2",
+        "testData3",
+        "testData",
+        "timestamps",
+        "upperCaseData",
+        "withEmptyParts").map(Row(_)))
   }
 
   test("SPARK-3176 Added Parser of SQL ABS()") {
