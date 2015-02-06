@@ -22,7 +22,8 @@ import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{DataFrame, SQLConf, SQLContext}
 import org.apache.spark.sql.catalyst.errors.TreeNodeException
-import org.apache.spark.sql.catalyst.expressions.{Row, Attribute}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Row, Attribute}
+import org.apache.spark.sql.types.StringType
 import org.apache.spark.sql.catalyst.plans.logical
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 
@@ -155,7 +156,6 @@ case class CacheTableCommand(
   override def output: Seq[Attribute] = Seq.empty
 }
 
-
 /**
  * :: DeveloperApi ::
  */
@@ -168,6 +168,20 @@ case class UncacheTableCommand(tableName: String) extends RunnableCommand {
   }
 
   override def output: Seq[Attribute] = Seq.empty
+}
+
+/**
+ * :: DeveloperApi ::
+ */
+@DeveloperApi
+case object ShowTablesCommand extends RunnableCommand {
+
+  override def output = Seq(AttributeReference("table_name", StringType, nullable = false)())
+
+  override def run(sqlContext: SQLContext) = {
+    sqlContext.catalog.getAllTables.map(Row(_))
+  }
+
 }
 
 /**

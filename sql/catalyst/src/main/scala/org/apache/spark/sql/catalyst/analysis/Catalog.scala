@@ -40,6 +40,8 @@ trait Catalog {
 
   def unregisterAllTables(): Unit
 
+  def getAllTables: Seq[String]
+
   protected def processTableIdentifier(tableIdentifier: Seq[String]): Seq[String] = {
     if (!caseSensitive) {
       tableIdentifier.map(_.toLowerCase)
@@ -80,6 +82,8 @@ class SimpleCatalog(val caseSensitive: Boolean) extends Catalog {
   override def unregisterAllTables() = {
     tables.clear()
   }
+
+  override def getAllTables = tables.keys.toSeq
 
   override def tableExists(tableIdentifier: Seq[String]): Boolean = {
     val tableIdent = processTableIdentifier(tableIdentifier)
@@ -152,6 +156,8 @@ trait OverrideCatalog extends Catalog {
   override def unregisterAllTables(): Unit = {
     overrides.clear()
   }
+
+  override def getAllTables = overrides.keys.map(_._2).toSeq
 }
 
 /**
@@ -181,4 +187,7 @@ object EmptyCatalog extends Catalog {
   }
 
   override def unregisterAllTables(): Unit = {}
+
+  override def getAllTables: Seq[String] = {}
+
 }

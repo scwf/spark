@@ -71,6 +71,19 @@ class SQLQuerySuite extends QueryTest with BeforeAndAfterAll {
       Row(1, 1) :: Nil)
   }
 
+  test("show tables") {
+    sql("show tables").collect().foreach(println)
+//    checkAnswer(
+//      sql("show tables"),
+//      Row("people") :: Row("animals") :: Nil)
+//
+//    dropTempTable("animals")
+//
+//    checkAnswer(
+//      sql("show tables"),
+//      Row("people") :: Nil)
+  }
+
   test("SPARK-3176 Added Parser of SQL ABS()") {
     checkAnswer(
       sql("SELECT ABS(-1.3)"),
