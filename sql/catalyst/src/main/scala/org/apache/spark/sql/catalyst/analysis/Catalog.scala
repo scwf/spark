@@ -157,7 +157,6 @@ trait OverrideCatalog extends Catalog {
     overrides.clear()
   }
 
-  override def getAllTables = overrides.keys.map(_._2).toSeq
 }
 
 /**
@@ -188,6 +187,6 @@ object EmptyCatalog extends Catalog {
 
   override def unregisterAllTables(): Unit = {}
 
-  override def getAllTables: Seq[String] = {}
+  override def getAllTables: Seq[String] = Seq.empty[String]
 
 }

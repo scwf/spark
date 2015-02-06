@@ -475,7 +475,7 @@ private[hive] class HiveMetastoreCatalog(hive: HiveContext) extends Catalog with
 
   override def unregisterAllTables() = {}
 
-  override def getAllTables = client.getAllTables
+  override def getAllTables = client.getAllTables.toIterator.toSeq
 }
 
 /**
