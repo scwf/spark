@@ -28,7 +28,7 @@ import akka.pattern.ask
 import akka.remote.{DisassociatedEvent, RemotingLifecycleEvent}
 
 import org.apache.spark.{ExecutorAllocationClient, Logging, SparkEnv, SparkException, TaskState}
-import org.apache.spark.scheduler.{SchedulerBackend, SlaveLost, TaskDescription, TaskSchedulerImpl, WorkerOffer}
+import org.apache.spark.scheduler._
 import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages._
 import org.apache.spark.util.{ActorLogReceive, SerializableBuffer, AkkaUtils, Utils}
 
@@ -66,6 +66,8 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val actorSyste
   // Number of executors requested from the cluster manager that have not registered yet
   private var numPendingExecutors = 0
 
+  private val listenerBus = scheduler.sc.listenerBus
+
   // Executors we have requested the cluster manager to kill that have not died yet
   private val executorsPendingToRemove = new HashSet[String]
 
@@ -84,7 +86,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val actorSyste
     }
 
     def receiveWithLogging = {
-      case RegisterExecutor(executorId, hostPort, cores) =>
+      case RegisterExecutor(executorId, hostPort, cores, logUrls) =>
         Utils.checkHostPort(hostPort, "Host port expected " + hostPort)
         if (executorDataMap.contains(executorId)) {
           sender ! RegisterExecutorFailed("Duplicate executor ID: " + executorId)
@@ -96,7 +98,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val actorSyste
           totalCoreCount.addAndGet(cores)
           totalRegisteredExecutors.addAndGet(1)
           val (host, _) = Utils.parseHostPort(hostPort)
-          val data = new ExecutorData(sender, sender.path.address, host, cores, cores)
+          val data = new ExecutorData(sender, sender.path.address, host, cores, cores, logUrls)
           // This must be synchronized because variables mutated
           // in this block are read when requesting executors
           CoarseGrainedSchedulerBackend.this.synchronized {
@@ -106,6 +108,8 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val actorSyste
               logDebug(s"Decremented number of pending executors ($numPendingExecutors left)")
             }
           }
+          listenerBus.post(
+            SparkListenerExecutorAdded(System.currentTimeMillis(), executorId, data))
           makeOffers()
         }
 
@@ -213,6 +217,8 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val actorSyste
           totalCoreCount.addAndGet(-executorInfo.totalCores)
           totalRegisteredExecutors.addAndGet(-1)
           scheduler.executorLost(executorId, SlaveLost(reason))
+          listenerBus.post(
+            SparkListenerExecutorRemoved(System.currentTimeMillis(), executorId, reason))
         case None => logError(s"Asked to remove non-existent executor $executorId")
       }
     }

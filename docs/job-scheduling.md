@@ -77,11 +77,10 @@ scheduling while sharing cluster resources efficiently.
 ### Configuration and Setup
 
 All configurations used by this feature live under the `spark.dynamicAllocation.*` namespace.
-To enable this feature, your application must set `spark.dynamicAllocation.enabled` to `true` and
-provide lower and upper bounds for the number of executors through
-`spark.dynamicAllocation.minExecutors` and `spark.dynamicAllocation.maxExecutors`. Other relevant
-configurations are described on the [configurations page](configuration.html#dynamic-allocation)
-and in the subsequent sections in detail.
+To enable this feature, your application must set `spark.dynamicAllocation.enabled` to `true`.
+Other relevant configurations are described on the
+[configurations page](configuration.html#dynamic-allocation) and in the subsequent sections in
+detail.
 
 Additionally, your application must use an external shuffle service. The purpose of the service is
 to preserve the shuffle files written by executors so the executors can be safely removed (more
@@ -98,7 +97,7 @@ pre-packaged distribution.
 2. Add this jar to the classpath of all `NodeManager`s in your cluster.
 3. In the `yarn-site.xml` on each node, add `spark_shuffle` to `yarn.nodemanager.aux-services`,
 then set `yarn.nodemanager.aux-services.spark_shuffle.class` to
-`org.apache.spark.yarn.network.YarnShuffleService`. Additionally, set all relevant
+`org.apache.spark.network.yarn.YarnShuffleService`. Additionally, set all relevant
 `spark.shuffle.service.*` [configurations](configuration.html).
 4. Restart all `NodeManager`s in your cluster.
 

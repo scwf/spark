@@ -31,7 +31,7 @@ import org.apache.spark.sql.sources.{PartitionFiles, CatalystScan, BaseRelation,
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.{SerializableWritable, Logging}
-import org.apache.spark.sql.catalyst.types._
+import org.apache.spark.sql.types._
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.hive.{HiveShim, HadoopTableReader, HiveMetastoreTypes}
 import org.apache.spark.rdd.{HadoopRDD, RDD}

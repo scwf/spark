@@ -15,6 +15,8 @@
  * limitations under the License.
  */
 
+import java.io.File
+
 import scala.util.Properties
 import scala.collection.JavaConversions._
 
@@ -23,7 +25,7 @@ import sbt.Classpaths.publishTask
 import sbt.Keys._
 import sbtunidoc.Plugin.genjavadocSettings
 import sbtunidoc.Plugin.UnidocKeys.unidocGenjavadocVersion
-import com.typesafe.sbt.pom.{PomBuild, SbtPomKeys}
+import com.typesafe.sbt.pom.{loadEffectivePom, PomBuild, SbtPomKeys}
 import net.virtualvoid.sbt.graph.Plugin.graphSettings
 
 object BuildCommons {
@@ -42,8 +44,9 @@ object BuildCommons {
     sparkKinesisAsl) = Seq("yarn", "yarn-stable", "java8-tests", "ganglia-lgpl",
     "kinesis-asl").map(ProjectRef(buildLocation, _))
 
-  val assemblyProjects@Seq(assembly, examples, networkYarn) =
-    Seq("assembly", "examples", "network-yarn").map(ProjectRef(buildLocation, _))
+  val assemblyProjects@Seq(assembly, examples, networkYarn, streamingKafkaAssembly) =
+    Seq("assembly", "examples", "network-yarn", "streaming-kafka-assembly")
+      .map(ProjectRef(buildLocation, _))
 
   val tools = ProjectRef(buildLocation, "tools")
   // Root project.
@@ -153,7 +156,7 @@ object SparkBuild extends PomBuild {
 
   // TODO: Add Sql to mima checks
   allProjects.filterNot(x => Seq(spark, sql, hive, hiveThriftServer, catalyst, repl,
-    streamingFlumeSink, networkCommon, networkShuffle, networkYarn).contains(x)).foreach {
+    networkCommon, networkShuffle, networkYarn).contains(x)).foreach {
       x => enable(MimaBuild.mimaSettings(sparkHome, x))(x)
     }
 
@@ -241,10 +244,11 @@ object SQL {
         |import org.apache.spark.sql.catalyst.expressions._
         |import org.apache.spark.sql.catalyst.plans.logical._
         |import org.apache.spark.sql.catalyst.rules._
-        |import org.apache.spark.sql.catalyst.types._
         |import org.apache.spark.sql.catalyst.util._
+        |import org.apache.spark.sql.Dsl._
         |import org.apache.spark.sql.execution
         |import org.apache.spark.sql.test.TestSQLContext._
+        |import org.apache.spark.sql.types._
         |import org.apache.spark.sql.parquet.ParquetTestData""".stripMargin,
     cleanupCommands in console := "sparkContext.stop()"
   )
@@ -271,11 +275,12 @@ object Hive {
         |import org.apache.spark.sql.catalyst.expressions._
         |import org.apache.spark.sql.catalyst.plans.logical._
         |import org.apache.spark.sql.catalyst.rules._
-        |import org.apache.spark.sql.catalyst.types._
         |import org.apache.spark.sql.catalyst.util._
+        |import org.apache.spark.sql.Dsl._
         |import org.apache.spark.sql.execution
         |import org.apache.spark.sql.hive._
         |import org.apache.spark.sql.hive.test.TestHive._
+        |import org.apache.spark.sql.types._
         |import org.apache.spark.sql.parquet.ParquetTestData""".stripMargin,
     cleanupCommands in console := "sparkContext.stop()",
     // Some of our log4j jars make it impossible to submit jobs from this JVM to Hive Map/Reduce
@@ -290,15 +295,20 @@ object Assembly {
   import sbtassembly.Plugin._
   import AssemblyKeys._
 
+  val hadoopVersion = taskKey[String]("The version of hadoop that spark is compiled against.")
+
   lazy val settings = assemblySettings ++ Seq(
     test in assembly := {},
-    jarName in assembly <<= (version, moduleName) map { (v, mName) =>
-      if (mName.contains("network-yarn")) {
-        // This must match the same name used in maven (see network/yarn/pom.xml)
-        "spark-" + v + "-yarn-shuffle.jar"
+    hadoopVersion := {
+      sys.props.get("hadoop.version")
+        .getOrElse(SbtPomKeys.effectivePom.value.getProperties.get("hadoop.version").asInstanceOf[String])
+    },
+    jarName in assembly <<= (version, moduleName, hadoopVersion) map { (v, mName, hv) =>
+      if (mName.contains("streaming-kafka-assembly")) {
+        // This must match the same name used in maven (see external/kafka-assembly/pom.xml)
+        s"${mName}-${v}.jar"
       } else {
-        mName + "-" + v + "-hadoop" +
-          Option(System.getProperty("hadoop.version")).getOrElse("1.0.4") + ".jar"
+        s"${mName}-${v}-hadoop${hv}.jar"
       }
     },
     mergeStrategy in assembly := {
@@ -311,7 +321,6 @@ object Assembly {
       case _                                                   => MergeStrategy.first
     }
   )
-
 }
 
 object Unidoc {
@@ -366,7 +375,10 @@ object Unidoc {
       ),
       "-group", "Spark SQL", packageList("sql.api.java", "sql.api.java.types", "sql.hive.api.java"),
       "-noqualifier", "java.lang"
-    )
+    ),
+
+    // Group similar methods together based on the @group annotation.
+    scalacOptions in (ScalaUnidoc, unidoc) ++= Seq("-groups")
   )
 }
 
