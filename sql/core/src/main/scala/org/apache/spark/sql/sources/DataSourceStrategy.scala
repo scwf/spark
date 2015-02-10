@@ -27,11 +27,6 @@ import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.{Row, Strategy, execution}
 
 /**
- * A Partition for external data source such as parquet, orc, which contains a set of files.
- */
-private[sql] case class PartitionFiles(partitionValues: Map[String, Any], files: Seq[FileStatus])
-
-/**
  * A Strategy for planning scans over data sources defined using the sources API.
  */
 private[sql] object DataSourceStrategy extends Strategy {
