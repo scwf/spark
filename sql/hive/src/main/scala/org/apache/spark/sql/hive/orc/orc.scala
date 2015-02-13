@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hive.orc
 
+import java.io.IOException
 import java.util.{Locale, Properties}
 import scala.collection.JavaConversions._
 
@@ -148,7 +149,7 @@ case class OrcRelation
     HiveMetastoreTypes.toDataType(schema).asInstanceOf[StructType]
   }
 
-  override def schema = {
+  lazy val schema = {
     val fs = FileSystem.get(new java.net.URI(path), sparkContext.hadoopConfiguration)
     val childrenOfPath = fs.listStatus(new Path(path))
       .filterNot(_.getPath.getName.startsWith("_"))
@@ -161,7 +162,6 @@ case class OrcRelation
   override def buildScan(output: Seq[Attribute], predicates: Seq[Expression]): RDD[Row] = {
     val sc = sparkContext
     val conf: Configuration = sc.hadoopConfiguration
-    val fs = FileSystem.get(new java.net.URI(path), conf)
 
     val setInputPathsFunc: Option[JobConf => Unit] =
        Some((jobConf: JobConf) => FileInputFormat.setInputPaths(jobConf, path))
@@ -207,7 +207,7 @@ case class OrcRelation
    */
   private def addColumnIds(output: Seq[Attribute], relationOutput: Seq[Attribute], conf: Configuration) {
     val names = output.map(_.name)
-    val fieldIdMap = relationOutput.map(_.name).zipWithIndex.toMap
+    val fieldIdMap = relationOutput.map(_.name.toLowerCase(Locale.ENGLISH)).zipWithIndex.toMap
     val ids = output.map { att =>
       val realName = att.name.toLowerCase(Locale.ENGLISH)
       fieldIdMap.getOrElse(realName, -1)
@@ -236,11 +236,24 @@ case class OrcRelation
     job.setOutputCommitter(classOf[FileOutputCommitter])
     FileOutputFormat.setOutputPath(job, SparkHadoopWriter.createPathFromString(path, job))
 
+    val conf = new Configuration(job)
+    val destinationPath = new Path(path)
+    if (overwrite) {
+      try {
+        destinationPath.getFileSystem(conf).delete(destinationPath, true)
+      } catch {
+        case e: IOException =>
+          throw new IOException(
+            s"Unable to clear output directory ${destinationPath.toString} prior" +
+              s" to writing to Orc file:\n${e.toString}")
+      }
+    }
+
     val taskIdOffset = if (overwrite) {
       1
     } else {
       FileSystemHelper.findMaxTaskId(
-        FileOutputFormat.getOutputPath(job).toString, new Configuration(job)) + 1
+        FileOutputFormat.getOutputPath(job).toString, conf) + 1
     }
 
     val writer = new OrcHadoopWriter(job)
@@ -251,7 +264,7 @@ case class OrcRelation
     // this function is executed on executor side
     def writeShard(context: TaskContext, iterator: Iterator[Row]): Unit = {
       val nullWritable = NullWritable.get()
-      val taskAttemptId = (context.taskAttemptId % Int.MaxValue).toInt + taskIdOffset
+      val taskAttemptId = (context.taskAttemptId % Int.MaxValue).toInt
 
       val serializer = {
         val prop: Properties = new Properties
@@ -269,7 +282,7 @@ case class OrcRelation
       val wrappers = fieldOIs.map(wrapperFor)
       val outputData = new Array[Any](fieldOIs.length)
 
-      writer.setup(context.stageId, context.partitionId, taskAttemptId)
+      writer.setup(context.stageId, context.partitionId + taskIdOffset, taskAttemptId)
       writer.open()
       var row: Row = null
       var i = 0
@@ -314,8 +327,8 @@ private[orc] object FileSystemHelper {
    */
   def findMaxTaskId(pathStr: String, conf: Configuration): Int = {
     val files = FileSystemHelper.listFiles(pathStr, conf)
-    // filename pattern is part-r-<int>.Orc
-    val nameP = new scala.util.matching.Regex("""part-r-(\d{1,}).Orc""", "taskid")
+    // filename pattern is part-<int>
+    val nameP = new scala.util.matching.Regex("""part-(\d{1,})""", "taskid")
     val hiddenFileP = new scala.util.matching.Regex("_.*")
     files.map(_.getName).map {
       case nameP(taskid) => taskid.toInt
