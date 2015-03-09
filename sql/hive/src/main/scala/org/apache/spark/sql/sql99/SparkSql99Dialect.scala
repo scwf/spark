@@ -15,26 +15,27 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.dialect
+package org.apache.spark.sql.sql99
 
-import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.SparkSQLParser
+import org.apache.spark.sql.dialect.Dialect
 import org.apache.spark.sql.sources.DDLParser
-import org.apache.spark.sql.{SparkSQLParser, catalyst}
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 
-object SparkSqlDialect extends Dialect {
+object SparkSql99Dialect extends Dialect {
+
+  protected[sql] val sqlParser = {
+    val fallback = new Sql99Parser
+    new SparkSQLParser(fallback(_))
+  }
 
   protected[sql] val ddlParser = new DDLParser(sqlParser.apply(_))
 
-  protected[sql] val sqlParser = {
-   val fallback = new catalyst.SqlParser
-   new SparkSQLParser(fallback(_))
-  }
-
   override def parse(sql: String): LogicalPlan = {
-   ddlParser(sql, false).getOrElse(sqlParser(sql))
+    ddlParser(sql, false).getOrElse(sqlParser(sql))
   }
 
-  val name = "sql"
+  val name = "sql99"
 
-  override def description = "spark sql native parser"
+  override def description = "spark sql99 parser"
 }
