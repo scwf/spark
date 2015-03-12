@@ -21,7 +21,7 @@ import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.dialect.Dialect
 
 object HiveQlDialect extends Dialect {
-  val name = "hiveql"
+  val name = "hql"
 
   override def description = "Hive query language dialect"
 

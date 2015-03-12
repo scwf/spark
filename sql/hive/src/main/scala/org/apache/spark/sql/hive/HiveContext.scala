@@ -41,6 +41,7 @@ import org.apache.spark.sql.execution.{ExecutedCommand, ExtractPythonUdfs, Query
 import org.apache.spark.sql.hive.execution.{DescribeHiveTableCommand, HiveNativeCommand}
 import org.apache.spark.sql.sources.{DDLParser, DataSourceStrategy}
 import org.apache.spark.sql.types._
+import org.apache.spark.sql.sql99.SparkSql99Dialect
 
 /**
  * An instance of the Spark SQL execution engine that integrates with data stored in Hive.
@@ -55,7 +56,8 @@ class HiveContext(sc: SparkContext) extends SQLContext(sc) {
 
   // register hiveql dialect to dialect manager
   dialectManager.registerDialect(HiveQlDialect.name, HiveQlDialect)
-
+  dialectManager.registerDialect(SparkSql99Dialect.name, SparkSql99Dialect)
+  dialectManager.registerDialect(HiveQlDialect.name, HiveQlDialect)
   /**
    * When true, enables an experimental feature where metastore tables that use the parquet SerDe
    * are automatically converted to use the Spark SQL parquet table scan, instead of the Hive
