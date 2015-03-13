@@ -15,8 +15,8 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.hive.hiveql
+package org.apache.spark.sql.catalyst.huawei
 
-class sql99LogicalPlans {
+class optimizerRules {
 
 }

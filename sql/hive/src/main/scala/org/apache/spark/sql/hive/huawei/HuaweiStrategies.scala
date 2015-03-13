@@ -15,8 +15,27 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.sql99
+package org.apache.spark.sql.hive.huawei
 
-class sql99Strategies {
+import org.apache.spark.sql._
+import org.apache.spark.sql.catalyst.huawei
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.execution._
+import org.apache.spark.sql.hive.HiveContext
+
+
+private[sql] trait HuaweiStrategies {
+  // Possibly being too clever with types here... or not clever enough.
+  self: SQLContext#SparkPlanner =>
+
+  val hiveContext: HiveContext
+
+  object WindowFunctionStrategy extends Strategy {
+    def apply(plan: LogicalPlan): Seq[SparkPlan] = plan match {
+      case huawei.WindowFunction(partition, compute, other, child) =>
+        execution.WindowFunction(partition, compute, other, planLater(child)) :: Nil
+      case _ => Nil
+    }
+  }
 
 }

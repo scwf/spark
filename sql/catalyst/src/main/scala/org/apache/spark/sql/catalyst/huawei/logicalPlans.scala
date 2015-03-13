@@ -15,8 +15,16 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.sql99
+package org.apache.spark.sql.catalyst.huawei
 
-class sql99AnalyzerRules {
+import org.apache.spark.sql.catalyst.expressions._
+import org.apache.spark.sql.catalyst.plans.logical._
 
+case class WindowFunction(
+    partitionExpressions: Seq[Expression],
+    computeExpressions: Seq[WindowAttribute],
+    otherExpressions: Seq[NamedExpression],
+    child: LogicalPlan) extends UnaryNode {
+
+  override def output = (computeExpressions ++ otherExpressions).map(_.toAttribute)
 }

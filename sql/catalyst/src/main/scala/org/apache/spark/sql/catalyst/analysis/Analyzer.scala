@@ -24,6 +24,7 @@ import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules._
 import org.apache.spark.sql.types._
+import org.apache.spark.sql.catalyst.huawei.WindowAttributes
 
 /**
  * A trivial [[Analyzer]] with an [[EmptyCatalog]] and [[EmptyFunctionRegistry]]. Used for testing
@@ -60,6 +61,7 @@ class Analyzer(catalog: Catalog,
       ResolveSortReferences ::
       ImplicitGenerate ::
       ResolveFunctions ::
+      WindowAttributes ::
       GlobalAggregates ::
       UnresolvedHavingClauseAttributes ::
       TrimGroupingAliases ::
@@ -381,7 +383,7 @@ class Analyzer(catalog: Catalog,
 
     def containsAggregates(exprs: Seq[Expression]): Boolean = {
       exprs.foreach(_.foreach {
-        case agg: AggregateExpression => return true
+        case agg: AggregateExpression if agg.windowSpec == null => return true
         case _ =>
       })
       false

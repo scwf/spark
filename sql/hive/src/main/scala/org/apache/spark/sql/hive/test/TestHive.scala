@@ -39,6 +39,7 @@ import org.apache.spark.{SparkConf, SparkContext}
 
 import scala.collection.mutable
 import scala.language.implicitConversions
+import org.apache.spark.sql.hive.huawei.HiveQLParser
 
 /* Implicit conversions */
 import scala.collection.JavaConversions._
@@ -152,7 +153,7 @@ class TestHiveContext(sc: SparkContext) extends HiveContext(sc) {
   val describedTable = "DESCRIBE (\\w+)".r
 
   protected[hive] class HiveQLQueryExecution(hql: String)
-    extends this.QueryExecution(HiveQl.parseSql(hql)) {
+    extends this.QueryExecution(HiveQLParser.parseSql(hql)) {
     def hiveExec() = runSqlHive(hql)
     override def toString = hql + "\n" + super.toString
   }

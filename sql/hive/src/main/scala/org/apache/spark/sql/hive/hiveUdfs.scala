@@ -190,7 +190,7 @@ private[hive] case class HiveGenericUdaf(
     children: Seq[Expression]) extends AggregateExpression
   with HiveInspectors {
 
-  type UDFType = AbstractGenericUDAFResolver
+  type UDFType = GenericUDAFResolver
 
   @transient
   protected lazy val resolver: AbstractGenericUDAFResolver = funcWrapper.createFunction()
@@ -364,9 +364,8 @@ private[hive] case class HiveUdafFunction(
 
   private val returnInspector = function.init(GenericUDAFEvaluator.Mode.COMPLETE, inspectors)
 
-  // Cast required to avoid type inference selecting a deprecated Hive API.
-  private val buffer =
-    function.getNewAggregationBuffer.asInstanceOf[GenericUDAFEvaluator.AbstractAggregationBuffer]
+  // remove cast to support row_number,rank etc.
+  private val buffer = function.getNewAggregationBuffer
 
   override def eval(input: Row): Any = unwrap(function.evaluate(buffer), returnInspector)
 
@@ -377,8 +376,12 @@ private[hive] case class HiveUdafFunction(
   protected lazy val cached = new Array[AnyRef](exprs.length)
   
   def update(input: Row): Unit = {
-    val inputs = inputProjection(input)
-    function.iterate(buffer, wrap(inputs, inspectors, cached))
+    var i = -1
+    val inputs = inputProjection(input).toSeq.map(data => {
+      i += 1
+      wrap(data, inspectors(i))
+    }).toArray
+    function.iterate(buffer, inputs)
   }
 }
 

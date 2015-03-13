@@ -23,15 +23,22 @@ import org.apache.spark.sql.types._
 import org.apache.spark.sql.catalyst.trees
 import org.apache.spark.sql.catalyst.errors.TreeNodeException
 import org.apache.spark.util.collection.OpenHashSet
+import org.apache.spark.sql.catalyst.huawei.WindowSpec
 
-abstract class AggregateExpression extends Expression {
+abstract class AggregateExpression extends Expression with  Serializable {
   self: Product =>
 
+  var windowSpec: WindowSpec = null
   /**
    * Creates a new instance that can be used to compute this aggregate expression for a group
    * of input rows/
    */
   def newInstance(): AggregateFunction
+
+  override def canEqual(other: Any): Boolean = other match {
+    case that: AggregateExpression => this.windowSpec == that.windowSpec
+    case _ => false
+  }
 
   /**
    * [[AggregateExpression.eval]] should never be invoked because [[AggregateExpression]]'s are

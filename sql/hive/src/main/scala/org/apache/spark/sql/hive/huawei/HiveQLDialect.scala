@@ -15,10 +15,11 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.hive.hiveql
+package org.apache.spark.sql.hive.huawei
 
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.dialect.Dialect
+import org.apache.spark.sql.sources.DDLParser
 
 /**
   * A dialect for hive ql
@@ -28,7 +29,11 @@ object HiveQLDialect extends Dialect {
 
   override def description = "Hive query language dialect"
 
+  @transient
+  protected[sql] val ddlParserWithHiveQL = new DDLParser(HiveQLParser.parseSql(_))
+
   override def parse(sql: String): LogicalPlan = {
-    HiveQLParser.parseSql(sql)
+    val ddlPlan = ddlParserWithHiveQL(sql, exceptionOnError = false)
+    ddlPlan.getOrElse(HiveQLParser.parseSql(sql))
   }
 }

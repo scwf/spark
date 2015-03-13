@@ -41,8 +41,7 @@ import org.apache.spark.sql.execution.{ExecutedCommand, ExtractPythonUdfs, Query
 import org.apache.spark.sql.hive.execution.{DescribeHiveTableCommand, HiveNativeCommand}
 import org.apache.spark.sql.sources.{DDLParser, DataSourceStrategy}
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.sql99.SparkSql99Dialect
-import org.apache.spark.sql.hive.hiveql.HiveQLDialect
+import org.apache.spark.sql.hive.huawei.{HuaweiStrategies, Sql99Dialect, HiveQLDialect}
 
 /**
  * An instance of the Spark SQL execution engine that integrates with data stored in Hive.
@@ -57,7 +56,7 @@ class HiveContext(sc: SparkContext) extends SQLContext(sc) {
 
   // register hiveql dialect to dialect manager
   dialectManager.registerDialect(HiveQlDialect.name, HiveQlDialect)
-  dialectManager.registerDialect(SparkSql99Dialect.name, SparkSql99Dialect)
+  dialectManager.registerDialect(Sql99Dialect.name, Sql99Dialect)
   dialectManager.registerDialect(HiveQLDialect.name, HiveQLDialect)
   /**
    * When true, enables an experimental feature where metastore tables that use the parquet SerDe
@@ -333,7 +332,7 @@ class HiveContext(sc: SparkContext) extends SQLContext(sc) {
   }
 
   @transient
-  private val hivePlanner = new SparkPlanner with HiveStrategies {
+  private val hivePlanner = new SparkPlanner with HiveStrategies with HuaweiStrategies{
     val hiveContext = self
 
     override def strategies: Seq[Strategy] = experimental.extraStrategies ++ Seq(
@@ -352,6 +351,7 @@ class HiveContext(sc: SparkContext) extends SQLContext(sc) {
       LeftSemiJoin,
       HashJoin,
       BasicOperators,
+      WindowFunctionStrategy,
       CartesianProduct,
       BroadcastNestedLoopJoin
     )
@@ -424,6 +424,7 @@ private object HiveContext {
       }.toSeq.sorted.mkString("{", ",", "}")
     case (null, _) => "NULL"
     case (d: Int, DateType) => new DateWritable(d).toString
+    case (o, ArrayType(typ, _)) => toHiveStructString(o, typ)
     case (t: Timestamp, TimestampType) => new TimestampWritable(t).toString
     case (bin: Array[Byte], BinaryType) => new String(bin, "UTF-8")
     case (decimal: java.math.BigDecimal, DecimalType()) =>

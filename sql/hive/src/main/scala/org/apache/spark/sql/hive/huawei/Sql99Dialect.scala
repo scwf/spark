@@ -15,8 +15,31 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.hive.hiveql
+package org.apache.spark.sql.hive.huawei
 
-class hiveqlSparkPlans {
+import org.apache.spark.sql.dialect.Dialect
+import org.apache.spark.sql.SparkSQLParser
+import org.apache.spark.sql.sources.DDLParser
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 
+object Sql99Dialect extends Dialect {
+
+  protected[sql] val sqlParser = {
+    val fallback = new Sql99Parser
+    new SparkSQLParser(fallback(_))
+  }
+
+  @transient
+  protected[sql] val ddlParserWithSQL99 = new DDLParser(sqlParser(_))
+
+  protected[sql] val ddlParser = new DDLParser(sqlParser.apply(_))
+
+  override def parse(sql: String): LogicalPlan = {
+    val ddlPlan = ddlParserWithSQL99(sql, exceptionOnError = false)
+    ddlPlan.getOrElse(sqlParser(sql))
+  }
+
+  val name = "sql99"
+
+  override def description = "spark sql99 parser"
 }
