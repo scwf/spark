@@ -981,6 +981,14 @@ https://cwiki.apache.org/confluence/display/Hive/Enhanced+Aggregation%2C+Cube%2C
       query
 
     case Token(destinationToken(),
+    Token("TOK_LOCAL_DIR", path :: formats) :: Nil) =>
+      WriteToDirectory(BaseSemanticAnalyzer.unescapeSQLString(path.getText), query, true, node)
+
+    case Token(destinationToken(),
+    Token("TOK_DIR", path :: formats) :: Nil) =>
+      WriteToDirectory(BaseSemanticAnalyzer.unescapeSQLString(path.getText), query, false, node)
+
+    case Token(destinationToken(),
     Token("TOK_TAB",
     tableArgs) :: Nil) =>
       val Some(tableNameParts) :: partitionClause :: Nil =

@@ -41,7 +41,7 @@ import org.apache.spark.sql.execution.{ExecutedCommand, ExtractPythonUdfs, Query
 import org.apache.spark.sql.hive.execution.{DescribeHiveTableCommand, HiveNativeCommand}
 import org.apache.spark.sql.sources.{DDLParser, DataSourceStrategy}
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.hive.huawei.{HuaweiStrategies, Sql99Dialect, HiveQLDialect}
+import org.apache.spark.sql.hive.huawei.{WriteToDirs, HuaweiStrategies, Sql99Dialect, HiveQLDialect}
 
 /**
  * An instance of the Spark SQL execution engine that integrates with data stored in Hive.
@@ -257,6 +257,7 @@ class HiveContext(sc: SparkContext) extends SQLContext(sc) {
   override protected[sql] lazy val analyzer =
     new Analyzer(catalog, functionRegistry, caseSensitive = false) {
       override val extendedResolutionRules =
+        new WriteToDirs(hiveconf) ::
         catalog.ParquetConversions ::
         catalog.CreateTables ::
         catalog.PreInsertionCasts ::
@@ -351,7 +352,7 @@ class HiveContext(sc: SparkContext) extends SQLContext(sc) {
       LeftSemiJoin,
       HashJoin,
       BasicOperators,
-      WindowFunctionStrategy,
+      HuaweiStrategy,
       CartesianProduct,
       BroadcastNestedLoopJoin
     )

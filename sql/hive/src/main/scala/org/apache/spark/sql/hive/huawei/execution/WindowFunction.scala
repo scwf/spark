@@ -29,7 +29,6 @@ import org.apache.spark.util.collection.CompactBuffer
 import org.apache.spark.sql.execution.{Sort, UnaryNode, SparkPlan}
 import org.apache.spark.sql.catalyst.huawei.{ValueFrame, RowsFrame, WindowAttribute}
 
-
 /**
  * :: DeveloperApi ::
  * Groups input data by `partitionExpressions` and computes the `computeExpressions` for each
@@ -167,8 +166,8 @@ case class WindowFunction(
   }
 
   private[this] def valueWindowFunction(
-      base: AggregateExpression,
-      rows: CompactBuffer[Row]): CompactBuffer[Any] = {
+                                         base: AggregateExpression,
+                                         rows: CompactBuffer[Row]): CompactBuffer[Any] = {
 
     val windowFrame = base.windowSpec.windowFrame.get
 
@@ -335,3 +334,4 @@ case class WindowFunction(
     }
   }
 }
+

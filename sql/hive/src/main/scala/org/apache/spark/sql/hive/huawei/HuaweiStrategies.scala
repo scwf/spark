@@ -17,6 +17,8 @@
 
 package org.apache.spark.sql.hive.huawei
 
+import org.apache.hadoop.hive.ql.plan.TableDesc
+
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.huawei
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
@@ -30,10 +32,12 @@ private[sql] trait HuaweiStrategies {
 
   val hiveContext: HiveContext
 
-  object WindowFunctionStrategy extends Strategy {
+  object HuaweiStrategy extends Strategy {
     def apply(plan: LogicalPlan): Seq[SparkPlan] = plan match {
       case huawei.WindowFunction(partition, compute, other, child) =>
         execution.WindowFunction(partition, compute, other, planLater(child)) :: Nil
+      case huawei.WriteToDirectory(path, child, isLocal, desc: TableDesc) =>
+        execution.WriteToDirectory(path, planLater(child), isLocal, desc) :: Nil
       case _ => Nil
     }
   }

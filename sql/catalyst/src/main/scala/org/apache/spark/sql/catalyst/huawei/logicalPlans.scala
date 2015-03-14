@@ -28,3 +28,19 @@ case class WindowFunction(
 
   override def output = (computeExpressions ++ otherExpressions).map(_.toAttribute)
 }
+
+/**
+ * Logical node for "INSERT OVERWRITE [LOCAL] DIRECTORY directory
+ * [ROW FORMAT row_format] STORED AS file_format SELECT ... FROM ..."
+ * @param path the target path to write data.
+ * @param child the child logical plan.
+ * @param isLocal whether to write data to local file system.
+ * @param desc describe the write property such as file format.
+ */
+case class WriteToDirectory[T](
+    path: String,
+    child: LogicalPlan,
+    isLocal: Boolean,
+    desc: T) extends UnaryNode {
+  override def output = Seq.empty[Attribute]
+}
