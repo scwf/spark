@@ -24,7 +24,8 @@ import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.plans._
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.catalyst.AbstractSparkSQLParser
+import org.apache.spark.sql.catalyst.{SqlLexical, AbstractSparkSQLParser}
+import org.apache.spark.sql.catalyst.huawei.Concat
 
 /**
  * A very simple SQL parser.  Based loosely on:
@@ -37,6 +38,11 @@ import org.apache.spark.sql.catalyst.AbstractSparkSQLParser
  * for a SQL like language should checkout the HiveQL support in the sql/hive sub-project.
  */
 class Sql99Parser extends AbstractSparkSQLParser {
+
+  // Set the keywords as empty by default, will change that later.
+  override val lexical = new SqlLexical {
+    delimiters += ("||")
+  }
 
   def parseExpression(input: String): Expression = {
     // Initialize the Keywords.
@@ -61,6 +67,7 @@ class Sql99Parser extends AbstractSparkSQLParser {
   protected val CASE = Keyword("CASE")
   protected val CAST = Keyword("CAST")
   protected val COALESCE = Keyword("COALESCE")
+  protected val CONCAT = Keyword("CONCAT")
   protected val COUNT = Keyword("COUNT")
   protected val DATE = Keyword("DATE")
   protected val DECIMAL = Keyword("DECIMAL")
@@ -280,6 +287,7 @@ class Sql99Parser extends AbstractSparkSQLParser {
     productExpression *
       ( "+" ^^^ { (e1: Expression, e2: Expression) => Add(e1, e2) }
       | "-" ^^^ { (e1: Expression, e2: Expression) => Subtract(e1, e2) }
+      | "||" ^^^ { (e1: Expression, e2: Expression) => Concat(e1, e2) }
       )
 
   protected lazy val productExpression: Parser[Expression] =
@@ -310,6 +318,8 @@ class Sql99Parser extends AbstractSparkSQLParser {
     | MAX   ~ "(" ~> expression <~ ")" ^^ { case exp => Max(exp) }
     | UPPER ~ "(" ~> expression <~ ")" ^^ { case exp => Upper(exp) }
     | LOWER ~ "(" ~> expression <~ ")" ^^ { case exp => Lower(exp) }
+    | CONCAT ~ "(" ~> expression ~ ("," ~> expression) <~ ")" ^^
+      { case e1 ~ e2 => Concat(e1, e2) }
     | IF ~ "(" ~> expression ~ ("," ~> expression) ~ ("," ~> expression) <~ ")" ^^
       { case c ~ t ~ f => If(c, t, f) }
     | CASE ~> expression.? ~ (WHEN ~> expression ~ (THEN ~> expression)).* ~

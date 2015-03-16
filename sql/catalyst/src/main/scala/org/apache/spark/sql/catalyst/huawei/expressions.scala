@@ -22,6 +22,7 @@ import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.expressions.AttributeReference
 import org.apache.spark.sql.catalyst.expressions.ExprId
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
+import org.apache.spark.sql.types.{StringType, DataType}
 
 /**
  *
@@ -64,3 +65,24 @@ case object ValueFrame extends FrameType
 case object RowsFrame extends FrameType
 
 case class WindowFrame(frameType: FrameType, preceding: Int, following: Int)
+
+case class Concat(left: Expression, right: Expression) extends BinaryExpression {
+  type EvaluatedType = Any
+
+  def symbol = "||"
+
+  def nullable: Boolean = left.nullable || right.nullable
+
+  def dataType: DataType = StringType
+
+  override def eval(input: Row): Any = {
+    val leftValue = left.eval(input)
+    val rightValue = right.eval(input)
+    // if left or right is null, return null
+    if (leftValue == null || rightValue == null) {
+      null
+    } else {
+      s"$leftValue$rightValue"
+    }
+  }
+}

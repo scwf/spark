@@ -67,4 +67,22 @@ class SQLQuerySuite extends QueryTest with BeforeAndAfterAll {
       sql("SELECT top 5 FROM testData where key < 10 order by key desc"),
       (5 to 9).map(i => Row(i, i.toString)).reverse.toSeq)
   }
+
+  test("string concat") {
+    checkAnswer(
+      sql("select 'a' || 'b' || 'c' "),
+      Row("abc") :: Nil)
+
+    checkAnswer(
+      sql("select 'value_' || value from testData limit 5"),
+      (1 to 5).map(i => Row("value_" + i)).toSeq)
+
+    checkAnswer(
+      sql("select concat('value_', value) from testData limit 5"),
+      (1 to 5).map(i => Row("value_" + i)).toSeq)
+
+    checkAnswer(
+      sql("select 'a' || 'b' || null "),
+      Row(null) :: Nil)
+  }
 }
