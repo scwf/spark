@@ -192,7 +192,7 @@ abstract class TreeNode[BaseType <: TreeNode[BaseType]] {
     if (this fastEquals afterRule) {
       transformChildrenDown(rule)
     } else {
-      afterRule.transformChildrenDown(rule)
+      afterRule.transformDown(rule)
     }
   }
 

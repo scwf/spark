@@ -80,7 +80,7 @@ object UnionPushdown extends Rule[LogicalPlan] {
     *  to the left child's output.
     */
   def pushToRight[A <: Expression](e: A, rewrites: AttributeMap[Attribute]): A = {
-    val result = e transform {
+    val result = e transformUp {
       case a: Attribute => rewrites(a)
     }
 
