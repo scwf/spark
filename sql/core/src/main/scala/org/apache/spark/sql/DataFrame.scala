@@ -190,7 +190,7 @@ class DataFrame private[sql](
     val colWidths = Array.fill(numCols)(0)
     for (row <- rows) {
       for ((cell, i) <- row.zipWithIndex) {
-        colWidths(i) = math.max(colWidths(i), cell.length)
+        colWidths(i) = scala.math.max(colWidths(i), cell.length)
       }
     }
 

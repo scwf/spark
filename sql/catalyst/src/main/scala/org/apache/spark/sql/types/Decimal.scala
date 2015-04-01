@@ -18,6 +18,7 @@
 package org.apache.spark.sql.types
 
 import org.apache.spark.annotation.DeveloperApi
+import org.apache.spark.sql.math.{Numeric}
 
 /**
  * A mutable implementation of BigDecimal that can hold a Long if values are small enough.
