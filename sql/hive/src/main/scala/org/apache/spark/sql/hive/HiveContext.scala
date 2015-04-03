@@ -249,6 +249,8 @@ class HiveContext(sc: SparkContext) extends SQLContext(sc) {
         catalog.CreateTables ::
         catalog.PreInsertionCasts ::
         ExtractPythonUdfs ::
+        ResolveUdtfsAlias ::
+        ResolveWindowUdaf ::
         sources.PreInsertCastAndRename ::
         Nil
     }
@@ -370,6 +372,7 @@ class HiveContext(sc: SparkContext) extends SQLContext(sc) {
       InMemoryScans,
       ParquetConversion, // Must be before HiveTableScans
       HiveTableScans,
+      WindowFunction,
       DataSinks,
       Scripts,
       HashAggregation,
