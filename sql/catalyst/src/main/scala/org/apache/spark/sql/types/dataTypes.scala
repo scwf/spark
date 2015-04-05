@@ -32,8 +32,9 @@ import org.json4s.jackson.JsonMethods._
 
 import org.apache.spark.SparkException
 import org.apache.spark.annotation.DeveloperApi
+
 import org.apache.spark.sql.math.Numeric
-import org.apache.spark.sql.types.Decimal.{Fractional, Integral}
+
 
 import org.apache.spark.sql.catalyst.ScalaReflectionLock
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference, Expression}
@@ -1226,4 +1227,23 @@ abstract class UserDefinedType[UserType] extends DataType with Serializable {
    * itself.
    */
   private[spark] override def asNullable: UserDefinedType[UserType] = this
+}
+
+trait Fractional[@specialized(Byte, Short, Int, Long, Float, Double) A] extends Numeric[A] {
+  class FractionalOps(lhs: A) extends Ops(lhs) {
+    def /(rhs: A) = div(lhs, rhs)
+  }
+  override implicit def mkNumericOps(lhs: A): FractionalOps = new FractionalOps(lhs)
+}
+
+trait Integral[@specialized(Byte, Short, Int, Long, Float, Double) A] extends Numeric[A] {
+  def quot(x: A, y: A): A
+  def rem(x: A, y: A): A
+
+  class IntegralOps(lhs: A) extends Ops(lhs) {
+    def /(rhs: A) = quot(lhs, rhs)
+    def %(rhs: A) = rem(lhs, rhs)
+    def /%(rhs: A) = (quot(lhs, rhs), rem(lhs, rhs))
+  }
+  override implicit def mkNumericOps(lhs: A): IntegralOps = new IntegralOps(lhs)
 }

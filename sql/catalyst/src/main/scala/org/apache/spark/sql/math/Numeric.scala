@@ -468,6 +468,7 @@ object Numeric {
 
   def numeric[@specialized(Byte, Short, Int, Long, Float, Double) A:Numeric]:Numeric[A] = implicitly[Numeric[A]]
 }
+
 /*
 object FastImplicits {
   implicit def infixOps[@specialized(Int, Long, Float, Double) A:Numeric](a:A) = new FastNumericOps(a)
