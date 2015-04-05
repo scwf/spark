@@ -236,6 +236,8 @@ extends ConvertableFrom[A] with ConvertableTo[A] {
     def toFloat(): Float = Numeric.this.toFloat(lhs)
     def toDouble(): Double = Numeric.this.toDouble(lhs)
   }
+
+  implicit def mkNumericOps(lhs: A): Ops = new Ops(lhs)
 }
 
 /**
@@ -426,7 +428,7 @@ extends Numeric[BigInt] with ConvertableFromBigInt with ConvertableToBigInt {
 
 trait DecimalIsNumeric
 extends Numeric[Decimal] with ConvertableFromDecimal with ConvertableToDecimal {
-  def abs(a:Decimal): Decimal = a.abs
+  def abs(a:Decimal): Decimal = if (lt(a, zero)) negate(a) else a
   def div(a:Decimal, b:Decimal): Decimal = a / b
   def equiv(a:Decimal, b:Decimal): Boolean = a == b
   def gt(a:Decimal, b:Decimal): Boolean = a > b
@@ -493,24 +495,3 @@ object EasyImplicits {
   def numeric[@specialized(Int, Long, Float, Double) A:Numeric]:Numeric[A] = implicitly[Numeric[A]]  
 }
 */
-trait Fractional[T] extends Numeric[T] {
-  def div(x: T, y: T): T
-
-  class FractionalOps(lhs: T) extends Ops(lhs) {
-    def /(rhs: T) = div(lhs, rhs)
-  }
-  implicit def mkNumericOps(lhs: T): FractionalOps =
-    new FractionalOps(lhs)
-}
-
-trait Integral[T] extends Numeric[T] {
-  def quot(x: T, y: T): T
-  def rem(x: T, y: T): T
-
-  class IntegralOps(lhs: T) extends Ops(lhs) {
-    def /(rhs: T) = quot(lhs, rhs)
-    def %(rhs: T) = rem(lhs, rhs)
-    def /%(rhs: T) = (quot(lhs, rhs), rem(lhs, rhs))
-  }
-  implicit def mkNumericOps(lhs: T): IntegralOps = new IntegralOps(lhs)
-}
