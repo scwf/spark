@@ -33,6 +33,7 @@ import org.json4s.jackson.JsonMethods._
 import org.apache.spark.SparkException
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.sql.math.Numeric
+import org.apache.spark.sql.math.Fractional
 import org.apache.spark.sql.catalyst.ScalaReflectionLock
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference, Expression}
 import org.apache.spark.util.Utils
@@ -651,8 +652,8 @@ protected[sql] object FractionalType {
 
 
 protected[sql] sealed abstract class FractionalType extends NumericType {
-  private[sql] val fractional: Fractional[JvmType]
-  private[sql] val asIntegral: Integral[JvmType]
+  private[sql] val fractional: org.apache.spark.sql.math.Fractional[JvmType]
+  private[sql] val asIntegral: org.apache.spark.sql.math.Integral[JvmType]
 }
 
 
@@ -785,7 +786,7 @@ class FloatType private() extends FractionalType {
   private[sql] type JvmType = Float
   @transient private[sql] lazy val tag = ScalaReflectionLock.synchronized { typeTag[JvmType] }
   private[sql] val numeric = implicitly[Numeric[Float]]
-  private[sql] val fractional = implicitly[Fractional[Float]]
+  private[sql] val fractional = implicitly[org.apache.spark.sql.math.Fractional[Float]]
   private[sql] val ordering = implicitly[Ordering[JvmType]]
   private[sql] val asIntegral = FloatAsIfIntegral
 

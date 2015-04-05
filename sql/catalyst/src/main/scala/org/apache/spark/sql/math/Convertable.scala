@@ -16,6 +16,8 @@ package org.apache.spark.sql.math
 
 import scala.{specialized => spec}
 
+import org.apache.spark.sql.types.Decimal
+
 /**
  * Conversions to type.
  *
@@ -30,7 +32,7 @@ trait ConvertableTo[@spec A] {
   implicit def fromFloat(a:Float): A
   implicit def fromDouble(a:Double): A
   implicit def fromBigInt(a:BigInt): A
-  implicit def fromBigDecimal(a:BigDecimal): A
+  implicit def fromDecimal(a:Decimal): A
 }
 
 trait ConvertableToByte extends ConvertableTo[Byte] {
@@ -41,7 +43,7 @@ trait ConvertableToByte extends ConvertableTo[Byte] {
   implicit def fromFloat(a:Float): Byte = a.toByte
   implicit def fromDouble(a:Double): Byte = a.toByte
   implicit def fromBigInt(a:BigInt): Byte = a.toByte
-  implicit def fromBigDecimal(a:BigDecimal): Byte = a.toByte
+  implicit def fromDecimal(a:Decimal): Byte = a.toByte
 }
 
 trait ConvertableToShort extends ConvertableTo[Short] {
@@ -52,7 +54,7 @@ trait ConvertableToShort extends ConvertableTo[Short] {
   implicit def fromFloat(a:Float): Short = a.toShort
   implicit def fromDouble(a:Double): Short = a.toShort
   implicit def fromBigInt(a:BigInt): Short = a.toShort
-  implicit def fromBigDecimal(a:BigDecimal): Short = a.toShort
+  implicit def fromDecimal(a:Decimal): Short = a.toShort
 }
 
 trait ConvertableToInt extends ConvertableTo[Int] {
@@ -63,7 +65,7 @@ trait ConvertableToInt extends ConvertableTo[Int] {
   implicit def fromFloat(a:Float): Int = a.toInt
   implicit def fromDouble(a:Double): Int = a.toInt
   implicit def fromBigInt(a:BigInt): Int = a.toInt
-  implicit def fromBigDecimal(a:BigDecimal): Int = a.toInt
+  implicit def fromDecimal(a:Decimal): Int = a.toInt
 }
 
 trait ConvertableToLong extends ConvertableTo[Long] {
@@ -74,7 +76,7 @@ trait ConvertableToLong extends ConvertableTo[Long] {
   implicit def fromFloat(a:Float): Long = a.toLong
   implicit def fromDouble(a:Double): Long = a.toLong
   implicit def fromBigInt(a:BigInt): Long = a.toLong
-  implicit def fromBigDecimal(a:BigDecimal): Long = a.toLong
+  implicit def fromDecimal(a:Decimal): Long = a.toLong
 }
 
 trait ConvertableToFloat extends ConvertableTo[Float] {
@@ -85,7 +87,7 @@ trait ConvertableToFloat extends ConvertableTo[Float] {
   implicit def fromFloat(a:Float): Float = a
   implicit def fromDouble(a:Double): Float = a.toFloat
   implicit def fromBigInt(a:BigInt): Float = a.toFloat
-  implicit def fromBigDecimal(a:BigDecimal): Float = a.toFloat
+  implicit def fromDecimal(a:Decimal): Float = a.toFloat
 }
 
 trait ConvertableToDouble extends ConvertableTo[Double] {
@@ -96,7 +98,7 @@ trait ConvertableToDouble extends ConvertableTo[Double] {
   implicit def fromFloat(a:Float): Double = a.toDouble
   implicit def fromDouble(a:Double): Double = a
   implicit def fromBigInt(a:BigInt): Double = a.toDouble
-  implicit def fromBigDecimal(a:BigDecimal): Double = a.toDouble
+  implicit def fromDecimal(a:Decimal): Double = a.toDouble
 }
 
 trait ConvertableToBigInt extends ConvertableTo[BigInt] {
@@ -107,18 +109,18 @@ trait ConvertableToBigInt extends ConvertableTo[BigInt] {
   implicit def fromFloat(a:Float): BigInt = BigInt(a.toLong)
   implicit def fromDouble(a:Double): BigInt = BigInt(a.toLong)
   implicit def fromBigInt(a:BigInt): BigInt = a
-  implicit def fromBigDecimal(a:BigDecimal): BigInt = a.toBigInt
+  implicit def fromDecimal(a:Decimal): BigInt = a
 }
 
-trait ConvertableToBigDecimal extends ConvertableTo[BigDecimal] {
-  implicit def fromByte(a:Byte): BigDecimal = BigDecimal(a)
-  implicit def fromShort(a:Short): BigDecimal = BigDecimal(a)
-  implicit def fromInt(a:Int): BigDecimal = BigDecimal(a)
-  implicit def fromLong(a:Long): BigDecimal = BigDecimal(a)
-  implicit def fromFloat(a:Float): BigDecimal = BigDecimal(a)
-  implicit def fromDouble(a:Double): BigDecimal = BigDecimal(a)
-  implicit def fromBigInt(a:BigInt): BigDecimal = BigDecimal(a)
-  implicit def fromBigDecimal(a:BigDecimal): BigDecimal = a
+trait ConvertableToDecimal extends ConvertableTo[Decimal] {
+  implicit def fromByte(a:Byte): Decimal = Decimal(a)
+  implicit def fromShort(a:Short): Decimal = Decimal(a)
+  implicit def fromInt(a:Int): Decimal = Decimal(a)
+  implicit def fromLong(a:Long): Decimal = Decimal(a)
+  implicit def fromFloat(a:Float): Decimal = Decimal(a)
+  implicit def fromDouble(a:Double): Decimal = Decimal(a)
+  implicit def fromBigInt(a:BigInt): Decimal = Decimal(a.intValue())
+  implicit def fromDecimal(a:Decimal): Decimal = a
 }
 
 object ConvertableTo {
@@ -129,7 +131,7 @@ object ConvertableTo {
   implicit object ConvertableToFloat extends ConvertableToFloat
   implicit object ConvertableToDouble extends ConvertableToDouble
   implicit object ConvertableToBigInt extends ConvertableToBigInt
-  implicit object ConvertableToBigDecimal extends ConvertableToBigDecimal
+  implicit object ConvertableToDecimal extends ConvertableToDecimal
 }
 
 
@@ -147,7 +149,7 @@ trait ConvertableFrom[@spec A] {
   implicit def toFloat(a:A): Float
   implicit def toDouble(a:A): Double
   implicit def toBigInt(a:A): BigInt
-  implicit def toBigDecimal(a:A): BigDecimal
+  implicit def toDecimal(a:A): Decimal
 
   implicit def toString(a:A): String
 }
@@ -160,7 +162,7 @@ trait ConvertableFromByte extends ConvertableFrom[Byte] {
   implicit def toFloat(a:Byte): Float = a.toFloat
   implicit def toDouble(a:Byte): Double = a.toDouble
   implicit def toBigInt(a:Byte): BigInt = BigInt(a)
-  implicit def toBigDecimal(a:Byte): BigDecimal = BigDecimal(a)
+  implicit def toDecimal(a:Byte): Decimal = Decimal(a)
 
   implicit def toString(a:Byte): String = a.toString
 }
@@ -173,7 +175,7 @@ trait ConvertableFromShort extends ConvertableFrom[Short] {
   implicit def toFloat(a:Short): Float = a.toFloat
   implicit def toDouble(a:Short): Double = a.toDouble
   implicit def toBigInt(a:Short): BigInt = BigInt(a)
-  implicit def toBigDecimal(a:Short): BigDecimal = BigDecimal(a)
+  implicit def toDecimal(a:Short): Decimal = Decimal(a)
 
   implicit def toString(a:Short): String = a.toString
 }
@@ -186,7 +188,7 @@ trait ConvertableFromInt extends ConvertableFrom[Int] {
   implicit def toFloat(a:Int): Float = a.toFloat
   implicit def toDouble(a:Int): Double = a.toDouble
   implicit def toBigInt(a:Int): BigInt = BigInt(a)
-  implicit def toBigDecimal(a:Int): BigDecimal = BigDecimal(a)
+  implicit def toDecimal(a:Int): Decimal = Decimal(a)
 
   implicit def toString(a:Int): String = a.toString
 }
@@ -199,7 +201,7 @@ trait ConvertableFromLong extends ConvertableFrom[Long] {
   implicit def toFloat(a:Long): Float = a.toFloat
   implicit def toDouble(a:Long): Double = a.toDouble
   implicit def toBigInt(a:Long): BigInt = BigInt(a)
-  implicit def toBigDecimal(a:Long): BigDecimal = BigDecimal(a)
+  implicit def toDecimal(a:Long): Decimal = Decimal(a)
 
   implicit def toString(a:Long): String = a.toString
 }
@@ -212,7 +214,7 @@ trait ConvertableFromFloat extends ConvertableFrom[Float] {
   implicit def toFloat(a:Float): Float = a
   implicit def toDouble(a:Float): Double = a.toDouble
   implicit def toBigInt(a:Float): BigInt = BigInt(a.toLong)
-  implicit def toBigDecimal(a:Float): BigDecimal = BigDecimal(a)
+  implicit def toDecimal(a:Float): Decimal = Decimal(a)
 
   implicit def toString(a:Float): String = a.toString
 }
@@ -225,7 +227,7 @@ trait ConvertableFromDouble extends ConvertableFrom[Double] {
   implicit def toFloat(a:Double): Float = a.toFloat
   implicit def toDouble(a:Double): Double = a
   implicit def toBigInt(a:Double): BigInt = BigInt(a.toLong)
-  implicit def toBigDecimal(a:Double): BigDecimal = BigDecimal(a)
+  implicit def toDecimal(a:Double): Decimal = Decimal(a)
 
   implicit def toString(a:Double): String = a.toString
 }
@@ -238,22 +240,22 @@ trait ConvertableFromBigInt extends ConvertableFrom[BigInt] {
   implicit def toFloat(a:BigInt): Float = a.toFloat
   implicit def toDouble(a:BigInt): Double = a.toDouble
   implicit def toBigInt(a:BigInt): BigInt = a
-  implicit def toBigDecimal(a:BigInt): BigDecimal = BigDecimal(a)
+  implicit def toDecimal(a:BigInt): Decimal = Decimal(a.intValue())
 
   implicit def toString(a:BigInt): String = a.toString
 }
 
-trait ConvertableFromBigDecimal extends ConvertableFrom[BigDecimal] {
-  implicit def toByte(a:BigDecimal): Byte = a.toByte
-  implicit def toShort(a:BigDecimal): Short = a.toShort
-  implicit def toInt(a:BigDecimal): Int = a.toInt
-  implicit def toLong(a:BigDecimal): Long = a.toLong
-  implicit def toFloat(a:BigDecimal): Float = a.toFloat
-  implicit def toDouble(a:BigDecimal): Double = a.toDouble
-  implicit def toBigInt(a:BigDecimal): BigInt = a.toBigInt
-  implicit def toBigDecimal(a:BigDecimal): BigDecimal = a
+trait ConvertableFromDecimal extends ConvertableFrom[Decimal] {
+  implicit def toByte(a:Decimal): Byte = a.toByte
+  implicit def toShort(a:Decimal): Short = a.toShort
+  implicit def toInt(a:Decimal): Int = a.toInt
+  implicit def toLong(a:Decimal): Long = a.toLong
+  implicit def toFloat(a:Decimal): Float = a.toFloat
+  implicit def toDouble(a:Decimal): Double = a.toDouble
+  implicit def toBigInt(a:Decimal): BigInt = a.toInt
+  implicit def toDecimal(a:Decimal): Decimal = a
 
-  implicit def toString(a:BigDecimal): String = a.toString
+  implicit def toString(a:Decimal): String = a.toString
 }
 
 object ConvertableFrom {
@@ -264,5 +266,5 @@ object ConvertableFrom {
   implicit object ConvertableFromFloat extends ConvertableFromFloat
   implicit object ConvertableFromDouble extends ConvertableFromDouble
   implicit object ConvertableFromBigInt extends ConvertableFromBigInt
-  implicit object ConvertableFromBigDecimal extends ConvertableFromBigDecimal
+  implicit object ConvertableFromDecimal extends ConvertableFromDecimal
 }

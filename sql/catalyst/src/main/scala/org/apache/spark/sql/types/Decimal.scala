@@ -18,7 +18,7 @@
 package org.apache.spark.sql.types
 
 import org.apache.spark.annotation.DeveloperApi
-import org.apache.spark.sql.math.{Numeric}
+import org.apache.spark.sql.math.{ConvertableTo, ConvertableFrom, Numeric, ConvertableFromDecimal, ConvertableToDecimal}
 
 /**
  * A mutable implementation of BigDecimal that can hold a Long if values are small enough.
@@ -314,7 +314,7 @@ object Decimal {
   // See scala.math's Numeric.scala for examples for Scala's built-in types.
 
   /** Common methods for Decimal evidence parameters */
-  trait DecimalIsConflicted extends Numeric[Decimal] {
+  trait DecimalIsConflicted extends Numeric[Decimal] with ConvertableToDecimal with ConvertableFromDecimal{
     override def plus(x: Decimal, y: Decimal): Decimal = x + y
     override def times(x: Decimal, y: Decimal): Decimal = x * y
     override def minus(x: Decimal, y: Decimal): Decimal = x - y
@@ -323,18 +323,63 @@ object Decimal {
     override def toFloat(x: Decimal): Float = x.toFloat
     override def toInt(x: Decimal): Int = x.toInt
     override def toLong(x: Decimal): Long = x.toLong
-    override def fromInt(x: Int): Decimal = new Decimal().set(x)
+    override def fromInt(x: Int): Decimal = Decimal(x)
     override def compare(x: Decimal, y: Decimal): Int = x.compare(y)
+
+    def abs(a:Decimal): Decimal = a //scala.math.abs(a)
+    def div(a:Decimal, b:Decimal): Decimal = a / b
+    def equiv(a:Decimal, b:Decimal): Boolean = a == b
+    def gt(a:Decimal, b:Decimal): Boolean = a > b
+    def gteq(a:Decimal, b:Decimal): Boolean = a >= b
+    def lt(a:Decimal, b:Decimal): Boolean = a < b
+    def lteq(a:Decimal, b:Decimal): Boolean = a <= b
+    def max(a:Decimal, b:Decimal): Decimal = Decimal(scala.math.max(a.doubleValue(), b.doubleValue()))
+    def min(a:Decimal, b:Decimal): Decimal = Decimal(scala.math.min(a.doubleValue(), b.doubleValue()))
+    def mod(a:Decimal, b:Decimal): Decimal = a % b
+    def nequiv(a:Decimal, b:Decimal): Boolean = a != b
+    def one: Decimal = Decimal(1)
+    def pow(a:Decimal, b:Decimal): Decimal = Decimal(scala.math.pow(a.doubleValue(), b.doubleValue()))
+    def zero: Decimal = Decimal(0)
   }
 
   /** A [[scala.math.Fractional]] evidence parameter for Decimals. */
   object DecimalIsFractional extends DecimalIsConflicted with Fractional[Decimal] {
-    override def div(x: Decimal, y: Decimal): Decimal = x / y
+
+    def fromType[@specialized(Byte, Short, Int, Long, Float, Double) B](b:B)(implicit c:ConvertableFrom[B]) = c.toDecimal(b)
+    def toType[@specialized(Byte, Short, Int, Long, Float, Double) B](a:Decimal)(implicit c:ConvertableTo[B]) = c.fromDecimal(a)
+
   }
 
   /** A [[scala.math.Integral]] evidence parameter for Decimals. */
   object DecimalAsIfIntegral extends DecimalIsConflicted with Integral[Decimal] {
     override def quot(x: Decimal, y: Decimal): Decimal = x / y
     override def rem(x: Decimal, y: Decimal): Decimal = x % y
+
+    def fromType[@specialized(Byte, Short, Int, Long, Float, Double) B](b:B)(implicit c:ConvertableFrom[B]) = c.toDecimal(b)
+    def toType[@specialized(Byte, Short, Int, Long, Float, Double) B](a:Decimal)(implicit c:ConvertableTo[B]) = c.fromDecimal(a)
+
   }
+
+  trait Fractional[T] extends Numeric[T] {
+    def div(x: T, y: T): T
+
+    class FractionalOps(lhs: T) extends Ops(lhs) {
+      def /(rhs: T) = div(lhs, rhs)
+    }
+    implicit def mkNumericOps(lhs: T): FractionalOps =
+      new FractionalOps(lhs)
+  }
+
+  trait Integral[T] extends Numeric[T] {
+    def quot(x: T, y: T): T
+    def rem(x: T, y: T): T
+
+    class IntegralOps(lhs: T) extends Ops(lhs) {
+      def /(rhs: T) = quot(lhs, rhs)
+      def %(rhs: T) = rem(lhs, rhs)
+      def /%(rhs: T) = (quot(lhs, rhs), rem(lhs, rhs))
+    }
+    implicit def mkNumericOps(lhs: T): IntegralOps = new IntegralOps(lhs)
+  }
+
 }

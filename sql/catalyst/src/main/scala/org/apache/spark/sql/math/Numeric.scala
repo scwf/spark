@@ -3,6 +3,8 @@ package org.apache.spark.sql.math
 import scala.math.{abs, min, max, pow}
 import annotation.implicitNotFound
 
+import org.apache.spark.sql.types.Decimal
+
 /**
  * @author Erik Osheim
  */
@@ -422,29 +424,29 @@ extends Numeric[BigInt] with ConvertableFromBigInt with ConvertableToBigInt {
   def toType[@specialized(Int, Long, Float, Double) B](a:BigInt)(implicit c:ConvertableTo[B]) = c.fromBigInt(a)
 }
 
-trait BigDecimalIsNumeric
-extends Numeric[BigDecimal] with ConvertableFromBigDecimal with ConvertableToBigDecimal {
-  def abs(a:BigDecimal): BigDecimal = a.abs
-  def div(a:BigDecimal, b:BigDecimal): BigDecimal = a / b
-  def equiv(a:BigDecimal, b:BigDecimal): Boolean = a == b
-  def gt(a:BigDecimal, b:BigDecimal): Boolean = a > b
-  def gteq(a:BigDecimal, b:BigDecimal): Boolean = a >= b
-  def lt(a:BigDecimal, b:BigDecimal): Boolean = a < b
-  def lteq(a:BigDecimal, b:BigDecimal): Boolean = a <= b
-  def max(a:BigDecimal, b:BigDecimal): BigDecimal = a.max(b)
-  def min(a:BigDecimal, b:BigDecimal): BigDecimal = a.min(b)
-  def minus(a:BigDecimal, b:BigDecimal): BigDecimal = a - b
-  def mod(a:BigDecimal, b:BigDecimal): BigDecimal = a % b
-  def negate(a:BigDecimal): BigDecimal = -a
-  def nequiv(a:BigDecimal, b:BigDecimal): Boolean = a != b
-  def one: BigDecimal = BigDecimal(1.0)
-  def plus(a:BigDecimal, b:BigDecimal): BigDecimal = a + b
-  def pow(a:BigDecimal, b:BigDecimal): BigDecimal = a.pow(b)
-  def times(a:BigDecimal, b:BigDecimal): BigDecimal = a * b
-  def zero: BigDecimal = BigDecimal(0.0)
+trait DecimalIsNumeric
+extends Numeric[Decimal] with ConvertableFromDecimal with ConvertableToDecimal {
+  def abs(a:Decimal): Decimal = a.abs
+  def div(a:Decimal, b:Decimal): Decimal = a / b
+  def equiv(a:Decimal, b:Decimal): Boolean = a == b
+  def gt(a:Decimal, b:Decimal): Boolean = a > b
+  def gteq(a:Decimal, b:Decimal): Boolean = a >= b
+  def lt(a:Decimal, b:Decimal): Boolean = a < b
+  def lteq(a:Decimal, b:Decimal): Boolean = a <= b
+  def max(a:Decimal, b:Decimal): Decimal = a.max(b)
+  def min(a:Decimal, b:Decimal): Decimal = a.min(b)
+  def minus(a:Decimal, b:Decimal): Decimal = a - b
+  def mod(a:Decimal, b:Decimal): Decimal = a % b
+  def negate(a:Decimal): Decimal = -a
+  def nequiv(a:Decimal, b:Decimal): Boolean = a != b
+  def one: Decimal = Decimal(1.0)
+  def plus(a:Decimal, b:Decimal): Decimal = a + b
+  def pow(a:Decimal, b:Decimal): Decimal = a.pow(b)
+  def times(a:Decimal, b:Decimal): Decimal = a * b
+  def zero: Decimal = Decimal(0.0)
   
-  def fromType[@specialized(Int, Long, Float, Double) B](b:B)(implicit c:ConvertableFrom[B]) = c.toBigDecimal(b)
-  def toType[@specialized(Int, Long, Float, Double) B](a:BigDecimal)(implicit c:ConvertableTo[B]) = c.fromBigDecimal(a)
+  def fromType[@specialized(Int, Long, Float, Double) B](b:B)(implicit c:ConvertableFrom[B]) = c.toDecimal(b)
+  def toType[@specialized(Int, Long, Float, Double) B](a:Decimal)(implicit c:ConvertableTo[B]) = c.fromDecimal(a)
 }
 
 
@@ -460,11 +462,11 @@ object Numeric {
   implicit object FloatIsNumeric extends FloatIsNumeric
   implicit object DoubleIsNumeric extends DoubleIsNumeric
   implicit object BigIntIsNumeric extends BigIntIsNumeric
-  implicit object BigDecimalIsNumeric extends BigDecimalIsNumeric
+  implicit object DecimalIsNumeric extends DecimalIsNumeric
 
   def numeric[@specialized(Byte, Short, Int, Long, Float, Double) A:Numeric]:Numeric[A] = implicitly[Numeric[A]]
 }
-
+/*
 object FastImplicits {
   implicit def infixOps[@specialized(Int, Long, Float, Double) A:Numeric](a:A) = new FastNumericOps(a)
 
@@ -473,7 +475,7 @@ object FastImplicits {
   implicit def infixFloatOps(f:Float) = new LiteralFloatOps(f)
   implicit def infixDoubleOps(d:Double) = new LiteralDoubleOps(d)
   implicit def infixBigIntOps(f:BigInt) = new LiteralBigIntOps(f)
-  implicit def infixBigDecimalOps(d:BigDecimal) = new LiteralBigDecimalOps(d)
+  implicit def infixDecimalOps(d:Decimal) = new LiteralDecimalOps(d)
 
   def numeric[@specialized(Int, Long, Float, Double) A:Numeric]:Numeric[A] = implicitly[Numeric[A]]  
 }
@@ -486,11 +488,11 @@ object EasyImplicits {
   implicit def infixFloatOps(f:Float) = new LiteralFloatOps(f)
   implicit def infixDoubleOps(d:Double) = new LiteralDoubleOps(d)
   implicit def infixBigIntOps(f:BigInt) = new LiteralBigIntOps(f)
-  implicit def infixBigDecimalOps(d:BigDecimal) = new LiteralBigDecimalOps(d)
+  implicit def infixDecimalOps(d:Decimal) = new LiteralDecimalOps(d)
 
   def numeric[@specialized(Int, Long, Float, Double) A:Numeric]:Numeric[A] = implicitly[Numeric[A]]  
 }
-
+*/
 trait Fractional[T] extends Numeric[T] {
   def div(x: T, y: T): T
 
