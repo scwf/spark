@@ -260,7 +260,7 @@ private[sql] abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
     def numPartitions: Int = self.numPartitions
 
     def apply(plan: LogicalPlan): Seq[SparkPlan] = plan match {
-      case r: RunnableCommand => ExecutedCommand(r) :: Nil
+      case r: RunnableCommand => LocalTableScan(r.output, r.run(sqlContext)) :: Nil
 
       case logical.Distinct(child) =>
         execution.Distinct(partial = false,

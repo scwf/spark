@@ -19,7 +19,6 @@ package org.apache.spark.sql.execution
 
 import org.apache.spark.Logging
 import org.apache.spark.annotation.DeveloperApi
-import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.types.{BooleanType, StructField, StructType, StringType}
 import org.apache.spark.sql.{DataFrame, SQLConf, SQLContext}
 import org.apache.spark.sql.catalyst.errors.TreeNodeException
@@ -35,33 +34,6 @@ trait RunnableCommand extends logical.Command {
   self: Product =>
 
   def run(sqlContext: SQLContext): Seq[Row]
-}
-
-/**
- * A physical operator that executes the run method of a `RunnableCommand` and
- * saves the result to prevent multiple executions.
- */
-case class ExecutedCommand(cmd: RunnableCommand) extends SparkPlan {
-  /**
-   * A concrete command should override this lazy field to wrap up any side effects caused by the
-   * command or any other computation that should be evaluated exactly once. The value of this field
-   * can be used as the contents of the corresponding RDD generated from the physical plan of this
-   * command.
-   *
-   * The `execute()` method of all the physical command classes should reference `sideEffectResult`
-   * so that the command can be executed eagerly right after the command query is created.
-   */
-  protected[sql] lazy val sideEffectResult: Seq[Row] = cmd.run(sqlContext)
-
-  override def output: Seq[Attribute] = cmd.output
-
-  override def children: Seq[SparkPlan] = Nil
-
-  override def executeCollect(): Array[Row] = sideEffectResult.toArray
-
-  override def executeTake(limit: Int): Array[Row] = sideEffectResult.take(limit).toArray
-
-  override def execute(): RDD[Row] = sqlContext.sparkContext.parallelize(sideEffectResult, 1)
 }
 
 /**

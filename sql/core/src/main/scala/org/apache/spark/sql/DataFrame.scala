@@ -140,9 +140,8 @@ class DataFrame private[sql](
     // For various commands (like DDL) and queries with side effects, we force query optimization to
     // happen right away to let these side effects take place eagerly.
     case _ : Command =>
-      LocalRelation(
-        queryExecution.analyzed.output,
-        queryExecution.sparkPlan.executeCollect())
+      queryExecution.sparkPlan.executeCollect()
+      queryExecution.analyzed
     case _: InsertIntoTable |
       _: CreateTableAsSelect[_] |
       _: CreateTableUsingAsSelect |
