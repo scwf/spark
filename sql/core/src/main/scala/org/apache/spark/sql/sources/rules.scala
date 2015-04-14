@@ -17,14 +17,32 @@
 
 package org.apache.spark.sql.sources
 
-import org.apache.spark.sql.{SaveMode, AnalysisException}
+import org.apache.spark.sql.{execution, SaveMode, AnalysisException}
 import org.apache.spark.sql.catalyst.analysis.{EliminateSubQueries, Catalog}
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Cast, Alias}
 import org.apache.spark.sql.catalyst.plans.logical
 import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoTable, LogicalPlan, Project}
 import org.apache.spark.sql.catalyst.rules.Rule
-import org.apache.spark.sql.types.DataType
 
+object ResolveDDLCommand extends  Rule[LogicalPlan] {
+  def apply(plan: LogicalPlan): LogicalPlan = plan transform {
+    case CreateTableUsing(tableName, userSpecifiedSchema, provider, true, opts, false, _) =>
+        CreateTempTableUsing(tableName, userSpecifiedSchema, provider, opts)
+    case c: CreateTableUsing if !c.temporary =>
+      sys.error("Tables created with SQLContext must be TEMPORARY. Use a HiveContext instead.")
+    case c: CreateTableUsing if c.temporary && c.allowExisting =>
+      sys.error("allowExisting should be set to false when creating a temporary table.")
+
+    case CreateTableUsingAsSelect(tableName, provider, true, mode, opts, query) =>
+        CreateTempTableUsingAsSelect(tableName, provider, mode, opts, query)
+    case c: CreateTableUsingAsSelect if !c.temporary =>
+      sys.error("Tables created with SQLContext must be TEMPORARY. Use a HiveContext instead.")
+
+    case DescribeCommand(table, isExtended) =>
+      val resultPlan = execution.SparkPlan.currentContext.get().executePlan(table).executedPlan
+      execution.DescribeCommand(resultPlan, resultPlan.output, isExtended)
+  }
+}
 /**
  * A rule to do pre-insert data type casting and field renaming. Before we insert into
  * an [[InsertableRelation]], we will use this rule to make sure that

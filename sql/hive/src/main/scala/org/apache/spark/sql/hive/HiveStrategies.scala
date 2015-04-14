@@ -219,36 +219,19 @@ private[hive] trait HiveStrategies {
     }
   }
 
-  object HiveDDLStrategy extends Strategy {
-    def apply(plan: LogicalPlan): Seq[SparkPlan] = plan match {
-      case CreateTableUsing(
-      tableName, userSpecifiedSchema, provider, false, opts, allowExisting, managedIfNoPath) =>
-        ExecutedCommand(
-          CreateMetastoreDataSource(
-            tableName, userSpecifiedSchema, provider, opts, allowExisting, managedIfNoPath)) :: Nil
-
-      case CreateTableUsingAsSelect(tableName, provider, false, mode, opts, query) =>
-        val cmd =
-          CreateMetastoreDataSourceAsSelect(tableName, provider, mode, opts, query)
-        ExecutedCommand(cmd) :: Nil
-
-      case _ => Nil
-    }
-  }
-
   case class HiveCommandStrategy(context: HiveContext) extends Strategy {
     def apply(plan: LogicalPlan): Seq[SparkPlan] = plan match {
       case describe: DescribeCommand =>
         val resolvedTable = context.executePlan(describe.table).analyzed
         resolvedTable match {
           case t: MetastoreRelation =>
-            ExecutedCommand(
-              DescribeHiveTableCommand(t, describe.output, describe.isExtended)) :: Nil
+            val runnableCommand = DescribeHiveTableCommand(t, describe.output, describe.isExtended)
+            LocalTableScan(runnableCommand.output, runnableCommand.run(context)) :: Nil
 
           case o: LogicalPlan =>
             val resultPlan = context.executePlan(o).executedPlan
-            ExecutedCommand(RunnableDescribeCommand(
-              resultPlan, describe.output, describe.isExtended)) :: Nil
+            val runnableCommand = RunnableDescribeCommand(resultPlan, describe.output, describe.isExtended)
+            LocalTableScan(runnableCommand.output, runnableCommand.run(context)) :: Nil
         }
 
       case _ => Nil

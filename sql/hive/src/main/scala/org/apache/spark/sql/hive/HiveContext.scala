@@ -20,7 +20,6 @@ package org.apache.spark.sql.hive
 import java.io.{BufferedReader, InputStreamReader, PrintStream}
 import java.sql.Timestamp
 
-import scala.collection.JavaConversions._
 import scala.language.implicitConversions
 
 import org.apache.hadoop.fs.{FileSystem, Path}
@@ -37,7 +36,7 @@ import org.apache.spark.annotation.Experimental
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.analysis.{Analyzer, EliminateSubQueries, OverrideCatalog, OverrideFunctionRegistry}
 import org.apache.spark.sql.catalyst.plans.logical._
-import org.apache.spark.sql.execution.{ExecutedCommand, ExtractPythonUdfs, QueryExecutionException, SetCommand}
+import org.apache.spark.sql.execution.{LocalTableScan, ExtractPythonUdfs, QueryExecutionException, SetCommand}
 import org.apache.spark.sql.hive.execution.{DescribeHiveTableCommand, HiveNativeCommand}
 import org.apache.spark.sql.sources.{DDLParser, DataSourceStrategy}
 import org.apache.spark.sql.types._
@@ -241,6 +240,8 @@ class HiveContext(sc: SparkContext) extends SQLContext(sc) {
         ExtractPythonUdfs ::
         ResolveUdtfsAlias ::
         sources.PreInsertCastAndRename ::
+        HiveResolveDDLCommand ::
+        sources.ResolveDDLCommand ::
         Nil
     }
 
@@ -354,8 +355,6 @@ class HiveContext(sc: SparkContext) extends SQLContext(sc) {
     override def strategies: Seq[Strategy] = experimental.extraStrategies ++ Seq(
       DataSourceStrategy,
       HiveCommandStrategy(self),
-      HiveDDLStrategy,
-      DDLStrategy,
       TakeOrdered,
       ParquetOperations,
       InMemoryScans,
@@ -389,17 +388,17 @@ class HiveContext(sc: SparkContext) extends SQLContext(sc) {
      * execution is simply passed back to Hive.
      */
     def stringResult(): Seq[String] = executedPlan match {
-      case ExecutedCommand(desc: DescribeHiveTableCommand) =>
+      case command: LocalTableScan if analyzed.isInstanceOf[DescribeHiveTableCommand] =>
         // If it is a describe command for a Hive table, we want to have the output format
         // be similar with Hive.
-        desc.run(self).map {
+        analyzed.asInstanceOf[DescribeHiveTableCommand].run(self).map {
           case Row(name: String, dataType: String, comment) =>
             Seq(name, dataType,
               Option(comment.asInstanceOf[String]).getOrElse(""))
               .map(s => String.format(s"%-20s", s))
               .mkString("\t")
         }
-      case command: ExecutedCommand =>
+      case command: LocalTableScan =>
         command.executeCollect().map(_(0).toString)
 
       case other =>

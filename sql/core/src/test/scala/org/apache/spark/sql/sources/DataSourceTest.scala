@@ -31,6 +31,7 @@ abstract class DataSourceTest extends QueryTest with BeforeAndAfter {
       new Analyzer(catalog, functionRegistry, caseSensitive = false) {
         override val extendedResolutionRules =
           PreInsertCastAndRename ::
+          ResolveDDLCommand ::
           Nil
       }
   }

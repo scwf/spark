@@ -56,7 +56,10 @@ private[sql] object DataSourceStrategy extends Strategy {
 
     case i @ logical.InsertIntoTable(
       l @ LogicalRelation(t: InsertableRelation), part, query, overwrite) if part.isEmpty =>
-      execution.ExecutedCommand(InsertIntoDataSource(l, query, overwrite)) :: Nil
+      val runnableCommand = InsertIntoDataSource(l, query, overwrite)
+      execution.LocalTableScan(
+        runnableCommand.output,
+        runnableCommand.run(execution.SparkPlan.currentContext.get())) :: Nil
 
     case _ => Nil
   }

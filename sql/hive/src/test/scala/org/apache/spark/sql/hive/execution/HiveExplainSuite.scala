@@ -42,7 +42,7 @@ class HiveExplainSuite extends QueryTest {
   test("explain create table command") {
     checkExistence(sql("explain create table temp__b as select * from src limit 2"), true,
                    "== Physical Plan ==",
-                   "InsertIntoHiveTable",
+                   "LocalTableScan",
                    "Limit",
                    "src")
 
