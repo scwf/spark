@@ -232,7 +232,8 @@ private[hive] trait HiveStrategies {
 
           case o: LogicalPlan =>
             val resultPlan = context.executePlan(o).executedPlan
-            val runnableCommand = RunnableDescribeCommand(resultPlan, describe.output, describe.isExtended)
+            val runnableCommand =
+              RunnableDescribeCommand(resultPlan, describe.output, describe.isExtended)
             LocalTableScan(runnableCommand.output, runnableCommand.run(context)) :: Nil
         }
 
