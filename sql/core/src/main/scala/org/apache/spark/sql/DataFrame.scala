@@ -38,7 +38,7 @@ import org.apache.spark.sql.catalyst.analysis.{UnresolvedRelation, ResolvedStar}
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.plans.{JoinType, Inner}
 import org.apache.spark.sql.catalyst.plans.logical._
-import org.apache.spark.sql.execution.{EvaluatePython, ExplainCommand, LogicalRDD}
+import org.apache.spark.sql.execution.{LocalTableScan, EvaluatePython, ExplainCommand, LogicalRDD}
 import org.apache.spark.sql.jdbc.JDBCWriteDetails
 import org.apache.spark.sql.json.JsonRDD
 import org.apache.spark.sql.types._
@@ -142,7 +142,7 @@ class DataFrame private[sql](
     case _ : Command =>
       LocalRelation(
         queryExecution.analyzed.output,
-        queryExecution.sparkPlan.executeCollect())
+        queryExecution.sparkPlan.asInstanceOf[LocalTableScan].rows)
     case _: InsertIntoTable |
       _: CreateTableAsSelect[_] |
       _: CreateTableUsingAsSelect |

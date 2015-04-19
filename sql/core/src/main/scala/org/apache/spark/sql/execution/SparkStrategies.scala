@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.execution
 
+import org.apache.spark.sql.catalyst.CatalystTypeConverters
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.planning._
 import org.apache.spark.sql.catalyst.plans._
@@ -278,7 +279,11 @@ private[sql] abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
     def numPartitions: Int = self.numPartitions
 
     def apply(plan: LogicalPlan): Seq[SparkPlan] = plan match {
-      case r: RunnableCommand => LocalTableScan(r.output, r.run(sqlContext)) :: Nil
+      case r: RunnableCommand =>
+        val converted = r.run(sqlContext).map( row =>
+          CatalystTypeConverters.convertToCatalyst(row, r.schema).asInstanceOf[Row]
+        )
+        LocalTableScan(r.output, converted) :: Nil
 
       case logical.Distinct(child) =>
         execution.Distinct(partial = false,
