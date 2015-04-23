@@ -59,7 +59,7 @@ case class BroadcastLeftSemiJoinHash(
           if (!rowKey.anyNull) {
             if (!hashMap.containsKey(rowKey)) {
               hashMap.put(rowKey, null)
-              }
+            }
           }
         }
       case Some(_) =>
