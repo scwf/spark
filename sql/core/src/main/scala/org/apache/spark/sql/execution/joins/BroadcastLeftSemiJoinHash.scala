@@ -47,22 +47,35 @@ case class BroadcastLeftSemiJoinHash(
 
   override def execute(): RDD[Row] = {
     val buildIter= buildPlan.execute().map(_.copy()).collect().toIterator
-    val hashMap = new java.util.HashMap[Row, scala.collection.mutable.ArrayBuffer[Row]]()
+    val hashMap = new java.util.HashMap[Row, scala.collection.mutable.Set[Row]]()
     var currentRow: Row = null
 
     // Create a Hash set of buildKeys
-    while (buildIter.hasNext) {
-      currentRow = buildIter.next()
-      val rowKey = buildSideKeyGenerator(currentRow)
-      if (!rowKey.anyNull) {
-        if (!hashMap.containsKey(rowKey)) {
-          val rowBuffer = scala.collection.mutable.ArrayBuffer[Row]()
-          rowBuffer.append(currentRow.copy())
-          hashMap.put(rowKey, rowBuffer)
-        } else {
-          hashMap.get(rowKey).append(currentRow.copy())
+    condition match {
+      case None =>
+        while (buildIter.hasNext) {
+          currentRow = buildIter.next()
+          val rowKey = buildSideKeyGenerator(currentRow)
+          if (!rowKey.anyNull) {
+            if (!hashMap.containsKey(rowKey)) {
+              hashMap.put(rowKey, null)
+              }
+          }
         }
-      }
+      case Some(_) =>
+        while (buildIter.hasNext) {
+          currentRow = buildIter.next()
+          val rowKey = buildSideKeyGenerator(currentRow)
+          if (!rowKey.anyNull) {
+            if (!hashMap.containsKey(rowKey)) {
+              val rowSet = scala.collection.mutable.HashSet[Row]()
+              rowSet.add(currentRow.copy())
+              hashMap.put(rowKey, rowSet)
+            } else {
+              hashMap.get(rowKey).add(currentRow.copy())
+            }
+          }
+        }
     }
 
     val broadcastedRelation = sparkContext.broadcast(hashMap)
@@ -70,13 +83,21 @@ case class BroadcastLeftSemiJoinHash(
     streamedPlan.execute().mapPartitions { streamIter =>
       val joinKeys = streamSideKeyGenerator()
       val joinedRow = new JoinedRow
-      streamIter.filter(current => {
-        !joinKeys(current).anyNull &&
-          broadcastedRelation.value.containsKey(joinKeys.currentValue) &&
-          broadcastedRelation.value.get(joinKeys.currentValue).exists {
-            build: Row => boundCondition(joinedRow(current, build))
-          }
-      })
+      condition match {
+        case None =>
+          streamIter.filter(current => {
+            !joinKeys(current).anyNull &&
+              broadcastedRelation.value.containsKey(joinKeys.currentValue)
+          })
+        case Some(_) =>
+          streamIter.filter(current => {
+            !joinKeys(current).anyNull &&
+              broadcastedRelation.value.containsKey(joinKeys.currentValue) &&
+              broadcastedRelation.value.get(joinKeys.currentValue).exists {
+                build: Row => boundCondition(joinedRow(current, build))
+              }
+          })
+      }
     }
   }
 }

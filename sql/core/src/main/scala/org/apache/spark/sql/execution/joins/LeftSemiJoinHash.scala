@@ -51,32 +51,47 @@ case class LeftSemiJoinHash(
 
   override def execute(): RDD[Row] = {
     buildPlan.execute().zipPartitions(streamedPlan.execute()) { (buildIter, streamIter) =>
-      val hashMap = new java.util.HashMap[Row, scala.collection.mutable.ArrayBuffer[Row]]()
+      val hashMap = new java.util.HashMap[Row, scala.collection.mutable.Set[Row]]()
       var currentRow: Row = null
-
-      // Create a Hash set of buildKeys
-      while (buildIter.hasNext) {
-        currentRow = buildIter.next()
-        val rowKey = buildSideKeyGenerator(currentRow)
-        if (!rowKey.anyNull) {
-          if (!hashMap.containsKey(rowKey)) {
-            val rowBuffer = scala.collection.mutable.ArrayBuffer[Row]()
-            rowBuffer.append(currentRow.copy())
-            hashMap.put(rowKey, rowBuffer)
-          } else {
-            hashMap.get(rowKey).append(currentRow.copy())
-          }
-        }
-      }
-
       val joinKeys = streamSideKeyGenerator()
       val joinedRow = new JoinedRow
-      streamIter.filter(current => {
-        !joinKeys(current).anyNull && hashMap.containsKey(joinKeys.currentValue) &&
-          hashMap.get(joinKeys.currentValue).exists {
-            build: Row => boundCondition(joinedRow(current, build))
+
+      // Create a Hash set of buildKeys
+      condition match {
+        case None =>
+          while (buildIter.hasNext) {
+            currentRow = buildIter.next()
+            val rowKey = buildSideKeyGenerator(currentRow)
+            if (!rowKey.anyNull) {
+              if (!hashMap.containsKey(rowKey)) {
+                hashMap.put(rowKey, null)
+              }
+            }
           }
-      })
+          streamIter.filter(current => {
+            !joinKeys(current).anyNull && hashMap.containsKey(joinKeys.currentValue)
+          })
+        case Some(_) =>
+          while (buildIter.hasNext) {
+            currentRow = buildIter.next()
+            val rowKey = buildSideKeyGenerator(currentRow)
+            if (!rowKey.anyNull) {
+              if (!hashMap.containsKey(rowKey)) {
+                val rowBuffer = scala.collection.mutable.HashSet[Row]()
+                rowBuffer.add(currentRow.copy())
+                hashMap.put(rowKey, rowBuffer)
+              } else {
+                hashMap.get(rowKey).add(currentRow.copy())
+              }
+            }
+          }
+          streamIter.filter(current => {
+            !joinKeys(current).anyNull && hashMap.containsKey(joinKeys.currentValue) &&
+              hashMap.get(joinKeys.currentValue).exists {
+                build: Row => boundCondition(joinedRow(current, build))
+              }
+          })
+      }
     }
   }
 }
