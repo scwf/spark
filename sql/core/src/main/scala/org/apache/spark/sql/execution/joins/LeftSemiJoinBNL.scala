@@ -60,9 +60,10 @@ case class LeftSemiJoinBNL(
       streamedIter.filter(streamedRow => {
         var i = 0
         var matched = false
+        var broadcastedRow: Row = null
 
         while (i < broadcastedRelation.value.size && !matched) {
-          val broadcastedRow = broadcastedRelation.value(i)
+          broadcastedRow = broadcastedRelation.value(i)
           if (boundCondition(joinedRow(streamedRow, broadcastedRow))) {
             matched = true
           }
