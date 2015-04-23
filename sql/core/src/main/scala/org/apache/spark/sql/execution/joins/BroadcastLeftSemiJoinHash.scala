@@ -47,7 +47,7 @@ case class BroadcastLeftSemiJoinHash(
 
   override def execute(): RDD[Row] = {
     val buildIter= buildPlan.execute().map(_.copy()).collect().toIterator
-    val hashMap = new java.util.HashMap[Row, scala.collection.mutable.Set[Row]]()
+    val hashMap = new java.util.HashMap[Row, scala.collection.mutable.ArrayBuffer[Row]]()
     var currentRow: Row = null
 
     // Create a Hash set of buildKeys
@@ -56,11 +56,11 @@ case class BroadcastLeftSemiJoinHash(
       val rowKey = buildSideKeyGenerator(currentRow)
       if (!rowKey.anyNull) {
         if (!hashMap.containsKey(rowKey)) {
-          val rowSet = scala.collection.mutable.Set[Row]()
-          rowSet.add(currentRow.copy())
-          hashMap.put(rowKey, rowSet)
+          val rowBuffer = scala.collection.mutable.ArrayBuffer[Row]()
+          rowBuffer.append(currentRow.copy())
+          hashMap.put(rowKey, rowBuffer)
         } else {
-          hashMap.get(rowKey).add(currentRow.copy())
+          hashMap.get(rowKey).append(currentRow.copy())
         }
       }
     }

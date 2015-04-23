@@ -51,7 +51,7 @@ case class LeftSemiJoinHash(
 
   override def execute(): RDD[Row] = {
     buildPlan.execute().zipPartitions(streamedPlan.execute()) { (buildIter, streamIter) =>
-      val hashMap = new java.util.HashMap[Row, scala.collection.mutable.Set[Row]]()
+      val hashMap = new java.util.HashMap[Row, scala.collection.mutable.ArrayBuffer[Row]]()
       var currentRow: Row = null
 
       // Create a Hash set of buildKeys
@@ -60,11 +60,11 @@ case class LeftSemiJoinHash(
         val rowKey = buildSideKeyGenerator(currentRow)
         if (!rowKey.anyNull) {
           if (!hashMap.containsKey(rowKey)) {
-            val rowSet = scala.collection.mutable.Set[Row]()
-            rowSet.add(currentRow.copy())
-            hashMap.put(rowKey, rowSet)
+            val rowBuffer = scala.collection.mutable.ArrayBuffer[Row]()
+            rowBuffer.append(currentRow.copy())
+            hashMap.put(rowKey, rowBuffer)
           } else {
-            hashMap.get(rowKey).add(currentRow.copy())
+            hashMap.get(rowKey).append(currentRow.copy())
           }
         }
       }
