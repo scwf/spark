@@ -45,7 +45,7 @@ case class LeftSemiJoinBNL(
   override def right: SparkPlan = broadcast
 
   @transient private lazy val boundCondition =
-    InterpretedPredicate(
+    InterpretedPredicate.create(
       condition
         .map(c => BindReferences.bindReference(c, left.output ++ right.output))
         .getOrElse(Literal(true)))
@@ -56,11 +56,13 @@ case class LeftSemiJoinBNL(
 
     streamed.execute().mapPartitions { streamedIter =>
       val joinedRow = new JoinedRow
+      var i = 0
+      var matched = false
+      var broadcastedRow: Row = null
 
       streamedIter.filter(streamedRow => {
-        var i = 0
-        var matched = false
-        var broadcastedRow: Row = null
+        i = 0
+        matched = false
 
         while (i < broadcastedRelation.value.size && !matched) {
           broadcastedRow = broadcastedRelation.value(i)
