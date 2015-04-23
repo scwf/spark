@@ -19,7 +19,7 @@ package org.apache.spark.sql.execution.joins
 
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression, Row}
+import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.plans.physical.ClusteredDistribution
 import org.apache.spark.sql.execution.{BinaryNode, SparkPlan}
 
@@ -33,7 +33,8 @@ case class LeftSemiJoinHash(
     leftKeys: Seq[Expression],
     rightKeys: Seq[Expression],
     left: SparkPlan,
-    right: SparkPlan) extends BinaryNode with HashJoin {
+    right: SparkPlan,
+    condition: Option[Expression]) extends BinaryNode with HashJoin {
 
   override val buildSide: BuildSide = BuildRight
 
@@ -42,9 +43,15 @@ case class LeftSemiJoinHash(
 
   override def output: Seq[Attribute] = left.output
 
+  @transient private lazy val boundCondition =
+    InterpretedPredicate(
+      condition
+        .map(c => BindReferences.bindReference(c, left.output ++ right.output))
+        .getOrElse(Literal(true)))
+
   override def execute(): RDD[Row] = {
     buildPlan.execute().zipPartitions(streamedPlan.execute()) { (buildIter, streamIter) =>
-      val hashSet = new java.util.HashSet[Row]()
+      val hashMap = new java.util.HashMap[Row, scala.collection.mutable.Set[Row]]()
       var currentRow: Row = null
 
       // Create a Hash set of buildKeys
@@ -52,16 +59,23 @@ case class LeftSemiJoinHash(
         currentRow = buildIter.next()
         val rowKey = buildSideKeyGenerator(currentRow)
         if (!rowKey.anyNull) {
-          val keyExists = hashSet.contains(rowKey)
-          if (!keyExists) {
-            hashSet.add(rowKey)
+          if (!hashMap.containsKey(rowKey)) {
+            val rowSet = scala.collection.mutable.Set[Row]()
+            rowSet.add(currentRow.copy())
+            hashMap.put(rowKey, rowSet)
+          } else {
+            hashMap.get(rowKey).add(currentRow.copy())
           }
         }
       }
 
       val joinKeys = streamSideKeyGenerator()
+      val joinedRow = new JoinedRow
       streamIter.filter(current => {
-        !joinKeys(current).anyNull && hashSet.contains(joinKeys.currentValue)
+        !joinKeys(current).anyNull && hashMap.containsKey(joinKeys.currentValue) &&
+          hashMap.get(joinKeys.currentValue).exists {
+            build: Row => boundCondition(joinedRow(current, build))
+          }
       })
     }
   }

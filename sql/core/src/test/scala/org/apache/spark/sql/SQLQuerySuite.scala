@@ -298,6 +298,13 @@ class SQLQuerySuite extends QueryTest with BeforeAndAfterAll {
     )
   }
 
+  test("left semi greater than predicate and equal operator") {
+    checkAnswer(
+      sql("SELECT * FROM testData2 x LEFT SEMI JOIN testData2 y ON x.b = y.b and x.a >= y.a + 2"),
+      Seq(Row(3,1), Row(3,2))
+    )
+  }
+
   test("index into array of arrays") {
     checkAnswer(
       sql(
