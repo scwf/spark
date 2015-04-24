@@ -216,24 +216,13 @@ class Analyzer(
         Project(
           projectList.flatMap {
             case s: Star => s.expand(child.output, resolver)
-            case Alias(f @ UnresolvedFunction(_, args), name) if containsStar(args) =>
-              val expandedArgs = args.flatMap {
+            case Alias(f @ (UnresolvedFunction(_, _) | CreateArray(_) | CreateStruct(_)), name)
+              if containsStar(f.children) =>
+              val newChildren = f.children.flatMap {
                 case s: Star => s.expand(child.output, resolver)
                 case o => o :: Nil
               }
-              Alias(child = f.copy(children = expandedArgs), name)() :: Nil
-            case Alias(c @ CreateArray(args), name) if containsStar(args) =>
-              val expandedArgs = args.flatMap {
-                case s: Star => s.expand(child.output, resolver)
-                case o => o :: Nil
-              }
-              Alias(c.copy(children = expandedArgs), name)() :: Nil
-            case Alias(c @ CreateStruct(args), name) if containsStar(args) =>
-              val expandedArgs = args.flatMap {
-                case s: Star => s.expand(child.output, resolver)
-                case o => o :: Nil
-              }
-              Alias(c.copy(children = expandedArgs), name)() :: Nil
+              Alias(f.withNewChildren(newChildren), name)() :: Nil
             case o => o :: Nil
           },
           child)

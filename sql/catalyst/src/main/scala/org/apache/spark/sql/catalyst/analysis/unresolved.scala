@@ -88,6 +88,10 @@ case class UnresolvedFunction(name: String, children: Seq[Expression]) extends E
   override def eval(input: Row = null): EvaluatedType =
     throw new TreeNodeException(this, s"No function to evaluate expression. type: ${this.nodeName}")
 
+  override def withNewChildren(newChildren: Seq[Expression]): this.type = {
+    makeCopy(Array(name, newChildren))
+  }
+
   override def toString: String = s"'$name(${children.mkString(",")})"
 }
 

@@ -177,6 +177,10 @@ case class CreateArray(children: Seq[Expression]) extends Expression {
     children.map(_.eval(input))
   }
 
+  override def withNewChildren(newChildren: Seq[Expression]): this.type = {
+    makeCopy(Array(newChildren))
+  }
+
   override def toString: String = s"Array(${children.mkString(",")})"
 }
 
@@ -204,5 +208,9 @@ case class CreateStruct(children: Seq[NamedExpression]) extends Expression {
 
   override def eval(input: Row): EvaluatedType = {
     Row(children.map(_.eval(input)): _*)
+  }
+
+  override def withNewChildren(newChildren: Seq[Expression]): this.type = {
+    makeCopy(Array(newChildren))
   }
 }
