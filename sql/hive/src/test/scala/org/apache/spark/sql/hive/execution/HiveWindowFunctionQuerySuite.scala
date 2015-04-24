@@ -69,7 +69,7 @@ class HiveWindowFunctionQuerySuite extends HiveComparisonTest with BeforeAndAfte
     sql("set hive.plan.serialization.format=kryo")
     // Explicitly set fs to local fs.
     sql(s"set fs.default.name=file://$testTempDir/")
-    //sql(s"set mapred.working.dir=${testTempDir}")
+    // sql(s"set mapred.working.dir=${testTempDir}")
     // Ask Hive to run jobs in-process as a single map and reduce task.
     sql("set mapred.job.tracker=local")
   }
