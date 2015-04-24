@@ -68,9 +68,6 @@ case class WindowAggregate(
       boundedFunction: Expression,
       computedAttribute: AttributeReference)
 
-  case class WindowFunctionInfo(
-      supportsWindow: Boolean, pivotResult: Boolean, impliesOrder: Boolean)
-
   private[this] val computedWindows = windowExpressions.collect{
 
     case Alias(expr @ WindowExpression(func, spec), _) =>
