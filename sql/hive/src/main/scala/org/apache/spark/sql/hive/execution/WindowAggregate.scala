@@ -76,7 +76,7 @@ case class WindowAggregate(
         case _ => false
       }
       ComputedWindow(
-        func,
+        expr,
         ipr,
         spec,
         BindReferences.bindReference(func, child.output),

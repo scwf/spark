@@ -1190,12 +1190,14 @@ https://cwiki.apache.org/confluence/display/Hive/Enhanced+Aggregation%2C+Cube%2C
             "TOK_CLUSTERBY"),
           partition.getChildren.toSeq.asInstanceOf[Seq[ASTNode]])
 
-      val partitionBy = distributeByClause.orElse(clusterByClause).toSeq
-      val sortBy = clusterByClause.orElse(orderByClause).orElse(sortByClause).toSeq
+      val partitionByExpr =
+        distributeByClause.orElse(clusterByClause).toSeq.flatMap(_.getChildren.map(nodeToExpr))
+      val sortByExpr =
+        orderByClause.orElse(sortByClause).toSeq.flatMap(_.getChildren.map(nodeToSortOrder)) ++
+        clusterByClause.toSeq.flatMap(_.getChildren.map(nodeToExpr).map(SortOrder(_, Ascending)))
 
-      WindowPartition(
-        partitionBy.flatMap(_.getChildren.map(nodeToExpr)),
-        sortBy.flatMap(_.getChildren.map(nodeToSortOrder)))
+      WindowPartition(partitionByExpr, sortByExpr)
+
     }.getOrElse(WindowPartition(Nil, Nil))
 
     val maybeWindowFrame = rowFrame.orElse(rangeFrame).flatMap { frame =>
