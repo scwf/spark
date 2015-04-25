@@ -33,11 +33,13 @@ import org.apache.spark.sql.types.StringType
  *
  * @param fallback A function that parses an input string to a logical plan
  */
+// 最顶层的 parser， 内部回调各个 dialect的 parser
+// 目前已有的两个dialect parser是：1 SqlParser 2 ExtendedHiveQlParser。 这两个parser最好重命名为：SqlDialectParser　和　HiveQlDialectParser
 private[sql] class SparkSQLParser(fallback: String => LogicalPlan) extends AbstractSparkSQLParser {
 
   // A parser for the key-value part of the "SET [key = [value ]]" syntax
   private object SetCommandParser extends RegexParsers {
-    private val key: Parser[String] = "(?m)[^=]+".r
+    private val key: Parser[String] = "(?m)[^=]+".r // todo： 正则的含义？ 需要学习下
 
     private val value: Parser[String] = "(?m).*$".r
 

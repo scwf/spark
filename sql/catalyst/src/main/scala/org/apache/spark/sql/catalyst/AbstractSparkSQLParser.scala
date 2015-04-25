@@ -52,6 +52,8 @@ private[sql] abstract class AbstractSparkSQLParser
   // NOTICE, Since the Keyword properties defined by sub class, we couldn't call this
   // method during the parent class instantiation, because the sub class instance
   // isn't created yet.
+  // 貌似这里 用lazy还是有玄机的，不想在初始化时父类里面调用
+  // 但是说实在的，定义一个 Keyword 类，采用反射获取 reserved 很奇怪， 何不直接定义一个Seq【String】
   protected lazy val reservedWords: Seq[String] =
     this
       .getClass
@@ -79,7 +81,17 @@ private[sql] abstract class AbstractSparkSQLParser
   }
 }
 
+/**
+ *  spark sql 提供的词法解析器， 该解析器的主要解析出 keywords， identifier， numeric， string 和 delimiters
+ *  为了区分identifiers 和 keywords, 词法解析器根据reserved集合来匹配keywords，只要是在reserved里面的字符串都不会被解析为identifire 而是会被解析成 keyword
+ *  用户可以自定义reserved
+ *  另外分隔符可以通过 delimiters 来设置
+ *
+ *  通常来讲，这个词法解析器用于将字符输入切割成多个token，然后我们会将这些token 传给一个token parser去解析
+ *  [[scala.util.parsing.combinator.syntactical.TokenParsers]].)
+ */
 class SqlLexical extends StdLexical {
+  // 定义了一个 float 的token，后面解析float字符串用
   case class FloatLit(chars: String) extends Token {
     override def toString: String = chars
   }
@@ -96,7 +108,9 @@ class SqlLexical extends StdLexical {
   )
 
   protected override def processIdent(name: String) = {
+    // 全部转为小写
     val token = KeywordNormalizer(name)
+    // 这个够直观了吧
     if (reserved contains token) Keyword(token) else Identifier(name)
   }
 
