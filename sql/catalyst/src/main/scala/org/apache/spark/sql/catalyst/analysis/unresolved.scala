@@ -132,7 +132,8 @@ case class UnresolvedStar(table: Option[String]) extends Star {
       // If there is no table specified, use all input attributes.
       case None => input
       // If there is a table, pick out attributes that are part of this table.
-      case Some(t) => input.filter(_.qualifiers.filter(resolver(_, t)).nonEmpty)
+      // qualifiers目前实现都为空，貌似是这个NamedExpression 的 多个等价叫法？ todo： zhongshuai解决的那个别名问题可以通过这个解决吗
+      case Some(t) => input.filter(_.qualifiers.filter(resolver(_, t)).nonEmpty) // 可读性不高
     }
     expandedAttributes.zip(input).map {
       case (n: NamedExpression, _) => n

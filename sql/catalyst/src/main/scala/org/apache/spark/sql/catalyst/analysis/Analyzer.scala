@@ -43,7 +43,7 @@ class Analyzer(
     maxIterations: Int = 100)
   extends RuleExecutor[LogicalPlan] with HiveTypeCoercion with CheckAnalysis {
 
-  val resolver = if (caseSensitive) caseSensitiveResolution else caseInsensitiveResolution
+  val resolver = if (caseSensitive) caseSensitiveResolution else caseInsensitiveResolution // 用于定义分析时是否区分大小写
 
   val fixedPoint = FixedPoint(maxIterations)
 
@@ -70,6 +70,7 @@ class Analyzer(
 
   /**
    * Removes no-op Alias expressions from the plan.
+   * todo： 将 groupingExpressions 中的 alias脱掉，不脱会怎么样？ 会报错吗？ 应该不会，我理解只是group里面的alias没有意义，需要确认下
    */
   object TrimGroupingAliases extends Rule[LogicalPlan] {
     def apply(plan: LogicalPlan): LogicalPlan = plan transform {
@@ -78,7 +79,7 @@ class Analyzer(
     }
   }
 
-  object ResolveGroupingAnalytics extends Rule[LogicalPlan] {
+  object ResolveGroupingAnalytics extends Rule[LogicalPlan] { // todo： yadong添加注释
     /**
      * Extract attribute set according to the grouping id
      * @param bitmask bitmask to represent the selected of the attribute sequence
@@ -187,11 +188,12 @@ class Analyzer(
     def apply(plan: LogicalPlan): LogicalPlan = {
       val (realPlan, cteRelations) = plan match {
         // TODO allow subquery to define CTE
+        // todo： 我们的是支持 子查询的，可以添加进来
         // Add cte table to a temp relation map,drop `with` plan and keep its child
         case With(child, relations) => (child, relations)
         case other => (other, Map.empty[String, LogicalPlan])
       }
-
+      // 这个其实是将 cte的替换过程和 解析底层表的过程混合在一起了，最好将替换过程添加到 analyzer的第一个 batch里面去，就像我们的内部实现。
       realPlan transform {
         case i@InsertIntoTable(u: UnresolvedRelation, _, _, _, _) =>
           i.copy(
@@ -209,7 +211,7 @@ class Analyzer(
    */
   object ResolveReferences extends Rule[LogicalPlan] {
     def apply(plan: LogicalPlan): LogicalPlan = plan transformUp {
-      case p: LogicalPlan if !p.childrenResolved => p
+      case p: LogicalPlan if !p.childrenResolved => p // 这一步很重要，一定是孩子都分析过了才能分析自己，不加会有问题，同时造成没必要的迭代。
 
       // If the projection list contains Stars, expand it.
       case p @ Project(projectList, child) if containsStar(projectList) =>

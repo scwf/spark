@@ -58,6 +58,8 @@ abstract class NamedExpression extends Expression {
    * 1. Empty Seq: when an attribute doesn't have a qualifier,
    *    e.g. top level attributes aliased in the SELECT clause, or column from a LocalRelation.
    * 2. Single element: either the table name or the alias name of the table.
+   *
+   *目前实现都为空，模式是这个NamedExpression 的 多个等价叫法？ todo： zhongshuai解决的那个别名问题可以通过这个解决吗
    */
   def qualifiers: Seq[String]
 
