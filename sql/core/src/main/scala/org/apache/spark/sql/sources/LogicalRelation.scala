@@ -23,7 +23,7 @@ import org.apache.spark.sql.catalyst.plans.logical.{Statistics, LeafNode, Logica
 /**
  * Used to link a [[BaseRelation]] in to a logical query plan.
  */
-private[sql] case class LogicalRelation(relation: BaseRelation)
+private[sql] case class LogicalRelation(relation: BaseRelation) // 叫 externalLogicalRelation比较合适？
   extends LeafNode
   with MultiInstanceRelation {
 

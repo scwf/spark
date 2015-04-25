@@ -1087,7 +1087,7 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])
     }
 
     self.context.runJob(self, writeToFile)
-    writer.commitJob()
+    writer.commitJob()  // hive insert clones here
   }
 
   private def initHadoopOutputMetrics(context: TaskContext): (OutputMetrics, Option[() => Long]) = {

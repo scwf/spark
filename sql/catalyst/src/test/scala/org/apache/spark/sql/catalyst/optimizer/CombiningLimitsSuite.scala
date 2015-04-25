@@ -42,7 +42,7 @@ class CombiningLimitsSuite extends PlanTest {
       testRelation
         .select('a)
         .limit(10)
-        .limit(5)
+        .limit(5)  // wf: optimize the case for not adjacent limit
 
     val optimized = Optimize.execute(originalQuery.analyze)
     val correctAnswer =

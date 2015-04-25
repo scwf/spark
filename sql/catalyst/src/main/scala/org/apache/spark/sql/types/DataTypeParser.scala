@@ -27,7 +27,7 @@ import org.apache.spark.sql.catalyst.SqlLexical
  * This is a data type parser that can be used to parse string representations of data types
  * provided in SQL queries. This parser is mixed in with DDLParser and SqlParser.
  */
-private[sql] trait DataTypeParser extends StandardTokenParsers {
+private[sql] trait DataTypeParser extends StandardTokenParsers { // 这个就是 token parser了，其内部先用 lexical parser
 
   // This is used to create a parser from a regex. We are using regexes for data type strings
   // since these strings can be also used as column names or field names.
@@ -37,6 +37,10 @@ private[sql] trait DataTypeParser extends StandardTokenParsers {
     { case Identifier(str) if regex.unapplySeq(str).isDefined => str }
   )
 
+    /**
+     *  todo： (?i) 是什么意思？
+     *  r 返回的是一个 regex，隐式转换为 一个 parser
+     */
   protected lazy val primitiveType: Parser[DataType] =
     "(?i)string".r ^^^ StringType |
     "(?i)float".r ^^^ FloatType |
@@ -107,7 +111,7 @@ private[sql] object DataTypeParser {
   lazy val dataTypeParser = new DataTypeParser {
     override val lexical = new SqlLexical
   }
-
+  // 改为parse 方法
   def apply(dataTypeString: String): DataType = dataTypeParser.toDataType(dataTypeString)
 }
 

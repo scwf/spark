@@ -68,7 +68,7 @@ class SQLContext(@transient val sparkContext: SparkContext)
   /**
    * @return Spark SQL configuration
    */
-  protected[sql] def conf = tlSession.get().conf
+  protected[sql] def conf = tlSession.get().conf   // 出于并发考虑
 
   /**
    * Set Spark SQL configuration properties.
@@ -183,7 +183,7 @@ class SQLContext(@transient val sparkContext: SparkContext)
    */
   @Experimental
   @transient
-  lazy val emptyDataFrame: DataFrame = createDataFrame(sparkContext.emptyRDD[Row], StructType(Nil))
+  lazy val emptyDataFrame: DataFrame = createDataFrame(sparkContext.emptyRDD[Row], StructType(Nil))  // 比如读parquet文件为空时，则返回该DF
 
   /**
    * A collection of methods for registering user-defined functions (UDF).
@@ -270,7 +270,7 @@ class SQLContext(@transient val sparkContext: SparkContext)
 
     /** Creates a DataFrame from an RDD of case classes or tuples. */
     implicit def rddToDataFrameHolder[A <: Product : TypeTag](rdd: RDD[A]): DataFrameHolder = {
-      DataFrameHolder(self.createDataFrame(rdd))
+      DataFrameHolder(self.createDataFrame(rdd)) // todo： 为什么搞一个DataFrameHolder？
     }
 
     /** Creates a DataFrame from a local Seq of Product. */
@@ -358,7 +358,7 @@ class SQLContext(@transient val sparkContext: SparkContext)
    * @group dataframes
    */
   def baseRelationToDataFrame(baseRelation: BaseRelation): DataFrame = {
-    DataFrame(this, LogicalRelation(baseRelation))
+    DataFrame(this, LogicalRelation(baseRelation)) // todo：为什么是 LogicalRelation，按道理这会导致本地表的产生，　看错了　是LogicalRelation 不是 LocalRelation　
   }
 
   /**
@@ -439,7 +439,7 @@ class SQLContext(@transient val sparkContext: SparkContext)
    * @group dataframes
    */
   def createDataFrame(rowRDD: JavaRDD[Row], columns: java.util.List[String]): DataFrame = {
-    createDataFrame(rowRDD.rdd, columns.toSeq)
+    createDataFrame(rowRDD.rdd, columns.toSeq) // todo：这个是调用谁？
   }
 
   /**
@@ -449,7 +449,7 @@ class SQLContext(@transient val sparkContext: SparkContext)
    *          SELECT * queries will return the columns in an undefined order.
    * @group dataframes
    */
-  def createDataFrame(rdd: RDD[_], beanClass: Class[_]): DataFrame = {
+  def createDataFrame(rdd: RDD[_], beanClass: Class[_]): DataFrame = { // 不保序，有点恐怖
     val attributeSeq = getSchema(beanClass)
     val className = beanClass.getName
     val rowRdd = rdd.mapPartitions { iter =>
@@ -673,7 +673,7 @@ class SQLContext(@transient val sparkContext: SparkContext)
    * @group genericdata
    */
   @Experimental
-  def load(path: String): DataFrame = {
+  def load(path: String): DataFrame = {  // 使用 默认的外部datasource 来导入文件，这里的问题是可能外部的datasource 不需要path参数，而是要其他参数
     val dataSourceName = conf.defaultDataSourceName
     load(path, dataSourceName)
   }
@@ -1075,7 +1075,7 @@ class SQLContext(@transient val sparkContext: SparkContext)
   protected[sql] val planner = new SparkPlanner
 
   @transient
-  protected[sql] lazy val emptyResult = sparkContext.parallelize(Seq.empty[Row], 1)
+  protected[sql] lazy val emptyResult = sparkContext.parallelize(Seq.empty[Row], 1)   // todo： 用来干啥的？ 和上面的emptyDF的关系？
 
   /**
    * Prepares a planned SparkPlan for execution by inserting shuffle operations as needed.
@@ -1083,7 +1083,7 @@ class SQLContext(@transient val sparkContext: SparkContext)
   @transient
   protected[sql] val prepareForExecution = new RuleExecutor[SparkPlan] {
     val batches =
-      Batch("Add exchange", Once, EnsureRequirements(self)) :: Nil
+      Batch("Add exchange", Once, EnsureRequirements(self)) :: Nil    // 这里用了once，哈哈
   }
 
   protected[sql] def openSession(): SQLSession = {
@@ -1108,6 +1108,7 @@ class SQLContext(@transient val sparkContext: SparkContext)
 
   protected[sql] class SQLSession {
     // Note that this is a lazy val so we can override the default value in subclasses.
+    // scala里面lazy用法 很精妙
     protected[sql] lazy val conf: SQLConf = new SQLConf
   }
 
@@ -1117,13 +1118,13 @@ class SQLContext(@transient val sparkContext: SparkContext)
    * access to the intermediate phases of query execution for developers.
    */
   @DeveloperApi
-  protected[sql] class QueryExecution(val logical: LogicalPlan) {
+  protected[sql] class QueryExecution(val logical: LogicalPlan) {   // 提出去，不当作内部类，目前已有PR在重构
     def assertAnalyzed(): Unit = analyzer.checkAnalysis(analyzed)
 
     lazy val analyzed: LogicalPlan = analyzer.execute(logical)
     lazy val withCachedData: LogicalPlan = {
-      assertAnalyzed()
-      cacheManager.useCachedData(analyzed)
+      assertAnalyzed()  // 确认analyze 没有出错
+      cacheManager.useCachedData(analyzed) // 如果该表已经被 cache了，使用cache的表
     }
     lazy val optimizedPlan: LogicalPlan = optimizer.execute(withCachedData)
 
@@ -1140,7 +1141,7 @@ class SQLContext(@transient val sparkContext: SparkContext)
     lazy val toRdd: RDD[Row] = executedPlan.execute()
 
     protected def stringOrError[A](f: => A): String =
-      try f.toString catch { case e: Throwable => e.toString }
+      try f.toString catch { case e: Throwable => e.toString } // 短小精悍的小函数
 
     def simpleString: String =
       s"""== Physical Plan ==
@@ -1151,6 +1152,7 @@ class SQLContext(@transient val sparkContext: SparkContext)
       // TODO previously will output RDD details by run (${stringOrError(toRdd.toDebugString)})
       // however, the `toRdd` will cause the real execution, which is not what we want.
       // We need to think about how to avoid the side effect.
+      // todo： 我们可以考虑怎么把RDD的信息也打印出来
       s"""== Parsed Logical Plan ==
          |${stringOrError(logical)}
          |== Analyzed Logical Plan ==

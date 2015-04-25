@@ -42,7 +42,7 @@ object BindReferences extends Logging {
   def bindReference[A <: Expression](
       expression: A,
       input: Seq[Attribute],
-      allowFailures: Boolean = false): A = {
+      allowFailures: Boolean = false): A = {   // allowFailures 参数用于控制是否 允许在input找不到 该expression
     expression.transform { case a: AttributeReference =>
       attachTree(a, "Binding attribute") {
         val ordinal = input.indexWhere(_.exprId == a.exprId)

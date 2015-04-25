@@ -93,6 +93,7 @@ class HiveContext(sc: SparkContext) extends SQLContext(sc) {
     if (conf.dialect == "sql") {
       super.sql(substituted)
     } else if (conf.dialect == "hiveql") {
+      // 这里需要重构，直接使用  DataFrame(this, parseSql(sqlText)) 即可
       val ddlPlan = ddlParserWithHiveQL.parse(sqlText, exceptionOnError = false)
       DataFrame(this, ddlPlan.getOrElse(HiveQl.parseSql(substituted)))
     }  else {
