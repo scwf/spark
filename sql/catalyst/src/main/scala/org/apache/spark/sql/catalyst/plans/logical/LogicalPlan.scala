@@ -72,7 +72,7 @@ abstract class LogicalPlan extends QueryPlan[LogicalPlan] with Logging {
    * differences like attribute naming and or expression id differences.  Logical operators that
    * can do better should override this function.
    */
-  def sameResult(plan: LogicalPlan): Boolean = {
+  def sameResult(plan: LogicalPlan): Boolean = { // 该方法永远返回false不会影响结果正确性，但会影响性能
     val cleanLeft = EliminateSubQueries(this)
     val cleanRight = EliminateSubQueries(plan)
 
@@ -80,13 +80,13 @@ abstract class LogicalPlan extends QueryPlan[LogicalPlan] with Logging {
       cleanLeft.children.size == cleanRight.children.size && {
       logDebug(
         s"[${cleanRight.cleanArgs.mkString(", ")}] == [${cleanLeft.cleanArgs.mkString(", ")}]")
-      cleanRight.cleanArgs == cleanLeft.cleanArgs
+      cleanRight.cleanArgs == cleanLeft.cleanArgs  // todo：为什么判断 cleanArgs？
     } &&
     (cleanLeft.children, cleanRight.children).zipped.forall(_ sameResult _)
   }
 
   /** Args that have cleaned such that differences in expression id should not affect equality */
-  protected lazy val cleanArgs: Seq[Any] = {
+  protected lazy val cleanArgs: Seq[Any] = { // todo： debug 这个方法
     val input = children.flatMap(_.output)
     productIterator.map {
       // Children are checked using sameResult above.
