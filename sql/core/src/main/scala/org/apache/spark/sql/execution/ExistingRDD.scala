@@ -85,7 +85,7 @@ object RDDConversions {
 
 /** Logical plan node for scanning data from an RDD. */
 case class LogicalRDD(output: Seq[Attribute], rdd: RDD[Row])(sqlContext: SQLContext)
-  extends LogicalPlan with MultiInstanceRelation {
+  extends LogicalPlan with MultiInstanceRelation {  // wf: here should be leaf node
 
   override def children: Seq[LogicalPlan] = Nil
 
