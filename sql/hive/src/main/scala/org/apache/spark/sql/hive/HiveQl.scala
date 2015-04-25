@@ -55,8 +55,9 @@ import scala.collection.JavaConversions._
 private[hive] case object NativePlaceholder extends Command
 
 /** Provides a mapping from HiveQL statements to catalyst logical plans and expression trees. */
+// 命名问题，不够直观，应该要体现他是一个转换器的作用
 private[hive] object HiveQl {
-  protected val nativeCommands = Seq(
+  protected val nativeCommands = Seq( // 应该把这个单独抽出来放到一个object里面，便于维护
     "TOK_ALTERDATABASE_OWNER",
     "TOK_ALTERDATABASE_PROPERTIES",
     "TOK_ALTERINDEX_PROPERTIES",
@@ -136,12 +137,13 @@ private[hive] object HiveQl {
   )
 
   // Commands that we do not need to explain.
-  protected val noExplainCommands = Seq(
+  protected val noExplainCommands = Seq(  // 同上，应该抽出去
     "TOK_DESCTABLE",
     "TOK_SHOWTABLES",
     "TOK_TRUNCATETABLE"     // truncate table" is a NativeCommand, does not need to explain.
   ) ++ nativeCommands
 
+  // 移到hivecontext 里面去， 放在这里不合适，需要重构
   protected val hqlParser = {
     val fallback = new ExtendedHiveQlParser
     new SparkSQLParser(fallback.parse(_))
@@ -156,7 +158,7 @@ private[hive] object HiveQl {
    * have clean copy semantics.  Therefore, users of this class should take care when
    * copying/modifying trees that might be used elsewhere.
    */
-  implicit class TransformableNode(n: ASTNode) {
+  implicit class TransformableNode(n: ASTNode) {  // 这个比较有意思， 对 astnode 进行transform操作，必须使用隐式转换吗？
     /**
      * Returns a copy of this node where `rule` has been recursively applied to it and all of its
      * children.  When `rule` does not apply to a given node it is left unchanged.
@@ -240,6 +242,7 @@ private[hive] object HiveQl {
 
 
   /** Returns a LogicalPlan for a given HiveQL string. */
+  // 重构时删除
   def parseSql(sql: String): LogicalPlan = hqlParser.parse(sql)
 
   val errorRegEx = "line (\\d+):(\\d+) (.*)".r
