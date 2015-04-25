@@ -46,19 +46,29 @@ case class Aggregate(
     child: SparkPlan)
   extends UnaryNode {
 
+  // sort可能会按照 aggregateExpressions 里面没有的列 但在groupingExpressions 有的列来排序，
+  // 当前的做法是 修改 aggregate 的aggregateExpressions 然后在sort上方添加 project进行修剪
+  // 这种case 是否可以去掉project？ 毕竟 project 会多走一遍， 可能会打破 物理row 和 逻辑output 不匹配
+
   override def requiredChildDistribution: List[Distribution] = {
     if (partial) {
       UnspecifiedDistribution :: Nil
     } else {
-      if (groupingExpressions == Nil) {
+      if (groupingExpressions == Nil) { // 如果没有group by，則对所有记录聚合
         AllTuples :: Nil
       } else {
         ClusteredDistribution(groupingExpressions) :: Nil
       }
     }
   }
+  // 注意对于语句 select a/sum(b) from testData2 group by a
+  // 1. 该语句会生成出两geaggregate 第一个partitial的，其中
+  // groupingexpression是 attributereference a
+  // 但 aggexpressions 居然长度是 2, a 和 sum（b）
+  // a * sum(b) 也类似
+  // 2 第二是全局的 aggregate ，这个 里面的aggexpression就正常了，长度为1,是devide/multiply
 
-  override def output: Seq[Attribute] = aggregateExpressions.map(_.toAttribute)
+  override def output: Seq[Attribute] = aggregateExpressions.map(_.toAttribute) // toAttribute sum as s =》s
 
   /**
    * An aggregate that needs to be computed for each row in a group.
@@ -79,8 +89,8 @@ case class Aggregate(
       case a: AggregateExpression =>
         ComputedAggregate(
           a,
-          BindReferences.bindReference(a, child.output),
-          AttributeReference(s"aggResult:$a", a.dataType, a.nullable)())
+          BindReferences.bindReference(a, child.output), // 这么写 在做全局聚合时 就可以拿到局部聚合的结果了，不用再算一遍
+          AttributeReference(s"aggResult:$a", a.dataType, a.nullable)()) // 给聚合计算结果 新命名为 aggResult的 AttributeReference，主要是生成resultExpressions使用
     }
   }.toArray
 
@@ -120,6 +130,9 @@ case class Aggregate(
       case e: Expression if resultMap.contains(e) => resultMap(e)
     }
   }
+  // 将aggregateExpressions中的expression替换为 最终结果 attribute， 便于使用中间聚合结果（指的是该聚合算子的计算的中间聚合结果，这里就是a 和 sum的row）的输出，
+  // 比如 (CAST(a#6, LongType) * CombineSum(PartialSum#46L)) AS c0#41L =》
+  // (CAST(a#6, LongType) * aggResult:CombineSum(PartialSum#46L)#49L) AS c0#41L
 
   override def execute(): RDD[Row] = attachTree(this, "execute") {
     if (groupingExpressions.isEmpty) {
@@ -130,18 +143,19 @@ case class Aggregate(
           currentRow = iter.next()
           var i = 0
           while (i < buffer.length) {
-            buffer(i).update(currentRow)
+            buffer(i).update(currentRow) // 更新聚合值
             i += 1
           }
         }
         val resultProjection = new InterpretedProjection(resultExpressions, computedSchema)
-        val aggregateResults = new GenericMutableRow(computedAggregates.length)
+        val aggregateResults = new GenericMutableRow(computedAggregates.length) // 如果groupingExpressions为空，最后结果是一行
 
         var i = 0
         while (i < buffer.length) {
-          aggregateResults(i) = buffer(i).eval(EmptyRow)
+          aggregateResults(i) = buffer(i).eval(EmptyRow) // 获取聚合值
           i += 1
         }
+        // aggregateResults 是中间计算结果，最后的计算结果要根据他再生成
 
         Iterator(resultProjection(aggregateResults))
       }
@@ -172,7 +186,7 @@ case class Aggregate(
           private[this] val aggregateResults = new GenericMutableRow(computedAggregates.length)
           private[this] val resultProjection =
             new InterpretedMutableProjection(
-              resultExpressions, computedSchema ++ namedGroups.map(_._2))
+              resultExpressions, computedSchema ++ namedGroups.map(_._2)) // namedGroups 不是多余的，之所以上面没有，是因为上面groupingExpressions为空所以namedGroups也为空
           private[this] val joinedRow = new JoinedRow4
 
           override final def hasNext: Boolean = hashTableIter.hasNext
@@ -189,7 +203,7 @@ case class Aggregate(
               aggregateResults(i) = currentBuffer(i).eval(EmptyRow)
               i += 1
             }
-            resultProjection(joinedRow(aggregateResults, currentGroup))
+            resultProjection(joinedRow(aggregateResults, currentGroup)) // 这个joinedrow 保证了 其schema和 computedSchema ++ namedGroups.map(_._2)对应
           }
         }
       }

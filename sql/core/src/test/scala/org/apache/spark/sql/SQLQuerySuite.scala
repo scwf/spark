@@ -33,6 +33,11 @@ class SQLQuerySuite extends QueryTest with BeforeAndAfterAll {
   import org.apache.spark.sql.test.TestSQLContext.implicits._
   val sqlCtx = TestSQLContext
 
+  test("aggregate wf") {
+
+    sql("select a*sum(b) from testData2 group by a").collect()
+  }
+
   test("self join with aliases") {
     Seq(1,2,3).map(i => (i, i.toString)).toDF("int", "str").registerTempTable("df")
 

@@ -39,7 +39,7 @@ case class BoundReference(ordinal: Int, dataType: DataType, nullable: Boolean)
 
 object BindReferences extends Logging {
 
-  def bindReference[A <: Expression](
+  def bindReference[A <: Expression]( // 把expression中属于input的expression转换为BoundReference
       expression: A,
       input: Seq[Attribute],
       allowFailures: Boolean = false): A = {   // allowFailures 参数用于控制是否 允许在input找不到 该expression
