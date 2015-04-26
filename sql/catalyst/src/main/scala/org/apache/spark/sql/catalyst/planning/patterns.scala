@@ -62,6 +62,8 @@ object PhysicalOperation extends PredicateHelper {
   }
 
   /**
+   * 主要解决如下场景，这种写法可以借鉴
+   * todo： 需要再仔细看下这里
    * Collects projects and filters, in-lining/substituting aliases if necessary.  Here are two
    * examples for alias in-lining/substitution.  Before:
    * {{{
@@ -92,7 +94,7 @@ object PhysicalOperation extends PredicateHelper {
     }
 
   def collectAliases(fields: Seq[Expression]): Map[Attribute, Expression] = fields.collect {
-    case a @ Alias(child, _) => a.toAttribute.asInstanceOf[Attribute] -> child
+    case a @ Alias(child, _) => a.toAttribute.asInstanceOf[Attribute] -> child // 这里的asInstanceOf[Attribute] 多余
   }.toMap
 
   def substitute(aliases: Map[Attribute, Expression])(expr: Expression): Expression = {

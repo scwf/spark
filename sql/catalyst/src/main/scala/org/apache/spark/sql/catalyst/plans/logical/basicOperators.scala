@@ -65,14 +65,14 @@ case class Generate(
       !generatorOutput.exists(!_.resolved)
   }
 
-  // we don't want the gOutput to be taken as part of the expressions
+  // we don't want the gOutput？？ to be taken as part of the expressions
   // as that will cause exceptions like unresolved attributes etc.
   override def expressions: Seq[Expression] = generator :: Nil
 
   def output: Seq[Attribute] = {
     val qualified = qualifier.map(q =>
       // prepend the new qualifier to the existed one
-      generatorOutput.map(a => a.withQualifiers(q +: a.qualifiers))
+      generatorOutput.map(a => a.withQualifiers(q +: a.qualifiers)) // 如果当前节点有qualifier 則添加到 output中去， zhongshuai那个是不是可以借鉴？
     ).getOrElse(generatorOutput)
 
     if (join) child.output ++ qualified else qualified

@@ -847,7 +847,7 @@ private[hive] case class MetastoreRelation
       HiveMetastoreTypes.toDataType(f.getType),
       // Since data can be dumped in randomly with no validation, everything is nullable.
       nullable = true
-    )(qualifiers = Seq(alias.getOrElse(tableName)))
+    )(qualifiers = Seq(alias.getOrElse(tableName))) // 这么看的话，在sqlcontext里面也不支持 table.column
   }
 
   // Must be a stable value since new attributes are born here.

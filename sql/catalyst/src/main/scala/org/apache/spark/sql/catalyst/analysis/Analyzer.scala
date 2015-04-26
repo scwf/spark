@@ -197,7 +197,7 @@ class Analyzer(
       realPlan transform {
         case i@InsertIntoTable(u: UnresolvedRelation, _, _, _, _) =>
           i.copy(
-            table = EliminateSubQueries(getTable(u, cteRelations)))
+            table = EliminateSubQueries(getTable(u, cteRelations))) // todo： EliminateSubQueries 一定要吗？
         case u: UnresolvedRelation =>
           getTable(u, cteRelations)
       }
@@ -214,6 +214,7 @@ class Analyzer(
       case p: LogicalPlan if !p.childrenResolved => p // 这一步很重要，一定是孩子都分析过了才能分析自己，不加会有问题，同时造成没必要的迭代。
 
       // If the projection list contains Stars, expand it.
+      // 分析 * 号
       case p @ Project(projectList, child) if containsStar(projectList) =>
         Project(
           projectList.flatMap {
@@ -257,23 +258,24 @@ class Analyzer(
         )
 
       // Special handling for cases when self-join introduce duplicate expression ids.
+      // 分析自join，原因是自join 会导致 上层查询下层字段时混乱
       case j @ Join(left, right, _, _) if left.outputSet.intersect(right.outputSet).nonEmpty =>
         val conflictingAttributes = left.outputSet.intersect(right.outputSet)
         logDebug(s"Conflicting attributes ${conflictingAttributes.mkString(",")} in $j")
 
-        val (oldRelation, newRelation) = right.collect {
+        val (oldRelation, newRelation) = right.collect { // 从上往下 收集
           // Handle base relations that might appear more than once.
-          case oldVersion: MultiInstanceRelation
+          case oldVersion: MultiInstanceRelation //遇到relation就复制一份
               if oldVersion.outputSet.intersect(conflictingAttributes).nonEmpty =>
             val newVersion = oldVersion.newInstance()
             (oldVersion, newVersion)
 
           // Handle projects that create conflicting aliases.
-          case oldVersion @ Project(projectList, _)
+          case oldVersion @ Project(projectList, _) // 遇到project就把其 projectList 中的alias 重新生成 ExprID， 这里有个小技巧： 非alias的是在第一个case解决的
               if findAliases(projectList).intersect(conflictingAttributes).nonEmpty =>
             (oldVersion, oldVersion.copy(projectList = newAliases(projectList)))
 
-          case oldVersion @ Aggregate(_, aggregateExpressions, _)
+          case oldVersion @ Aggregate(_, aggregateExpressions, _) // 遇到agg和project类似
               if findAliases(aggregateExpressions).intersect(conflictingAttributes).nonEmpty =>
             (oldVersion, oldVersion.copy(aggregateExpressions = newAliases(aggregateExpressions)))
         }.headOption.getOrElse { // Only handle first case, others will be fixed on the next pass.
@@ -286,8 +288,8 @@ class Analyzer(
               """.stripMargin)
         }
 
-        val attributeRewrites = AttributeMap(oldRelation.output.zip(newRelation.output))
-        val newRight = right transformUp {
+        val attributeRewrites = AttributeMap(oldRelation.output.zip(newRelation.output)) // 把原来的output映射到新的output
+        val newRight = right transformUp { // 从下往上遍历并替换掉 老的 expression，
           case r if r == oldRelation => newRelation
         } transformUp {
           case other => other transformExpressions {
@@ -296,14 +298,14 @@ class Analyzer(
         }
         j.copy(right = newRight)
 
-      case q: LogicalPlan =>
+      case q: LogicalPlan => // 正真开始分析 reference
         logTrace(s"Attempting to resolve ${q.simpleString}")
         q transformExpressionsUp  {
           case u @ UnresolvedAttribute(nameParts) if nameParts.length == 1 &&
             resolver(nameParts(0), VirtualColumn.groupingIdName) &&
             q.isInstanceOf[GroupingAnalytics] =>
             // Resolve the virtual column GROUPING__ID for the operator GroupingAnalytics
-            q.asInstanceOf[GroupingAnalytics].gid
+            q.asInstanceOf[GroupingAnalytics].gid // todo: yadong 添加注释
           case u @ UnresolvedAttribute(nameParts) =>
             // Leave unchanged if resolution fails.  Hopefully will be resolved next round.
             val result =
@@ -338,6 +340,7 @@ class Analyzer(
    * clause.  This rule detects such queries and adds the required attributes to the original
    * projection, so that they will be available during sorting. Another projection is added to
    * remove these attributes after sorting.
+   * 分析 sort里面有 但下层 output没有的请况
    */
   object ResolveSortReferences extends Rule[LogicalPlan] {
     def apply(plan: LogicalPlan): LogicalPlan = plan transformUp {
@@ -417,7 +420,7 @@ class Analyzer(
   /**
    * Replaces [[UnresolvedFunction]]s with concrete [[catalyst.expressions.Expression Expressions]].
    */
-  object ResolveFunctions extends Rule[LogicalPlan] {
+  object ResolveFunctions extends Rule[LogicalPlan] { // 简单： 分析 function
     def apply(plan: LogicalPlan): LogicalPlan = plan transform {
       case q: LogicalPlan =>
         q transformExpressions {
@@ -430,7 +433,7 @@ class Analyzer(
   /**
    * Turns projections that contain aggregate expressions into aggregations.
    */
-  object GlobalAggregates extends Rule[LogicalPlan] {
+  object GlobalAggregates extends Rule[LogicalPlan] { // 简单 project 转为 agg
     def apply(plan: LogicalPlan): LogicalPlan = plan transform {
       case Project(projectList, child) if containsAggregates(projectList) =>
         Aggregate(Nil, projectList, child)
@@ -474,7 +477,7 @@ class Analyzer(
    * [[catalyst.expressions.Generator Generator]] we convert the
    * [[catalyst.plans.logical.Project Project]] to a [[catalyst.plans.logical.Generate Generate]].
    */
-  object ImplicitGenerate extends Rule[LogicalPlan] {
+  object ImplicitGenerate extends Rule[LogicalPlan] { // 简单 project =》 Generate
     def apply(plan: LogicalPlan): LogicalPlan = plan transform {
       case Project(Seq(Alias(g: Generator, name)), child) =>
         Generate(g, join = false, outer = false,
@@ -538,7 +541,7 @@ class Analyzer(
  * only required to provide scoping information for attributes and can be removed once analysis is
  * complete.
  */
-object EliminateSubQueries extends Rule[LogicalPlan] {
+object EliminateSubQueries extends Rule[LogicalPlan] { // 简单，消除Subquery,算是优化规则，但分析里面也用了，
   def apply(plan: LogicalPlan): LogicalPlan = plan transform {
     case Subquery(_, child) => child
   }

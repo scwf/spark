@@ -47,7 +47,7 @@ abstract class NamedExpression extends Expression {
    * multiple qualifiers, it is possible that there are other possible way to refer to this
    * attribute.
    */
-  def qualifiedName: String = (qualifiers.headOption.toSeq :+ name).mkString(".")
+  def qualifiedName: String = (qualifiers.headOption.toSeq :+ name).mkString(".") // 使用第一个qualifier
 
   /**
    * All possible qualifiers for the expression.
@@ -59,7 +59,9 @@ abstract class NamedExpression extends Expression {
    *    e.g. top level attributes aliased in the SELECT clause, or column from a LocalRelation.
    * 2. Single element: either the table name or the alias name of the table.
    *
-   *目前实现都为空，模式是这个NamedExpression 的 多个等价叫法？ todo： zhongshuai解决的那个别名问题可以通过这个解决吗
+   *目前实现多数为空，但在hive的表里面默认会把table的别名加到这里去，qualifiers的准确定义应该是本attribute的多个候选 qualifier？
+   * 比如这个列叫 m， 但他所属的表 为 t，有别名 t1,那么 t1就是连个 qualifier
+   * todo： zhongshuai解决的那个别名问题可以通过这个解决吗， 不能？
    */
   def qualifiers: Seq[String]
 
@@ -140,6 +142,7 @@ case class Alias(child: Expression, name: String)(
 
   override def toString: String = s"$child AS $name#${exprId.id}$typeSuffix"
 
+  // todo： otherCopyArgs 干啥用
   override protected final def otherCopyArgs: Seq[AnyRef] = {
     exprId :: qualifiers :: explicitMetadata :: Nil
   }
@@ -212,7 +215,7 @@ case class AttributeReference(
   /**
    * Returns a copy of this [[AttributeReference]] with new qualifiers.
    */
-  override def withQualifiers(newQualifiers: Seq[String]): AttributeReference = {
+  override def withQualifiers(newQualifiers: Seq[String]): AttributeReference = { // 使用newQualifiers构造 新的AttributeReference
     if (newQualifiers.toSet == qualifiers.toSet) {
       this
     } else {

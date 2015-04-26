@@ -128,7 +128,7 @@ abstract class LogicalPlan extends QueryPlan[LogicalPlan] with Logging {
 
   /**
    * Resolve the given `name` string against the given attribute, returning either 0 or 1 match.
-   *
+   * 这个函数专门用来解析 table.column的列， table就是qualifiers，但table可能有别名 但是没关系。
    * This assumes `name` has multiple parts, where the 1st part is a qualifier
    * (i.e. table name, alias, or subquery alias).
    * See the comment above `candidates` variable in resolve() for semantics the returned data.
