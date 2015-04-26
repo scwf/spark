@@ -71,7 +71,8 @@ private[sql] class SparkSQLParser(fallback: String => LogicalPlan) extends Abstr
   override protected lazy val start: Parser[LogicalPlan] = cache | uncache | set | show | others
 
   private lazy val cache: Parser[LogicalPlan] =
-    CACHE ~> LAZY.? ~ (TABLE ~> ident) ~ (AS ~> restInput).? ^^ {
+    // 原来  restInput 是这么用的， 比较巧妙
+    CACHE ~> LAZY.? ~ (TABLE ~> ident) ~ (AS ~> restInput).? ^^ { // cache [lazy] table table name [as select ...]
       case isLazy ~ tableName ~ plan =>
         CacheTableCommand(tableName, plan.map(fallback), isLazy.isDefined)
     }

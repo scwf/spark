@@ -26,6 +26,7 @@ import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel.MEMORY_AND_DISK
 
 /** Holds a cached logical plan and its data */
+// 准确的说 是把 原生 逻辑计划 和 缓存 逻辑计划对应起来
 private case class CachedData(plan: LogicalPlan, cachedRepresentation: InMemoryRelation)
 
 /**
@@ -101,8 +102,8 @@ private[sql] class CacheManager(sqlContext: SQLContext) extends Logging {
           InMemoryRelation(
             sqlContext.conf.useCompression,
             sqlContext.conf.columnBatchSize,
-            storageLevel,
-            query.queryExecution.executedPlan,
+            storageLevel, // todo： 可以设置为 tachyon 吗？， 貌似还不支持
+            query.queryExecution.executedPlan, // 同时已经把原来计划的 执行计划 放到了 InMemoryRelation
             tableName))
     }
   }

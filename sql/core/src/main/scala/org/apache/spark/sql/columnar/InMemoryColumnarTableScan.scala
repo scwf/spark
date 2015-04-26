@@ -52,7 +52,7 @@ private[sql] case class InMemoryRelation(
     useCompression: Boolean,
     batchSize: Int,
     storageLevel: StorageLevel,
-    child: SparkPlan,
+    child: SparkPlan, // 取名叫 child 实在让人误解，类型不匹配
     tableName: Option[String])(
     private var _cachedColumnBuffers: RDD[CachedBatch] = null,
     private var _statistics: Statistics = null,

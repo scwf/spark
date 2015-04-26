@@ -153,11 +153,11 @@ case class CacheTableCommand(
     plan.foreach { logicalPlan =>
       sqlContext.registerDataFrameAsTable(DataFrame(sqlContext, logicalPlan), tableName)
     }
-    sqlContext.cacheTable(tableName)
+    sqlContext.cacheTable(tableName) // 执行这个语句来 cache table
 
     if (!isLazy) {
       // Performs eager caching
-      sqlContext.table(tableName).count()
+      sqlContext.table(tableName).count() // 一直没注意这个开关，加到doc
     }
 
     Seq.empty[Row]

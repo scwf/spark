@@ -52,7 +52,7 @@ class Analyzer(
    */
   val extendedResolutionRules: Seq[Rule[LogicalPlan]] = Nil
 
-  lazy val batches: Seq[Batch] = Seq(
+  lazy val batches: Seq[Batch] = Seq( // 这里需要添加一个batch
     Batch("Resolution", fixedPoint,
       ResolveRelations ::
       ResolveReferences ::

@@ -23,11 +23,11 @@ import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.types._
-
+// 多余的空行
 import org.apache.spark.sql.catalyst.dsl.expressions._
 import org.apache.spark.sql.catalyst.dsl.plans._
 
-class AnalysisSuite extends FunSuite with BeforeAndAfter {
+class AnalysisSuite extends FunSuite with BeforeAndAfter { // analyzer 的测试用例 写的没什么 套路！ 比较随意
   val caseSensitiveCatalog = new SimpleCatalog(true)
   val caseInsensitiveCatalog = new SimpleCatalog(false)
 
