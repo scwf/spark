@@ -16,7 +16,7 @@
  */
 
 package org.apache.spark.sql.hive.execution
-
+/*
 import java.util.HashMap
 
 import org.apache.spark.annotation.DeveloperApi
@@ -142,7 +142,7 @@ case class WindowAggregate(
       }
     }
 
-  private[this] def rowFrameFunction(base: AggregateExpression, frame: WindowFrame,
+  private[this] def rowFrameFunction(base: AggregateExpression, frame: SpecifiedWindowFrame,
       rows: CompactBuffer[Row]): CompactBuffer[Any] = {
 
     val frameResults = new CompactBuffer[Any]()
@@ -170,7 +170,7 @@ case class WindowAggregate(
     frameResults
   }
 
-  private[this] def rangeFrameFunction(base: AggregateExpression, frame: WindowFrame,
+  private[this] def rangeFrameFunction(base: AggregateExpression, frame: SpecifiedWindowFrame,
       rows: CompactBuffer[Row]): CompactBuffer[Any] = {
 
     val (preceding, following) = sortReference.map { sortExpression =>
@@ -333,3 +333,4 @@ case class WindowAggregate(
     }
   }
 }
+*/

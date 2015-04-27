@@ -69,7 +69,6 @@ class HiveWindowFunctionQuerySuite extends HiveComparisonTest with BeforeAndAfte
     sql("set hive.plan.serialization.format=kryo")
     // Explicitly set fs to local fs.
     sql(s"set fs.default.name=file://$testTempDir/")
-    // sql(s"set mapred.working.dir=${testTempDir}")
     // Ask Hive to run jobs in-process as a single map and reduce task.
     sql("set mapred.job.tracker=local")
   }
@@ -81,8 +80,24 @@ class HiveWindowFunctionQuerySuite extends HiveComparisonTest with BeforeAndAfte
     TestHive.reset()
   }
 
+  test("explain") {
+    sql(
+      s"""
+      |select p_mfgr, p_name, p_size,
+      |rank() over(distribute by p_mfgr sort by p_name) as r,
+      |dense_rank() over(distribute by p_mfgr sort by p_name) as dr,
+      |sum(p_retailprice) over
+      |(distribute by p_mfgr sort by p_name rows between unbounded preceding and current row) as s1
+      |from part
+    """.stripMargin).explain(true)
+  }
+
+  /*
   /////////////////////////////////////////////////////////////////////////////
   // Tests from windowing.q
+  // We port tests in windowing.q to here because this query file contains too
+  // many tests and the syntax of test "-- 7. testJoinWithWindowingAndPTF"
+  // is not supported right now.
   /////////////////////////////////////////////////////////////////////////////
   createQueryTest("windowing.q -- 1. testWindowing",
     s"""
@@ -505,4 +520,5 @@ class HiveWindowFunctionQuerySuite extends HiveComparisonTest with BeforeAndAfte
       |from part
       |order by p_name
     """.stripMargin, reset = false)
+    */
 }

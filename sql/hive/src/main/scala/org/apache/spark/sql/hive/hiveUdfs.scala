@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hive
 
 import org.apache.hadoop.hive.ql.udf.generic.GenericUDFUtils.ConversionHelper
+import org.apache.spark.sql.AnalysisException
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -58,12 +59,10 @@ private[hive] abstract class HiveFunctionRegistry
     if (classOf[UDF].isAssignableFrom(functionInfo.getFunctionClass)) {
       HiveSimpleUdf(new HiveFunctionWrapper(functionClassName), children)
     } else if (classOf[GenericUDF].isAssignableFrom(functionInfo.getFunctionClass)) {
-      HiveGenericUdf(name, new HiveFunctionWrapper(functionClassName), children)
+      HiveGenericUdf(new HiveFunctionWrapper(functionClassName), children)
     } else if (
          classOf[AbstractGenericUDAFResolver].isAssignableFrom(functionInfo.getFunctionClass)) {
-      val windowFunctionInfo: WindowFunctionInfo =
-        FunctionRegistry.getWindowFunctionInfo(name.toLowerCase)
-      HiveGenericUdaf(new HiveFunctionWrapper(functionClassName), windowFunctionInfo, children)
+      HiveGenericUdaf(new HiveFunctionWrapper(functionClassName), children)
     } else if (classOf[UDAF].isAssignableFrom(functionInfo.getFunctionClass)) {
       HiveUdaf(new HiveFunctionWrapper(functionClassName), children)
     } else if (classOf[GenericUDTF].isAssignableFrom(functionInfo.getFunctionClass)) {
@@ -137,8 +136,7 @@ private[hive] class DeferredObjectAdapter(oi: ObjectInspector)
   override def get(): AnyRef = wrap(func(), oi)
 }
 
-private[hive] case class HiveGenericUdf(
-    name: String, funcWrapper: HiveFunctionWrapper, children: Seq[Expression])
+private[hive] case class HiveGenericUdf(funcWrapper: HiveFunctionWrapper, children: Seq[Expression])
   extends Expression with HiveInspectors with Logging {
   type UDFType = GenericUDF
   type EvaluatedType = Any
@@ -191,43 +189,79 @@ private[hive] case class HiveGenericUdf(
   }
 }
 
-private[spark] object ResolveWindowUdaf extends Rule[LogicalPlan] {
+private[spark] object ResolveHiveWindowFunction extends Rule[LogicalPlan] {
   def apply(plan: LogicalPlan): LogicalPlan = plan transformUp {
+    case p: LogicalPlan if !p.childrenResolved => p
 
-    case q @ WindowAggregate(_, _, _, child) =>
+    // We are resolving WindowExpressions at here.
+    case q: Project =>
       q transformExpressions {
-        case WindowExpression(HiveGenericUdaf(wrapper, wfi, _), WindowSpec(_, Some(frame)))
-          if (wfi.isSupportsWindow == false) =>
-          sys.error(s"udaf ${wrapper.functionClassName} does not support window frame")
-        // if `isImpliesOrder` is true, we need to use sort expressions as parameters,
-        // such as rank, dense_rank
-        case HiveGenericUdaf(wrapper, wfi, children)
-          if (wfi.isImpliesOrder && children.isEmpty) =>  child match {
-          case SortPartitions(sortExpr, _) =>
-            HiveGenericUdaf(wrapper, wfi, children ++ sortExpr.map(_.child))
-          case Sort(sortExpr, _, _) =>
-            HiveGenericUdaf(wrapper, wfi, children ++ sortExpr.map(_.child))
-          case _ =>
-            sys.error(s"udaf ${wrapper.functionClassName} need sort expressions")
-        }
-        // if function computed with window is `HiveGenericUdf`, we need to check whether
-        // it has HiveGenericUadf one, such as lead, lag
-        case HiveGenericUdf(name, wrapper, children) =>
+        case WindowExpression(
+          UnresolvedWindowFunction(name, children),
+          windowSpec: WindowSpecDefinition) =>
+          // First, let's find the window function info.
           val windowFunctionInfo: WindowFunctionInfo =
             Option(FunctionRegistry.getWindowFunctionInfo(name.toLowerCase)).getOrElse(
-              sys.error(s"Couldn't find udaf function $name"))
-          HiveGenericUdaf(
-            new HiveFunctionWrapper(windowFunctionInfo.getfInfo().getFunctionClass.getName),
-            windowFunctionInfo, children)
-      }
+              throw new AnalysisException(s"Couldn't find window function $name"))
+          val functionClassName = windowFunctionInfo.getFunctionClass.getName
+          // Create the window function wrapper.
 
+          val newChildren =
+            // Rank(), DENSE_RANK(), CUME_DIST(), and PERCENT_RANK do not take explicit
+            // input parameters. These functions in Hive require implicit parameters, which
+            // are expressions in Order By clause.
+            if (classOf[GenericUDAFRank].isAssignableFrom(windowFunctionInfo.getFunctionClass)) {
+              if (children.nonEmpty) {
+               throw  new AnalysisException(s"$name does not take input parameters.")
+              }
+              windowSpec.orderSpec.map(_.child)
+            } else {
+              children
+            }
+
+          val windowFunction =
+            HiveWindowFunction(
+              new HiveFunctionWrapper(functionClassName),
+              windowFunctionInfo,
+              newChildren)
+
+          // Second, check if the specified window function can accept window definition.
+          windowSpec.frameSpecification match {
+            case frame: SpecifiedWindowFrame if !windowFunctionInfo.isSupportsWindow =>
+             throw  new AnalysisException(
+                s"Window function $name does not take a frame specification.")
+            case _ => // OK
+          }
+          // Resolve those UnspecifiedWindowFrame.
+          val newWindowSpec = windowSpec.frameSpecification match {
+            case UnspecifiedFrame =>
+              val newWindowFrame =
+                SpecifiedWindowFrame.defaultWindowFrame(
+                  windowSpec.orderSpec.nonEmpty,
+                  windowFunctionInfo.isSupportsWindow)
+              WindowSpecDefinition(windowSpec.partitionSpec, windowSpec.orderSpec, newWindowFrame)
+            case _ => windowSpec
+          }
+
+          // Finally, we check if the defined window spec is valid or not.
+          newWindowSpec.validate match {
+            case Some(reason) =>
+              // At here, we are still use the old windowSpec in the error message because the
+              // old one is one provided by the user.
+              throw new AnalysisException(s"Window specification $windowSpec is not valid " +
+                s"because $reason")
+            case None => // OK
+          }
+
+          WindowExpression(windowFunction, newWindowSpec)
+      }
   }
 }
 
-private[hive] case class HiveGenericUdaf(
+private[hive] case class HiveWindowFunction(
     funcWrapper: HiveFunctionWrapper,
     @transient windowFunctionInfo: WindowFunctionInfo,
-    children: Seq[Expression]) extends AggregateExpression
+    children: Seq[Expression]) extends Expression
   with HiveInspectors {
 
   type UDFType = AbstractGenericUDAFResolver
@@ -247,15 +281,42 @@ private[hive] case class HiveGenericUdaf(
 
   protected val pivotResult = windowFunctionInfo.isPivotResult
 
-  def dataType: DataType =
-    if (!pivotResult) inspectorToDataType(objectInspector)
-    else {
-      inspectorToDataType(objectInspector) match {
-        case ArrayType(dt, _) => dt
-        case _ => sys.error(s"error resolve the data type of udaf $funcWrapper.functionClassName")
-      }
-    }
+  def dataType: DataType = inspectorToDataType(objectInspector)
 
+  def nullable: Boolean = true
+
+  override type EvaluatedType = Any
+
+  override def eval(input: Row): Any = ???
+
+  override def toString: String = {
+    s"$nodeName#${funcWrapper.functionClassName}(${children.mkString(",")})"
+  }
+
+  def newInstance(): HiveWindowFunction = this
+}
+
+private[hive] case class HiveGenericUdaf(
+    funcWrapper: HiveFunctionWrapper,
+    children: Seq[Expression]) extends AggregateExpression
+  with HiveInspectors {
+
+  type UDFType = AbstractGenericUDAFResolver
+
+  @transient
+  protected lazy val resolver: AbstractGenericUDAFResolver = funcWrapper.createFunction()
+
+  @transient
+  protected lazy val objectInspector  = {
+    val parameterInfo = new SimpleGenericUDAFParameterInfo(inspectors.toArray, false, false)
+    resolver.getEvaluator(parameterInfo)
+      .init(GenericUDAFEvaluator.Mode.COMPLETE, inspectors.toArray)
+  }
+
+  @transient
+  protected lazy val inspectors = children.map(toInspector)
+
+  def dataType: DataType = inspectorToDataType(objectInspector)
 
   def nullable: Boolean = true
 
@@ -389,7 +450,8 @@ private[hive] case class HiveUdafFunction(
 
   private val returnInspector = function.init(GenericUDAFEvaluator.Mode.COMPLETE, inspectors)
 
-  private val buffer = function.getNewAggregationBuffer
+  private val buffer =
+    function.getNewAggregationBuffer
 
   override def eval(input: Row): Any = unwrap(function.evaluate(buffer), returnInspector)
 

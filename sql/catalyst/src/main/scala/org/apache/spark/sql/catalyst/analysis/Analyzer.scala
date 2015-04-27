@@ -61,6 +61,7 @@ class Analyzer(
       ResolveGenerate ::
       ImplicitGenerate ::
       ResolveFunctions ::
+      ResolveWindowFunction ::
       GlobalAggregates ::
       UnresolvedHavingClauseAttributes ::
       TrimGroupingAliases ::
@@ -430,13 +431,16 @@ class Analyzer(
    */
   object GlobalAggregates extends Rule[LogicalPlan] {
     def apply(plan: LogicalPlan): LogicalPlan = plan transform {
+      case p: LogicalPlan if !p.childrenResolved => p
+
       case Project(projectList, child) if containsAggregates(projectList) =>
         Aggregate(Nil, projectList, child)
     }
 
     def containsAggregates(exprs: Seq[Expression]): Boolean = {
       exprs.foreach(_.foreach {
-        case agg: AggregateExpression => return true
+        case agg: AggregateExpression =>
+          return true
         case _ =>
       })
       false
@@ -527,6 +531,71 @@ class Analyzer(
           outer = p.outer,
           p.qualifier,
           makeGeneratorOutput(p.generator, p.generatorOutput), p.child)
+    }
+  }
+
+  object ResolveWindowFunction extends Rule[LogicalPlan] {
+    def hasWindowFunction(projectList: Seq[NamedExpression]): Boolean = {
+      projectList.foreach ( _.foreach {
+        case window: WindowExpression => return true
+        case _ =>
+      })
+
+      return false
+    }
+
+    def hasWindowFunction(expr: NamedExpression): Boolean = {
+      expr.foreach {
+        case window: WindowExpression => return true
+        case _ =>
+      }
+
+      return false
+    }
+
+    def apply(plan: LogicalPlan): LogicalPlan = plan transformUp {
+      case p: LogicalPlan if !p.childrenResolved => p
+
+      // Fill WindowSpecDefinitions.
+      case WithWindowDefinition(windowDefinitions, child) =>
+        child.transform {
+          case plan => plan.transformExpressions {
+            case UnresolvedWindowExpression(child, WindowSpecReference(windowName)) =>
+              WindowExpression(child, windowDefinitions(windowName))
+          }
+        }
+
+      // We only extract Window Expressions after all expressions of the Project
+      // have been resolved.
+      case p @ Project(projectList, child)
+        if hasWindowFunction(projectList) && !p.expressions.exists(!_.resolved) =>
+        val finalProjectList = projectList.map (_.toAttribute)
+        val (windowExpressions, regularExpressions) = projectList.partition(hasWindowFunction)
+        // Also need to extract all UnresolvedAttribute from windowExpressions.
+        // For example, in the case of SUM(x) OVER (...), we need to extract x.
+        val attributes = windowExpressions.flatMap(_.collect {
+          case attribute: Attribute => attribute
+        })
+
+        val groupedWindowExpression = windowExpressions.groupBy { expr =>
+          expr.collect {
+            case window: WindowExpression => window.windowSpec
+          }.head
+        }.toSeq
+
+        var currentChild = child
+        var currentRegularExpressions = regularExpressions ++ attributes
+        var i = 0
+        while (i < groupedWindowExpression.size) {
+          val (windowSpec, expressions) = groupedWindowExpression(i)
+          val newExpressions = currentRegularExpressions ++ expressions
+          currentChild = Window(newExpressions, windowSpec, currentChild)
+          currentRegularExpressions = newExpressions.map(_.toAttribute)
+
+          i += 1
+        }
+
+        Project(finalProjectList, currentChild)
     }
   }
 }
