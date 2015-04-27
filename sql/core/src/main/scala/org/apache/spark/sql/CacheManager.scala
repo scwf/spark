@@ -102,7 +102,7 @@ private[sql] class CacheManager(sqlContext: SQLContext) extends Logging {
           InMemoryRelation(
             sqlContext.conf.useCompression,
             sqlContext.conf.columnBatchSize,
-            storageLevel, // todo： 可以设置为 tachyon 吗？， 貌似还不支持
+            storageLevel, // todo： 可以设置为 tachyon 吗？， 貌似还不支持, 需要测试下, 即使可以也不是 parquet 方案
             query.queryExecution.executedPlan, // 同时已经把原来计划的 执行计划 放到了 InMemoryRelation
             tableName))
     }

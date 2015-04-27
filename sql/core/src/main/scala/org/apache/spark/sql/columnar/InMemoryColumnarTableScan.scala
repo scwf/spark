@@ -61,7 +61,7 @@ private[sql] case class InMemoryRelation(
 
   private val batchStats: Accumulable[ArrayBuffer[Row], Row] =
     if (_batchStats == null) {
-      child.sqlContext.sparkContext.accumulableCollection(ArrayBuffer.empty[Row])
+      child.sqlContext.sparkContext.accumulableCollection(ArrayBuffer.empty[Row]) // todo： accumulableCollection的意义
     } else {
       _batchStats
     }
@@ -74,7 +74,7 @@ private[sql] case class InMemoryRelation(
         output.map(a => partitionStatistics.forAttribute(a).sizeInBytes).reduce(Add),
         partitionStatistics.schema)
 
-    batchStats.value.map(row => sizeOfRow.eval(row).asInstanceOf[Long]).sum
+    batchStats.value.map(row => sizeOfRow.eval(row).asInstanceOf[Long]).sum // 这句会对所有行 size求和
   }
 
   // Statistics propagation contracts:
@@ -82,7 +82,7 @@ private[sql] case class InMemoryRelation(
   // 2. Only propagate statistics when `_statistics` is non-null
   private def statisticsToBePropagated = if (_statistics == null) {
     val updatedStats = statistics
-    if (_statistics == null) null else updatedStats
+    if (_statistics == null) null else updatedStats // todo： 上面不是判断过了？
   } else {
     _statistics
   }
@@ -130,7 +130,7 @@ private[sql] case class InMemoryRelation(
           }.toArray
 
           var rowCount = 0
-          while (rowIterator.hasNext && rowCount < batchSize) {
+          while (rowIterator.hasNext && rowCount < batchSize) { // 把原来一个partition 分成多个patch
             val row = rowIterator.next()
 
             // Added for SPARK-6082. This assertion can be useful for scenarios when something
@@ -151,7 +151,7 @@ private[sql] case class InMemoryRelation(
             rowCount += 1
           }
 
-          val stats = Row.merge(columnBuilders.map(_.columnStats.collectedStatistics) : _*)
+          val stats = Row.merge(columnBuilders.map(_.columnStats.collectedStatistics) : _*) // 把每一列的统计信息做合并
 
           batchStats += stats
           CachedBatch(columnBuilders.map(_.build().array()), stats)

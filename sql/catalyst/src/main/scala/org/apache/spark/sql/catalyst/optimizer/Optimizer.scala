@@ -612,7 +612,7 @@ object SimplifyCasts extends Rule[LogicalPlan] {
  * Combines two adjacent [[Limit]] operators into one, merging the
  * expressions into one single expression.
  */
-object CombineLimits extends Rule[LogicalPlan] {
+object CombineLimits extends Rule[LogicalPlan] { // 一般也不会有人这么写
   def apply(plan: LogicalPlan): LogicalPlan = plan transform {
     case ll @ Limit(le, nl @ Limit(ne, grandChild)) =>
       Limit(If(LessThan(ne, le), ne, le), grandChild)
@@ -623,7 +623,7 @@ object CombineLimits extends Rule[LogicalPlan] {
  * Removes the inner [[CaseConversionExpression]] that are unnecessary because
  * the inner conversion is overwritten by the outer one.
  */
-object SimplifyCaseConversionExpressions extends Rule[LogicalPlan] {
+object SimplifyCaseConversionExpressions extends Rule[LogicalPlan] { // 一般也不会有人这么写
   def apply(plan: LogicalPlan): LogicalPlan = plan transform {
     case q: LogicalPlan => q transformExpressionsUp {
       case Upper(Upper(child)) => Upper(child)
@@ -640,7 +640,7 @@ object SimplifyCaseConversionExpressions extends Rule[LogicalPlan] {
  * This uses the same rules for increasing the precision and scale of the output as
  * [[org.apache.spark.sql.catalyst.analysis.HiveTypeCoercion.DecimalPrecision]].
  */
-object DecimalAggregates extends Rule[LogicalPlan] {
+object DecimalAggregates extends Rule[LogicalPlan] { // todo： 暂时没看明白
   import Decimal.MAX_LONG_DIGITS
 
   /** Maximum number of decimal digits representable precisely in a Double */

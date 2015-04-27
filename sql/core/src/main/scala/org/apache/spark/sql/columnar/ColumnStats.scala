@@ -23,7 +23,7 @@ import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.expressions.{AttributeMap, Attribute, AttributeReference}
 import org.apache.spark.sql.types._
 
-private[sql] class ColumnStatisticsSchema(a: Attribute) extends Serializable {
+private[sql] class ColumnStatisticsSchema(a: Attribute) extends Serializable { // 列统计信息，还可以添加其他的吗， range？
   val upperBound = AttributeReference(a.name + ".upperBound", a.dataType, nullable = true)()
   val lowerBound = AttributeReference(a.name + ".lowerBound", a.dataType, nullable = true)()
   val nullCount = AttributeReference(a.name + ".nullCount", IntegerType, nullable = false)()
@@ -34,7 +34,7 @@ private[sql] class ColumnStatisticsSchema(a: Attribute) extends Serializable {
 }
 
 private[sql] class PartitionStatistics(tableSchema: Seq[Attribute]) extends Serializable {
-  val (forAttribute, schema) = {
+  val (forAttribute, schema) = { // todo： 这个会不会导致不能序列化
     val allStats = tableSchema.map(a => a -> new ColumnStatisticsSchema(a))
     (AttributeMap(allStats), allStats.map(_._2.schema).foldLeft(Seq.empty[Attribute])(_ ++ _))
   }
@@ -51,6 +51,8 @@ private[sql] sealed trait ColumnStats extends Serializable {
   protected var nullCount = 0
   protected var sizeInBytes = 0L
 
+  // 由于 upper 和 lower类型不定，这里不抽公共属性
+
   /**
    * Gathers statistics information from `row(ordinal)`.
    */
@@ -65,7 +67,7 @@ private[sql] sealed trait ColumnStats extends Serializable {
 
   /**
    * Column statistics represented as a single row, currently including closed lower bound, closed
-   * upper bound and null count.
+   * upper bound, null count, count and sizeInBytes
    */
   def collectedStatistics: Row
 }
@@ -87,7 +89,7 @@ private[sql] class BooleanColumnStats extends ColumnStats {
     super.gatherStats(row, ordinal)
     if (!row.isNullAt(ordinal)) {
       val value = row.getBoolean(ordinal)
-      if (value > upper) upper = value
+      if (value > upper) upper = value // 对于boolean类型，有必要这么转来转去？ 应该是有的，把true 当成1, false当成0即可
       if (value < lower) lower = value
       sizeInBytes += BOOLEAN.defaultSize
     }
@@ -232,7 +234,7 @@ private[sql] class StringColumnStats extends ColumnStats {
   override def collectedStatistics: Row = Row(lower, upper, nullCount, count, sizeInBytes)
 }
 
-private[sql] class DateColumnStats extends IntColumnStats
+private[sql] class DateColumnStats extends IntColumnStats // date 就直接用 int表示了
 
 private[sql] class TimestampColumnStats extends ColumnStats {
   protected var upper: Timestamp = null
@@ -262,7 +264,7 @@ private[sql] class BinaryColumnStats extends ColumnStats {
   override def collectedStatistics: Row = Row(null, null, nullCount, count, sizeInBytes)
 }
 
-private[sql] class GenericColumnStats extends ColumnStats {
+private[sql] class GenericColumnStats extends ColumnStats { // 这个主要应对神码类型，其他复杂类型？
   override def gatherStats(row: Row, ordinal: Int): Unit = {
     super.gatherStats(row, ordinal)
     if (!row.isNullAt(ordinal)) {

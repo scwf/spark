@@ -138,7 +138,7 @@ abstract class LogicalPlan extends QueryPlan[LogicalPlan] with Logging {
       resolver: Resolver,
       attribute: Attribute): Option[(Attribute, List[String])] = {
     assert(nameParts.length > 1)
-    if (attribute.qualifiers.exists(resolver(_, nameParts.head))) {
+    if (attribute.qualifiers.exists(resolver(_, nameParts.head))) { // 匹配 table 名
       // At least one qualifier matches. See if remaining parts match.
       val remainingParts = nameParts.tail
       resolveAsColumn(remainingParts, resolver, attribute)
@@ -179,7 +179,7 @@ abstract class LogicalPlan extends QueryPlan[LogicalPlan] with Logging {
     // and the second element will be List("c").
     var candidates: Seq[(Attribute, List[String])] = {
       // If the name has 2 or more parts, try to resolve it as `table.column` first.
-      if (nameParts.length > 1) {
+      if (nameParts.length > 1) { // 首先尝试分析成 table。column
         input.flatMap { option =>
           resolveAsTableColumn(nameParts, resolver, option)
         }
@@ -191,7 +191,7 @@ abstract class LogicalPlan extends QueryPlan[LogicalPlan] with Logging {
     // If none of attributes match `table.column` pattern, we try to resolve it as a column.
     if (candidates.isEmpty) {
       candidates = input.flatMap { candidate =>
-        resolveAsColumn(nameParts, resolver, candidate)
+        resolveAsColumn(nameParts, resolver, candidate) // 然后再尝试，分析为 column
       }
     }
 

@@ -209,7 +209,7 @@ class Analyzer(
    * [[catalyst.expressions.AttributeReference AttributeReferences]] from a logical plan node's
    * children.
    */
-  object ResolveReferences extends Rule[LogicalPlan] {
+  object ResolveReferences extends Rule[LogicalPlan] { // 最重要的分析步骤
     def apply(plan: LogicalPlan): LogicalPlan = plan transformUp {
       case p: LogicalPlan if !p.childrenResolved => p // 这一步很重要，一定是孩子都分析过了才能分析自己，不加会有问题，同时造成没必要的迭代。
 
@@ -543,6 +543,6 @@ class Analyzer(
  */
 object EliminateSubQueries extends Rule[LogicalPlan] { // 简单，消除Subquery,算是优化规则，但分析里面也用了，
   def apply(plan: LogicalPlan): LogicalPlan = plan transform {
-    case Subquery(_, child) => child
+    case Subquery(_, child) => child // todo： 在现在版本里面，为什么要这个subquery
   }
 }
