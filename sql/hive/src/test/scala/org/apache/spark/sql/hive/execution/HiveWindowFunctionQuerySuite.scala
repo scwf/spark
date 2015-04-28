@@ -90,6 +90,53 @@ class HiveWindowFunctionQuerySuite extends HiveComparisonTest with BeforeAndAfte
       |(distribute by p_mfgr sort by p_name rows between unbounded preceding and current row) as s1
       |from part
     """.stripMargin).explain(true)
+
+
+    sql(
+      s"""
+      |select p_mfgr, p_name, p_size,
+      |min(p_retailprice),
+      |rank() over(distribute by p_mfgr sort by p_name)as r,
+      |dense_rank() over(distribute by p_mfgr sort by p_name) as dr,
+      |p_size, p_size - lag(p_size,1,p_size) over(distribute by p_mfgr sort by p_name) as deltaSz
+      |from part
+      |group by p_mfgr, p_name, p_size
+      """.stripMargin).explain(true)
+
+    sql(
+      s"""
+      |select p_mfgr, p_name, p_size, min(p_retailprice),
+      |rank() over(distribute by p_mfgr sort by p_name) as r,
+      |dense_rank() over(distribute by p_mfgr sort by p_name) as dr,
+      |p_size, p_size - lag(p_size,1,p_size) over(distribute by p_mfgr sort by p_name) as deltaSz
+      |from part
+      |group by p_mfgr, p_name, p_size
+      |having p_size > 0
+      """.stripMargin).explain(true)
+
+    sql(
+      s"""
+      |select  p_mfgr,p_name, p_size,
+      |sum(p_size) over w2 as s2,
+      |first_value(p_size) over
+      |(partition by p_mfgr order by p_name rows between 2 preceding and 2 following)  as f,
+      |last_value(p_size, false) over w1  as l
+      |from part
+      |window w1 as (distribute by p_mfgr sort by p_name rows between 2 preceding and 2 following),
+      |w2 as (distribute by p_mfgr sort by p_name rows between current row and current row)
+      """.stripMargin).explain(true)
+
+    sql(
+      s"""
+      |select  p_mfgr,p_name, p_size,
+      |sum(p_size) over w2 as s2,
+      |first_value(p_size) over
+      |(partition by p_name order by p_name rows between 2 preceding and 2 following)  as f,
+      |last_value(p_size, false) over w1  as l
+      |from part
+      |window w1 as (distribute by p_mfgr sort by p_name rows between 2 preceding and 2 following),
+      |w2 as (distribute by p_mfgr sort by p_name rows between current row and current row)
+      """.stripMargin).explain(true)
   }
 
   /*

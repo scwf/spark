@@ -194,8 +194,8 @@ private[spark] object ResolveHiveWindowFunction extends Rule[LogicalPlan] {
     case p: LogicalPlan if !p.childrenResolved => p
 
     // We are resolving WindowExpressions at here.
-    case q: Project =>
-      q transformExpressions {
+    case p: LogicalPlan =>
+      p transformExpressions {
         case WindowExpression(
           UnresolvedWindowFunction(name, children),
           windowSpec: WindowSpecDefinition) =>
@@ -264,10 +264,10 @@ private[hive] case class HiveWindowFunction(
     children: Seq[Expression]) extends Expression
   with HiveInspectors {
 
-  type UDFType = AbstractGenericUDAFResolver
+  type UDFType = GenericUDAFResolver2
 
   @transient
-  protected lazy val resolver: AbstractGenericUDAFResolver = funcWrapper.createFunction()
+  protected lazy val resolver: GenericUDAFResolver2 = funcWrapper.createFunction()
 
   @transient
   protected lazy val objectInspector  = {
@@ -279,9 +279,26 @@ private[hive] case class HiveWindowFunction(
   @transient
   protected lazy val inspectors = children.map(toInspector)
 
+  // If true, the Hive function will return a list of values representing the values of the
+  // added columns.
   protected val pivotResult = windowFunctionInfo.isPivotResult
 
-  def dataType: DataType = inspectorToDataType(objectInspector)
+  def dataType: DataType =
+    if (!pivotResult) {
+      inspectorToDataType(objectInspector)
+    } else {
+      // If pivotResult is true, we should take the element type out as the data type of this
+      // function.
+      inspectorToDataType(objectInspector) match {
+        case ArrayType(dt, _) => dt
+        case _ =>
+          sys.error(
+            s"error resolve the data type of window function ${funcWrapper.functionClassName}")
+      }
+    }
+
+
+
 
   def nullable: Boolean = true
 

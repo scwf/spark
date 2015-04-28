@@ -553,49 +553,107 @@ class Analyzer(
       return false
     }
 
-    def apply(plan: LogicalPlan): LogicalPlan = plan transformUp {
-      case p: LogicalPlan if !p.childrenResolved => p
+    /**
+     * From a Seq of [[NamedExpression]]s, extract window expressions and
+     * other regular expressions.
+     */
+    def extract(
+        expressions: Seq[NamedExpression]): (Seq[NamedExpression], Seq[NamedExpression]) = {
+      val (windowExpressions, regularExpressions) = expressions.partition(hasWindowFunction)
+      // Also need to extract all UnresolvedAttribute from windowExpressions.
+      // For example, in the case of SUM(x) OVER (...), we need to extract x.
+      val attributes = windowExpressions.flatMap(_.collect {
+        case attribute: Attribute => attribute
+      })
 
-      // Fill WindowSpecDefinitions.
+      (windowExpressions, regularExpressions ++ attributes)
+    }
+
+    def addWindow(windowExpressions: Seq[NamedExpression], child: LogicalPlan): LogicalPlan = {
+      val groupedWindowExpression = windowExpressions.groupBy { expr =>
+        expr.collect {
+          case window: WindowExpression => window.windowSpec
+        }.head
+      }.toSeq
+
+      var currentChild = child
+      var i = 0
+      while (i < groupedWindowExpression.size) {
+        val (windowSpec, expressions) = groupedWindowExpression(i)
+        val newExpressions = currentChild.output ++ expressions
+        currentChild = Window(newExpressions, windowSpec, currentChild)
+
+        i += 1
+      }
+
+      currentChild
+    }
+
+    // We have to use transformDown at here to make sure the rule of "Aggregate with Having clause"
+    // will be triggered.
+    def apply(plan: LogicalPlan): LogicalPlan = plan transformDown {
+      // Fill WindowSpecDefinitions. This one work with unresolved children.
       case WithWindowDefinition(windowDefinitions, child) =>
         child.transform {
           case plan => plan.transformExpressions {
             case UnresolvedWindowExpression(child, WindowSpecReference(windowName)) =>
-              WindowExpression(child, windowDefinitions(windowName))
+              val errorMessage =
+                s"Window specification $windowName is not defined in the WINDOW clause."
+              val windowSpecDefinition =
+                windowDefinitions
+                  .get(windowName)
+                  .getOrElse(throw new AnalysisException(errorMessage))
+              WindowExpression(child, windowSpecDefinition)
           }
         }
+
+      // Aggregate with Having clause
+      case f @ Filter(condition, a @ Aggregate(groupingExprs, aggregateExprs, child))
+        if child.resolved &&
+          hasWindowFunction(aggregateExprs) &&
+          !a.expressions.exists(!_.resolved) =>
+        val (windowExpressions, aggregateExpressions) = extract(aggregateExprs)
+        // Create an Aggregate operator to evaluate aggregation functions.
+        val withAggregate = Aggregate(groupingExprs, aggregateExpressions, child)
+        // Add a Filter operator for conditions in the Having clause.
+        val withFilter = Filter(condition, withAggregate)
+        val withWindow = addWindow(windowExpressions, withFilter)
+
+        // Finally, generate output columns according to the original projectList.
+        val finalProjectList = aggregateExprs.map (_.toAttribute)
+        Project(finalProjectList, withWindow)
+
+      case p: LogicalPlan if !p.childrenResolved => p
+
+      // Aggregate without Having clause
+      case a @ Aggregate(groupingExprs, aggregateExprs, child)
+        if hasWindowFunction(aggregateExprs) && !a.expressions.exists(!_.resolved) =>
+        val (windowExpressions, aggregateExpressions) = extract(aggregateExprs)
+
+        // Create an Aggregate operator to evaluate aggregation functions.
+        val withAggregate = Aggregate(groupingExprs, aggregateExpressions, child)
+        // Add Window operators.
+        val withWindow = addWindow(windowExpressions, withAggregate)
+
+        // Finally, generate output columns according to the original projectList.
+        val finalProjectList = aggregateExprs.map (_.toAttribute)
+        Project(finalProjectList, withWindow)
 
       // We only extract Window Expressions after all expressions of the Project
       // have been resolved.
       case p @ Project(projectList, child)
         if hasWindowFunction(projectList) && !p.expressions.exists(!_.resolved) =>
+        val (windowExpressions, regularExpressions) = extract(projectList)
+
+        // We add a project to get all needed expressions of window expressions in the
+        // original projectList.
+        val withProject = Project(regularExpressions, child)
+        // Add Window operators.
+        val withWindow = addWindow(windowExpressions, withProject)
+
+        // Finally, generate output columns according to the original projectList.
         val finalProjectList = projectList.map (_.toAttribute)
-        val (windowExpressions, regularExpressions) = projectList.partition(hasWindowFunction)
-        // Also need to extract all UnresolvedAttribute from windowExpressions.
-        // For example, in the case of SUM(x) OVER (...), we need to extract x.
-        val attributes = windowExpressions.flatMap(_.collect {
-          case attribute: Attribute => attribute
-        })
-
-        val groupedWindowExpression = windowExpressions.groupBy { expr =>
-          expr.collect {
-            case window: WindowExpression => window.windowSpec
-          }.head
-        }.toSeq
-
-        var currentChild = child
-        var currentRegularExpressions = regularExpressions ++ attributes
-        var i = 0
-        while (i < groupedWindowExpression.size) {
-          val (windowSpec, expressions) = groupedWindowExpression(i)
-          val newExpressions = currentRegularExpressions ++ expressions
-          currentChild = Window(newExpressions, windowSpec, currentChild)
-          currentRegularExpressions = newExpressions.map(_.toAttribute)
-
-          i += 1
-        }
-
-        Project(finalProjectList, currentChild)
+        Project(finalProjectList, withWindow)
     }
   }
 }

@@ -202,6 +202,15 @@ case class Aggregate(
     child: LogicalPlan)
   extends UnaryNode {
 
+  override lazy val resolved: Boolean = {
+    val hasWindowExpressions = aggregateExpressions.exists ( _.collect {
+        case window: WindowExpression => window
+      }.nonEmpty
+    )
+
+    !expressions.exists(!_.resolved) && childrenResolved && !hasWindowExpressions
+  }
+
   override def output: Seq[Attribute] = aggregateExpressions.map(_.toAttribute)
 }
 
@@ -209,20 +218,9 @@ case class Window(
     windowExpressions: Seq[NamedExpression],
     windowSpec: WindowSpecDefinition,
     child: LogicalPlan) extends UnaryNode {
+
   override def output: Seq[Attribute] = windowExpressions.map(_.toAttribute)
 }
-
-/*
-case class WindowAggregate(
-    partitionExpressions: Seq[Expression],
-    windowExpressions: Seq[Alias],
-    otherExpressions: Seq[NamedExpression],
-    child: LogicalPlan)
-  extends UnaryNode {
-
-  override def output: Seq[Attribute] = (windowExpressions ++ otherExpressions).map(_.toAttribute)
-}
-*/
 
 /**
  * Apply the all of the GroupExpressions to every input row, hence we will get
