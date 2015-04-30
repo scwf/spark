@@ -215,11 +215,13 @@ case class Aggregate(
 }
 
 case class Window(
+    projectList: Seq[Attribute],
     windowExpressions: Seq[NamedExpression],
     windowSpec: WindowSpecDefinition,
     child: LogicalPlan) extends UnaryNode {
 
-  override def output: Seq[Attribute] = windowExpressions.map(_.toAttribute)
+  override def output: Seq[Attribute] =
+    (projectList ++ windowExpressions).map(_.toAttribute)
 }
 
 /**

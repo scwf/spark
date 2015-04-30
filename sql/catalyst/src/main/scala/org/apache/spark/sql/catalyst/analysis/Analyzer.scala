@@ -214,6 +214,7 @@ class Analyzer(
 
       // If the projection list contains Stars, expand it.
       case p @ Project(projectList, child) if containsStar(projectList) =>
+        println("has star!!!")
         Project(
           projectList.flatMap {
             case s: Star => s.expand(child.output, resolver)
@@ -566,7 +567,12 @@ class Analyzer(
         case attribute: Attribute => attribute
       })
 
-      (windowExpressions, regularExpressions ++ attributes)
+      // Figure out which ones are missing from the regularExpressions,
+      // so that we can add them.
+      val requiredAttributes = AttributeSet(attributes)
+      val missingInProject = requiredAttributes -- regularExpressions
+
+      (windowExpressions, regularExpressions ++ missingInProject)
     }
 
     def addWindow(windowExpressions: Seq[NamedExpression], child: LogicalPlan): LogicalPlan = {
@@ -579,9 +585,8 @@ class Analyzer(
       var currentChild = child
       var i = 0
       while (i < groupedWindowExpression.size) {
-        val (windowSpec, expressions) = groupedWindowExpression(i)
-        val newExpressions = currentChild.output ++ expressions
-        currentChild = Window(newExpressions, windowSpec, currentChild)
+        val (windowSpec, windowExpressions) = groupedWindowExpression(i)
+        currentChild = Window(currentChild.output, windowExpressions, windowSpec, currentChild)
 
         i += 1
       }
@@ -596,14 +601,14 @@ class Analyzer(
       case WithWindowDefinition(windowDefinitions, child) =>
         child.transform {
           case plan => plan.transformExpressions {
-            case UnresolvedWindowExpression(child, WindowSpecReference(windowName)) =>
+            case UnresolvedWindowExpression(c, WindowSpecReference(windowName)) =>
               val errorMessage =
                 s"Window specification $windowName is not defined in the WINDOW clause."
               val windowSpecDefinition =
                 windowDefinitions
                   .get(windowName)
                   .getOrElse(throw new AnalysisException(errorMessage))
-              WindowExpression(child, windowSpecDefinition)
+              WindowExpression(c, windowSpecDefinition)
           }
         }
 

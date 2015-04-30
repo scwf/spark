@@ -81,6 +81,7 @@ class HiveWindowFunctionQuerySuite extends HiveComparisonTest with BeforeAndAfte
   }
 
   test("explain") {
+    /*
     sql(
       s"""
       |select p_mfgr, p_name, p_size,
@@ -137,9 +138,22 @@ class HiveWindowFunctionQuerySuite extends HiveComparisonTest with BeforeAndAfte
       |window w1 as (distribute by p_mfgr sort by p_name rows between 2 preceding and 2 following),
       |w2 as (distribute by p_mfgr sort by p_name rows between current row and current row)
       """.stripMargin).explain(true)
+
+    sql(
+      s"""
+      |select p_mfgr, p_name, p_size,
+      |rank() over(distribute by p_mfgr sort by p_name) as r
+      |from part
+      """.stripMargin).explain(true)
+
+    sql(
+      """
+        |select 200 + count(*) from part group by p_mfgr
+      """.stripMargin).explain(true)
+    */
   }
 
-  /*
+
   /////////////////////////////////////////////////////////////////////////////
   // Tests from windowing.q
   // We port tests in windowing.q to here because this query file contains too
@@ -316,6 +330,7 @@ class HiveWindowFunctionQuerySuite extends HiveComparisonTest with BeforeAndAfte
       |             rows between 2 preceding and 2 following)
     """.stripMargin, reset = false)
 
+
   createQueryTest("windowing.q -- 17. testCountStar",
     s"""
       |select  p_mfgr,p_name, p_size,
@@ -436,6 +451,7 @@ class HiveWindowFunctionQuerySuite extends HiveComparisonTest with BeforeAndAfte
       |       w2 as (partition by p_mfgr order by p_name)
     """.stripMargin, reset = false)
 
+  /* p_name is not a numeric column. What is Hive's semantic?
   createQueryTest("windowing.q -- 31. testWindowCrossReference",
     """
       |select p_mfgr, p_name, p_size,
@@ -446,7 +462,8 @@ class HiveWindowFunctionQuerySuite extends HiveComparisonTest with BeforeAndAfte
       |             range between 2 preceding and 2 following),
       |       w2 as w1
     """.stripMargin, reset = false)
-
+  */
+  /*
   createQueryTest("windowing.q -- 32. testWindowInheritance",
     """
       |select p_mfgr, p_name, p_size,
@@ -457,7 +474,9 @@ class HiveWindowFunctionQuerySuite extends HiveComparisonTest with BeforeAndAfte
       |             range between 2 preceding and 2 following),
       |       w2 as (w1 rows between unbounded preceding and current row)
     """.stripMargin, reset = false)
+  */
 
+  /* p_name is not a numeric column. What is Hive's semantic?
   createQueryTest("windowing.q -- 33. testWindowForwardReference",
     """
       |select p_mfgr, p_name, p_size,
@@ -471,7 +490,8 @@ class HiveWindowFunctionQuerySuite extends HiveComparisonTest with BeforeAndAfte
       |       w3 as (distribute by p_mfgr sort by p_name
       |             range between unbounded preceding and current row)
     """.stripMargin, reset = false)
-
+  */
+  /*
   createQueryTest("windowing.q -- 34. testWindowDefinitionPropagation",
     """
       |select p_mfgr, p_name, p_size,
@@ -485,7 +505,9 @@ class HiveWindowFunctionQuerySuite extends HiveComparisonTest with BeforeAndAfte
       |       w3 as (distribute by p_mfgr sort by p_name
       |             range between unbounded preceding and current row)
     """.stripMargin, reset = false)
+  */
 
+  /* Seems Hive evaluate SELECT DISTINCT before window functions?
   createQueryTest("windowing.q -- 35. testDistinctWithWindowing",
     """
       |select DISTINCT p_mfgr, p_name, p_size,
@@ -493,6 +515,7 @@ class HiveWindowFunctionQuerySuite extends HiveComparisonTest with BeforeAndAfte
       |from part
       |window w1 as (distribute by p_mfgr sort by p_name rows between 2 preceding and 2 following)
     """.stripMargin, reset = false)
+  */
 
   createQueryTest("windowing.q -- 36. testRankWithPartitioning",
     """
@@ -567,5 +590,4 @@ class HiveWindowFunctionQuerySuite extends HiveComparisonTest with BeforeAndAfte
       |from part
       |order by p_name
     """.stripMargin, reset = false)
-    */
 }

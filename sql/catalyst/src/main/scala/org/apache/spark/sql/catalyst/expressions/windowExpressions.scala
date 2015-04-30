@@ -20,7 +20,7 @@ package org.apache.spark.sql.catalyst.expressions
 import org.apache.spark.sql.catalyst.analysis.UnresolvedException
 import org.apache.spark.sql.catalyst.errors.TreeNodeException
 import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.sql.types.DataType
+import org.apache.spark.sql.types.{NumericType, DataType}
 
 sealed trait WindowSpec
 
@@ -40,14 +40,23 @@ case class WindowSpecDefinition(
       "It should be converted to a SpecifiedWindowFrame during analysis. " +
       "Please file a bug report.")
     case frame: SpecifiedWindowFrame => frame.validate.orElse {
-      // It is not allowed to have a value-based PRECEDING and FOLLOWING
-      // as the boundary of a Range Window Frame.
-      val reason = "This Range Window Frame only accepts at most one ORDER BY expression."
+      def checkValueBasedBoundaryForRangeFrame(): Option[String] = {
+        if (orderSpec.length > 1)  {
+          // It is not allowed to have a value-based PRECEDING and FOLLOWING
+          // as the boundary of a Range Window Frame.
+          Some("This Range Window Frame only accepts at most one ORDER BY expression.")
+        } else if (orderSpec.nonEmpty && !orderSpec.head.dataType.isInstanceOf[NumericType]) {
+          Some("The data type of the expression in the ORDER BY clause should be numeric type.")
+        } else {
+          None
+        }
+      }
+
       (frame.frameType, frame.frameStart, frame.frameEnd) match {
-        case (RangeFrame, vp: ValuePreceding, _) if orderSpec.length > 1 => Some(reason)
-        case (RangeFrame, vf: ValueFollowing, _) if orderSpec.length > 1 => Some(reason)
-        case (RangeFrame, _, vp: ValuePreceding) if orderSpec.length > 1 => Some(reason)
-        case (RangeFrame, _, vf: ValueFollowing) if orderSpec.length > 1 => Some(reason)
+        case (RangeFrame, vp: ValuePreceding, _) => checkValueBasedBoundaryForRangeFrame()
+        case (RangeFrame, vf: ValueFollowing, _) => checkValueBasedBoundaryForRangeFrame()
+        case (RangeFrame, _, vp: ValuePreceding) => checkValueBasedBoundaryForRangeFrame()
+        case (RangeFrame, _, vf: ValueFollowing) => checkValueBasedBoundaryForRangeFrame()
         case (_, _, _) => None
       }
     }
@@ -56,6 +65,10 @@ case class WindowSpecDefinition(
   type EvaluatedType = Any
 
   override def children = partitionSpec ++ orderSpec
+
+  override lazy val resolved =
+    childrenResolved && frameSpecification.isInstanceOf[SpecifiedWindowFrame]
+
 
   override def toString: String = simpleString
 
@@ -112,7 +125,7 @@ case object UnboundedPreceding extends FrameBoundary {
 case class ValuePreceding(value: Int) extends FrameBoundary {
   def notFollows(other: FrameBoundary): Boolean = other match {
     case UnboundedPreceding => false
-    case ValuePreceding(anotherValue) => value <= anotherValue
+    case ValuePreceding(anotherValue) => value >= anotherValue
     case CurrentRow => true
     case vf: ValueFollowing => true
     case UnboundedFollowing => true
@@ -203,21 +216,67 @@ object SpecifiedWindowFrame {
   }
 }
 
-case class UnresolvedWindowFunction(name: String, children: Seq[Expression]) extends Expression {
+/**
+ * Every window function needs to maintain a output buffer for its output.
+ * It should expect that for a n-row window frame, it will be called n times
+ * to retrieve value corresponding with these n rows.
+ */
+trait WindowFunction extends Expression {
+  self: Product =>
+
+  def init(): Unit
+
+  def reset(): Unit
+
+  def prepareInputParameters(input: Row): AnyRef
+
+  def update(input: AnyRef): Unit
+
+  def batchUpdate(inputs: Array[AnyRef]): Unit
+
+  def evaluate(): Unit
+
+  def get(index: Int): Any
+
+  def newInstance(): WindowFunction
+}
+
+case class UnresolvedWindowFunction(
+    name: String,
+    children: Seq[Expression])
+  extends Expression with WindowFunction {
+
   override def dataType: DataType = throw new UnresolvedException(this, "dataType")
   override def foldable: Boolean = throw new UnresolvedException(this, "foldable")
   override def nullable: Boolean = throw new UnresolvedException(this, "nullable")
   override lazy val resolved = false
 
+  override def init(): Unit =
+    throw new UnresolvedException(this, "reset")
+  override def reset(): Unit =
+    throw new UnresolvedException(this, "reset")
+  override def prepareInputParameters(input: Row): AnyRef =
+    throw new UnresolvedException(this, "prepareInputParameters")
+  override def update(input: AnyRef): Unit =
+    throw new UnresolvedException(this, "update")
+  override def batchUpdate(inputs: Array[AnyRef]): Unit =
+    throw new UnresolvedException(this, "batchUpdate")
+  override def evaluate(): Unit =
+    throw new UnresolvedException(this, "evaluate")
+  override def get(index: Int): Any =
+    throw new UnresolvedException(this, "get")
   // Unresolved functions are transient at compile time and don't get evaluated during execution.
   override def eval(input: Row = null): EvaluatedType =
     throw new TreeNodeException(this, s"No function to evaluate expression. type: ${this.nodeName}")
 
   override def toString: String = s"'$name(${children.mkString(",")})"
+
+  override def newInstance(): WindowFunction =
+    throw new UnresolvedException(this, "newInstance")
 }
 
 case class UnresolvedWindowExpression(
-    child: Expression,
+    child: UnresolvedWindowFunction,
     windowSpec: WindowSpecReference) extends UnaryExpression {
   override def dataType: DataType = throw new UnresolvedException(this, "dataType")
   override def foldable: Boolean = throw new UnresolvedException(this, "foldable")
@@ -230,18 +289,19 @@ case class UnresolvedWindowExpression(
 }
 
 case class WindowExpression(
-    windowExpression: Expression,
+    windowFunction: WindowFunction,
     windowSpec: WindowSpecDefinition) extends Expression {
   override type EvaluatedType = Any
 
   override def children: Seq[Expression] =
-    windowExpression :: windowSpec :: Nil
+    windowFunction :: windowSpec :: Nil
 
-  override def eval(input: Row): Any = windowExpression.eval(input)
+  override def eval(input: Row): EvaluatedType =
+    throw new TreeNodeException(this, s"No function to evaluate expression. type: ${this.nodeName}")
 
-  override def dataType: DataType = windowExpression.dataType
-  override def foldable: Boolean = windowExpression.foldable
-  override def nullable: Boolean = windowExpression.nullable
+  override def dataType: DataType = windowFunction.dataType
+  override def foldable: Boolean = windowFunction.foldable
+  override def nullable: Boolean = windowFunction.nullable
 
-  override def toString: String = s"$windowExpression $windowSpec"
+  override def toString: String = s"$windowFunction $windowSpec"
 }
