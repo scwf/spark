@@ -165,7 +165,7 @@ abstract class HiveWindowFunctionQueryBaseSuite extends HiveComparisonTest with 
   // Tests based on windowing_navfn.q
   // Results of the original query file are not deterministic.
   // Also, the original query of
-  // select i, lead(s) over (partition by bin order by d,i desc) from over10k limit 100 
+  // select i, lead(s) over (partition by bin order by d,i desc) from over10k limit 100
   /////////////////////////////////////////////////////////////////////////////
   createQueryTest("windowing_navfn.q (deterministic)",
     s"""
