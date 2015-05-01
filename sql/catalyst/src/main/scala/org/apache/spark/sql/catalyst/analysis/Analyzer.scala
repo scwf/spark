@@ -214,7 +214,6 @@ class Analyzer(
 
       // If the projection list contains Stars, expand it.
       case p @ Project(projectList, child) if containsStar(projectList) =>
-        println("has star!!!")
         Project(
           projectList.flatMap {
             case s: Star => s.expand(child.output, resolver)
