@@ -28,6 +28,11 @@ import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
  */
 @DeveloperApi
 abstract class Dialect {
+  // sqlparser of the dialect
+  def sqlParser: AbstractSparkSQLParser
+
   // this is the main function that will be implemented by sql parser.
-  def parse(sqlText: String): LogicalPlan
+  def parse(sqlText: String): LogicalPlan = {
+    sqlParser.parse(sqlText)
+  }
 }

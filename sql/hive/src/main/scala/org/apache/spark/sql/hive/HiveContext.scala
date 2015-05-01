@@ -49,8 +49,10 @@ import org.apache.spark.sql.types._
  * This is the HiveQL Dialect, this dialect is strongly bind with HiveContext
  */
 private[hive] class HiveQLDialect extends Dialect {
-  override def parse(sqlText: String): LogicalPlan = {
-    HiveQl.parseSql(sqlText)
+  @transient
+  val sqlParser = {
+    val fallback = new ExtendedHiveQlParser
+    new SparkSQLParser(fallback.parse(_))
   }
 }
 
