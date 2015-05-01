@@ -32,6 +32,7 @@ abstract class Dialect {
   def sqlParser: AbstractSparkSQLParser
 
   // this is the main function that will be implemented by sql parser.
+  // call sqlParser.parse by default
   def parse(sqlText: String): LogicalPlan = {
     sqlParser.parse(sqlText)
   }

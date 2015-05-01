@@ -20,9 +20,6 @@ package org.apache.spark.sql.hive
 import java.io.{BufferedReader, InputStreamReader, PrintStream}
 import java.sql.Timestamp
 
-import org.apache.hadoop.hive.ql.parse.VariableSubstitution
-import org.apache.spark.sql.catalyst.Dialect
-
 import scala.collection.JavaConversions._
 import scala.language.implicitConversions
 
@@ -39,10 +36,11 @@ import org.apache.spark.SparkContext
 import org.apache.spark.annotation.Experimental
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.analysis.{Analyzer, EliminateSubQueries, OverrideCatalog, OverrideFunctionRegistry}
+import org.apache.spark.sql.catalyst.Dialect
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.execution.{ExecutedCommand, ExtractPythonUdfs, QueryExecutionException, SetCommand}
 import org.apache.spark.sql.hive.execution.{DescribeHiveTableCommand, HiveNativeCommand}
-import org.apache.spark.sql.sources.{DDLParser, DataSourceStrategy}
+import org.apache.spark.sql.sources.DataSourceStrategy
 import org.apache.spark.sql.types._
 
 /**

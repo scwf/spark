@@ -173,7 +173,7 @@ class SQLContext(@transient val sparkContext: SparkContext)
   protected[sql] val sqlParser = getSQLDialect().sqlParser
 
   @transient
-  protected[sql] val ddlParser = new DDLParser((sql: String) => { getSQLDialect().parse(sql) })
+  protected[sql] val ddlParser = new DDLParser(sqlParser.parse(_))
 
   protected[sql] def getSQLDialect(): Dialect = {
     try {
