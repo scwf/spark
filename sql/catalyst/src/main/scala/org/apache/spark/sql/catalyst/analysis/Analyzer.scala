@@ -562,7 +562,8 @@ class Analyzer(
      * From a Seq of [[NamedExpression]]s, extract window expressions and
      * other regular expressions.
      */
-    def extract(expressions: Seq[NamedExpression]): (Seq[NamedExpression], Seq[NamedExpression]) = {
+    def extract(
+        expressions: Seq[NamedExpression]): (Seq[NamedExpression], Seq[NamedExpression]) = {
       val (windowExpressions, regularExpressions) = expressions.partition(hasWindowFunction)
 
       // 1. Substitute expression in windowExpressions with regular expression if possible

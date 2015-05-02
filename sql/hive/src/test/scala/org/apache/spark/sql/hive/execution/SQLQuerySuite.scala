@@ -124,15 +124,6 @@ class SQLQuerySuite extends QueryTest {
       (1 to 6).map(_ => Row("CA", 20151)))
   }
 
-
-  test("hahahah") {
-//    checkAnswer(sql("select sum(key), sum(sum(key)) over (partition by value) from src group by value"),
-//      (1 to 6).map(_ => Row("CA", 20151)))
-
-    checkAnswer(sql("select sum(key), sum(key) / sum(sum(key)) over (partition by value) from src group by value"),
-      (1 to 6).map(_ => Row("CA", 20151)))
-  }
-
   test("SPARK-5371: union with null and sum") {
     val df = Seq((1, 1)).toDF("c1", "c2")
     df.registerTempTable("table1")
