@@ -566,7 +566,7 @@ class Analyzer(
         expressions: Seq[NamedExpression]): (Seq[NamedExpression], Seq[NamedExpression]) = {
       val (windowExpressions, regularExpressions) = expressions.partition(hasWindowFunction)
 
-      // 1. Substitute expression in windowExpressions with regular expression if possible
+      // 1. Substitute expression in windowExpressions with alias in regularExpressions if possible
       // For example, select sum(key) as s1, sum(sum(key)) over (...) from src group by value,
       // we need substitute the inner sum(key) with s1.
       val regularExpressionWithAlias = regularExpressions.collect {
