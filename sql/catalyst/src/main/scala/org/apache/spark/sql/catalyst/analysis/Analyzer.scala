@@ -553,16 +553,35 @@ class Analyzer(
       return false
     }
 
+    def takeOffAlias(expr: Expression): Expression = expr match {
+      case Alias(child, name) => takeOffAlias(child)
+      case other => other
+    }
+
     /**
      * From a Seq of [[NamedExpression]]s, extract window expressions and
      * other regular expressions.
      */
-    def extract(
-        expressions: Seq[NamedExpression]): (Seq[NamedExpression], Seq[NamedExpression]) = {
+    def extract(expressions: Seq[NamedExpression]): (Seq[NamedExpression], Seq[NamedExpression]) = {
       val (windowExpressions, regularExpressions) = expressions.partition(hasWindowFunction)
-      // Also need to extract all UnresolvedAttribute from windowExpressions.
+
+      // 1. Substitute expression in windowExpressions with regular expression if possible
+      // For example, select sum(key) as s1, sum(sum(key)) over (...) from src group by value,
+      // we need substitute the inner sum(key) with s1.
+      val regularExpressionWithAlias = regularExpressions.collect {
+        case a @ Alias(child, name) => (takeOffAlias(child), a)
+      }.toMap
+
+      val newWindowExpressions = windowExpressions.map {
+        _.transform {
+          case expr if regularExpressionWithAlias.contains(expr) =>
+            regularExpressionWithAlias.get(expr).get.toAttribute
+        }.asInstanceOf[NamedExpression]
+      }
+
+      // 2. Also need to extract all UnresolvedAttribute from windowExpressions.
       // For example, in the case of SUM(x) OVER (...), we need to extract x.
-      val attributes = windowExpressions.flatMap(_.collect {
+      val attributes = newWindowExpressions.flatMap(_.collect {
         case attribute: Attribute => attribute
       })
 
@@ -571,7 +590,7 @@ class Analyzer(
       val requiredAttributes = AttributeSet(attributes)
       val missingInProject = requiredAttributes -- regularExpressions
 
-      (windowExpressions, regularExpressions ++ missingInProject)
+      (newWindowExpressions, regularExpressions ++ missingInProject)
     }
 
     def addWindow(windowExpressions: Seq[NamedExpression], child: LogicalPlan): LogicalPlan = {
