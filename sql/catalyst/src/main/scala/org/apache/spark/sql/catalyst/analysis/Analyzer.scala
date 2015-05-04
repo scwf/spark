@@ -23,6 +23,8 @@ import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules._
 import org.apache.spark.sql.types._
+import scala.collection.mutable.ArrayBuffer
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * A trivial [[Analyzer]] with an [[EmptyCatalog]] and [[EmptyFunctionRegistry]]. Used for testing
@@ -535,6 +537,8 @@ class Analyzer(
   }
 
   object ResolveWindowFunction extends Rule[LogicalPlan] {
+    protected val nextWindowSpecId: AtomicInteger = new AtomicInteger(0)
+    
     def hasWindowFunction(projectList: Seq[NamedExpression]): Boolean = {
       projectList.foreach ( _.foreach {
         case window: WindowExpression => return true
@@ -558,6 +562,25 @@ class Analyzer(
       case other => other
     }
 
+    def assignAliases(expr: Expression): NamedExpression = expr match {
+      case ne: NamedExpression => ne
+      case e => Alias(e, s"w${nextWindowSpecId.getAndIncrement}")()
+    }
+    
+    def pushdownExprAndTransform(
+        expr: Expression,
+        regularExpressionWithAlias: Map[Expression, Alias],        
+        pushdownExpressions: ArrayBuffer[Expression]): Expression = {
+      
+      if(regularExpressionWithAlias.contains(expr)) {
+        regularExpressionWithAlias.get(expr).get
+      } else {
+        val namedExpr = assignAliases(expr)
+        pushdownExpressions += namedExpr
+        namedExpr
+      }
+    }
+
     /**
      * From a Seq of [[NamedExpression]]s, extract window expressions and
      * other regular expressions.
@@ -573,25 +596,38 @@ class Analyzer(
         case a @ Alias(child, name) => (takeOffAlias(child), a)
       }.toMap
 
+      val pushdownExpressions = new ArrayBuffer[Expression]()
       val newWindowExpressions = windowExpressions.map {
         _.transform {
-          case expr if regularExpressionWithAlias.contains(expr) =>
-            regularExpressionWithAlias.get(expr).get.toAttribute
-        }.asInstanceOf[NamedExpression]
+          case wf : WindowFunction =>
+            val newChildren = wf.children.map(
+              pushdownExprAndTransform(_, regularExpressionWithAlias, pushdownExpressions))
+            wf.withNewChildren(newChildren)  
+          case wsc @ WindowSpecDefinition(partitionSpec, orderSpec, _) =>
+            val newPartitionSpec = partitionSpec.map(
+              pushdownExprAndTransform(_, regularExpressionWithAlias, pushdownExpressions)
+            )
+            val newOrderSpec = orderSpec.map { so => 
+              val newChild = 
+                pushdownExprAndTransform(so.child, regularExpressionWithAlias, pushdownExpressions)
+              so.copy(child = newChild)
+            }
+            wsc.copy(partitionSpec = newPartitionSpec, orderSpec = newOrderSpec)
+        }
       }
 
-      // 2. Also need to extract all UnresolvedAttribute from windowExpressions.
-      // For example, in the case of SUM(x) OVER (...), we need to extract x.
-      val attributes = newWindowExpressions.flatMap(_.collect {
-        case attribute: Attribute => attribute
-      })
+//      // 2. Also need to extract all UnresolvedAttribute from windowExpressions.
+//      // For example, in the case of SUM(x) OVER (...), we need to extract x.
+//      val attributes = newWindowExpressions.flatMap(_.collect {
+//        case attribute: Attribute => attribute
+//      })
+//
+//      // Figure out which ones are missing from the regularExpressions,
+//      // so that we can add them.
+//      val requiredAttributes = AttributeSet(attributes)
+//      val missingInProject = requiredAttributes -- regularExpressions
 
-      // Figure out which ones are missing from the regularExpressions,
-      // so that we can add them.
-      val requiredAttributes = AttributeSet(attributes)
-      val missingInProject = requiredAttributes -- regularExpressions
-
-      (newWindowExpressions, regularExpressions ++ missingInProject)
+      (newWindowExpressions, regularExpressions ++ pushdownExpressions)
     }
 
     def addWindow(windowExpressions: Seq[NamedExpression], child: LogicalPlan): LogicalPlan = {
