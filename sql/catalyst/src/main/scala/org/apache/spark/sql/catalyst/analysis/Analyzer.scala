@@ -570,7 +570,7 @@ class Analyzer(
     def pushdownExprAndTransform(
         expr: Expression,
         regularExpressionWithAlias: Map[Expression, Alias],        
-        pushdownExpressions: ArrayBuffer[Expression]): Expression = {
+        pushdownExpressions: ArrayBuffer[NamedExpression]): NamedExpression = {
       
       if(regularExpressionWithAlias.contains(expr)) {
         regularExpressionWithAlias.get(expr).get.toAttribute
@@ -596,7 +596,7 @@ class Analyzer(
         case a @ Alias(child, name) => (takeOffAlias(child), a)
       }.toMap
 
-      val pushdownExpressions = new ArrayBuffer[Expression]()
+      val pushdownExpressions = new ArrayBuffer[NamedExpression]()
       val newWindowExpressions = windowExpressions.map {
         _.transform {
           case wf : WindowFunction =>
@@ -613,7 +613,7 @@ class Analyzer(
               so.copy(child = newChild)
             }
             wsc.copy(partitionSpec = newPartitionSpec, orderSpec = newOrderSpec)
-        }
+        }.asInstanceOf[NamedExpression]
       }
 
 //      // 2. Also need to extract all UnresolvedAttribute from windowExpressions.
