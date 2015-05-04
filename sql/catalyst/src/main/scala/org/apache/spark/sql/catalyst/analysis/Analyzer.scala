@@ -573,11 +573,11 @@ class Analyzer(
         pushdownExpressions: ArrayBuffer[Expression]): Expression = {
       
       if(regularExpressionWithAlias.contains(expr)) {
-        regularExpressionWithAlias.get(expr).get
+        regularExpressionWithAlias.get(expr).get.toAttribute
       } else {
         val namedExpr = assignAliases(expr)
         pushdownExpressions += namedExpr
-        namedExpr
+        namedExpr.toAttribute
       }
     }
 
