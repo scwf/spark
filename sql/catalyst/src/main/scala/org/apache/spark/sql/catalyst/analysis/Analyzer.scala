@@ -602,7 +602,7 @@ class Analyzer(
           case wf : WindowFunction =>
             val newChildren = wf.children.map(
               pushdownExprAndTransform(_, regularExpressionWithAlias, pushdownExpressions))
-            wf.withNewChildren(newChildren)  
+            wf.newInstanceWithChildren(newChildren)
           case wsc @ WindowSpecDefinition(partitionSpec, orderSpec, _) =>
             val newPartitionSpec = partitionSpec.map(
               pushdownExprAndTransform(_, regularExpressionWithAlias, pushdownExpressions)
