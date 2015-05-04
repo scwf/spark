@@ -567,19 +567,28 @@ class Analyzer(
       case e => Alias(e, s"w${nextWindowSpecId.getAndIncrement}")()
     }
     
-    def pushdownExprAndTransform(
+    def pushdownExpr(
         expr: Expression,
-        regularExpressionWithAlias: Map[Expression, Alias],        
-        pushdownExpressions: ArrayBuffer[NamedExpression]): NamedExpression = {
-      // if child output contains this expr, we substitute it; else we add this expression to
-      // pushdownExpressions
-      if(regularExpressionWithAlias.contains(expr)) {
-        regularExpressionWithAlias.get(expr).get.toAttribute
-      } else {
-        val namedExpr = assignAliases(expr)
-        pushdownExpressions += namedExpr
-        namedExpr.toAttribute
-      }
+        childExprs: Seq[NamedExpression],
+        childExprsAlias: Map[Expression, NamedExpression],
+        pushdownExprs: ArrayBuffer[NamedExpression]): Expression = expr match {
+      case b: BinaryArithmetic if b.left.foldable =>
+        b.withNewChildren(
+          Seq(b.left, pushdownExpr(b.right, childExprs, childExprsAlias, pushdownExprs)))
+      case b: BinaryArithmetic if b.right.foldable =>
+        b.withNewChildren(
+          Seq(pushdownExpr(b.left, childExprs, childExprsAlias, pushdownExprs), b.right))
+      case ne: NamedExpression =>
+        if ((AttributeSet(Seq(expr)) -- childExprs).nonEmpty) {
+          pushdownExprs += ne
+        }
+        ne
+      case e: Expression =>
+        val named = assignAliases(e)
+        if (!childExprsAlias.contains(expr)) {
+          pushdownExprs += named
+        }
+        named.toAttribute
     }
 
     /**
@@ -595,24 +604,31 @@ class Analyzer(
       // For example,
       // select sum(key) as s1, sum(sum(key)) over (partition by value) from src group by value
       // we need substitute the inner sum(key) with s1 and push down value to regularExpressions
-      val regularExpressionWithAlias = regularExpressions.collect {
+      val regularExprsAlias = regularExpressions.collect {
         case a @ Alias(child, name) => (takeOffAlias(child), a)
       }.toMap
-      val pushdownExpressions = new ArrayBuffer[NamedExpression]()
 
-      val newWindowExpressions = windowExpressions.map {
+      val substitutedWindowExpressions = windowExpressions.map {
+        _.transform {
+          case expr if regularExprsAlias.contains(expr) =>
+            regularExprsAlias.get(expr).get.toAttribute
+        }.asInstanceOf[NamedExpression]
+      }
+
+      val pushdownExpressions = new ArrayBuffer[NamedExpression]()
+      val newWindowExpressions = substitutedWindowExpressions.map {
         _.transform {
           case wf : WindowFunction =>
             val newChildren = wf.children.map(
-              pushdownExprAndTransform(_, regularExpressionWithAlias, pushdownExpressions))
+              pushdownExpr(_, regularExpressions, regularExprsAlias, pushdownExpressions))
             wf.newInstanceWithChildren(newChildren)
           case wsc @ WindowSpecDefinition(partitionSpec, orderSpec, _) =>
             val newPartitionSpec = partitionSpec.map(
-              pushdownExprAndTransform(_, regularExpressionWithAlias, pushdownExpressions)
+              pushdownExpr(_, regularExpressions, regularExprsAlias, pushdownExpressions)
             )
-            val newOrderSpec = orderSpec.map { so => 
-              val newChild = 
-                pushdownExprAndTransform(so.child, regularExpressionWithAlias, pushdownExpressions)
+            val newOrderSpec = orderSpec.map { so =>
+              val newChild =
+                pushdownExpr(so.child, regularExpressions, regularExprsAlias, pushdownExpressions)
               so.copy(child = newChild)
             }
             wsc.copy(partitionSpec = newPartitionSpec, orderSpec = newOrderSpec)

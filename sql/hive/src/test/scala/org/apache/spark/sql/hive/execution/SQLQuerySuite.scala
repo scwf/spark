@@ -589,6 +589,21 @@ class SQLQuerySuite extends QueryTest {
     checkAnswer(
       sql(
         """
+          |select area, sum(product), sum(sum(product)) over (partition by area)
+          |from windowData group by month, area
+        """.stripMargin),
+      Seq(
+        ("a", 5, 11),
+        ("a", 6, 11),
+        ("b", 7, 15),
+        ("b", 8, 15),
+        ("c", 9, 19),
+        ("c", 10, 19)
+      ).map(i => Row(i._1, i._2, i._3)))
+
+    checkAnswer(
+      sql(
+        """
           |select area, sum(product) - 1, sum(sum(product)) over (partition by area)
           |from windowData group by month, area
         """.stripMargin),
@@ -614,6 +629,21 @@ class SQLQuerySuite extends QueryTest {
         ("b", 8, 8d/15),
         ("c", 10, 10d/19),
         ("c", 9, 9d/19)
+      ).map(i => Row(i._1, i._2, i._3)))
+
+    checkAnswer(
+      sql(
+        """
+          |select area, sum(product), sum(product) / sum(sum(product) - 1) over (partition by area)
+          |from windowData group by month, area
+        """.stripMargin),
+      Seq(
+        ("a", 5, 5d/9),
+        ("a", 6, 6d/9),
+        ("b", 7, 7d/13),
+        ("b", 8, 8d/13),
+        ("c", 10, 10d/17),
+        ("c", 9, 9d/17)
       ).map(i => Row(i._1, i._2, i._3)))
   }
 }
