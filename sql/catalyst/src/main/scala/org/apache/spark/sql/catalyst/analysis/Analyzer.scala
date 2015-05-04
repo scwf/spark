@@ -571,7 +571,8 @@ class Analyzer(
         expr: Expression,
         regularExpressionWithAlias: Map[Expression, Alias],        
         pushdownExpressions: ArrayBuffer[NamedExpression]): NamedExpression = {
-      
+      // if child output contains this expr, we substitute it; else we add this expression to
+      // pushdownExpressions
       if(regularExpressionWithAlias.contains(expr)) {
         regularExpressionWithAlias.get(expr).get.toAttribute
       } else {
@@ -590,13 +591,15 @@ class Analyzer(
       val (windowExpressions, regularExpressions) = expressions.partition(hasWindowFunction)
 
       // 1. Substitute expression in windowExpressions with alias in regularExpressions if possible
-      // For example, select sum(key) as s1, sum(sum(key)) over (...) from src group by value,
-      // we need substitute the inner sum(key) with s1.
+      // 2. Push down expressions which in windowExpressions but not in regularExpressions
+      // For example,
+      // select sum(key) as s1, sum(sum(key)) over (partition by value) from src group by value
+      // we need substitute the inner sum(key) with s1 and push down value to regularExpressions
       val regularExpressionWithAlias = regularExpressions.collect {
         case a @ Alias(child, name) => (takeOffAlias(child), a)
       }.toMap
-
       val pushdownExpressions = new ArrayBuffer[NamedExpression]()
+
       val newWindowExpressions = windowExpressions.map {
         _.transform {
           case wf : WindowFunction =>
@@ -615,18 +618,6 @@ class Analyzer(
             wsc.copy(partitionSpec = newPartitionSpec, orderSpec = newOrderSpec)
         }.asInstanceOf[NamedExpression]
       }
-
-//      // 2. Also need to extract all UnresolvedAttribute from windowExpressions.
-//      // For example, in the case of SUM(x) OVER (...), we need to extract x.
-//      val attributes = newWindowExpressions.flatMap(_.collect {
-//        case attribute: Attribute => attribute
-//      })
-//
-//      // Figure out which ones are missing from the regularExpressions,
-//      // so that we can add them.
-//      val requiredAttributes = AttributeSet(attributes)
-//      val missingInProject = requiredAttributes -- regularExpressions
-
       (newWindowExpressions, regularExpressions ++ pushdownExpressions)
     }
 

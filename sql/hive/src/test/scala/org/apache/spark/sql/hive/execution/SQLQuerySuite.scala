@@ -589,15 +589,15 @@ class SQLQuerySuite extends QueryTest {
     checkAnswer(
       sql(
         """
-          |select area, sum(product), sum(sum(product)) over (partition by area)
+          |select area, sum(product) - 1, sum(sum(product)) over (partition by area)
           |from windowData group by month, area
         """.stripMargin),
       Seq(
+        ("a", 4, 11),
         ("a", 5, 11),
-        ("a", 6, 11),
+        ("b", 6, 15),
         ("b", 7, 15),
-        ("b", 8, 15),
-        ("c", 10, 19),
+        ("c", 8, 19),
         ("c", 9, 19)
       ).map(i => Row(i._1, i._2, i._3)))
 
