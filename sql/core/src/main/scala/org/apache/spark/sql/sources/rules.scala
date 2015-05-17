@@ -17,13 +17,12 @@
 
 package org.apache.spark.sql.sources
 
-import org.apache.spark.sql.{SaveMode, AnalysisException}
+import org.apache.spark.sql.{SQLContext, execution, SaveMode, AnalysisException}
 import org.apache.spark.sql.catalyst.analysis.{EliminateSubQueries, Catalog}
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Cast, Alias}
 import org.apache.spark.sql.catalyst.plans.logical
 import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoTable, LogicalPlan, Project}
 import org.apache.spark.sql.catalyst.rules.Rule
-import org.apache.spark.sql.types.DataType
 
 /**
  * A rule to do pre-insert data type casting and field renaming. Before we insert into
@@ -147,5 +146,40 @@ private[sql] case class PreWriteCheck(catalog: Catalog) extends (LogicalPlan => 
 
       case _ => // OK
     }
+  }
+}
+
+case class ResolveDataSourceCommand(sqlContext: SQLContext) extends  Rule[LogicalPlan] {
+  def apply(plan: LogicalPlan): LogicalPlan = plan transform {
+    case CreateTableUsing(tableName, userSpecifiedSchema, provider, true, opts, false, _) =>
+      CreateTempTableUsing(tableName, userSpecifiedSchema, provider, opts)
+
+    case c: CreateTableUsing if !c.temporary =>
+      sys.error("Tables created with SQLContext must be TEMPORARY. Use a HiveContext instead.")
+    case c: CreateTableUsing if c.temporary && c.allowExisting =>
+      sys.error("allowExisting should be set to false when creating a temporary table.")
+
+    case CreateTableUsingAsSelect(tableName, provider, true, partitionsCols, mode, opts, query)
+      if partitionsCols.nonEmpty =>
+      sys.error("Cannot create temporary partitioned table.")
+
+    case CreateTableUsingAsSelect(tableName, provider, true, _, mode, opts, query) =>
+      CreateTempTableUsingAsSelect(
+        tableName, provider, Array.empty[String], mode, opts, query)
+    case c: CreateTableUsingAsSelect if !c.temporary =>
+      sys.error("Tables created with SQLContext must be TEMPORARY. Use a HiveContext instead.")
+
+    case DescribeCommand(table, isExtended) =>
+      val resultPlan = sqlContext.executePlan(table).executedPlan
+      execution.DescribeCommand(resultPlan, resultPlan.output, isExtended)
+      
+    case i @ logical.InsertIntoTable(
+    l @ LogicalRelation(t: InsertableRelation), part, query, overwrite, false) if part.isEmpty =>
+      InsertIntoDataSource(l, query, overwrite)
+
+    case i @ logical.InsertIntoTable(
+    l @ LogicalRelation(t: HadoopFsRelation), part, query, overwrite, false) if part.isEmpty =>
+      val mode = if (overwrite) SaveMode.Overwrite else SaveMode.Append
+      InsertIntoHadoopFsRelation(t, query, Array.empty[String], mode)
   }
 }

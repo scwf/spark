@@ -18,7 +18,6 @@
 package org.apache.spark.sql.sources
 
 import org.apache.spark.sql._
-import org.apache.spark.sql.catalyst.CatalystConf
 import org.apache.spark.sql.test.TestSQLContext
 import org.scalatest.BeforeAndAfter
 

@@ -280,8 +280,6 @@ private[sql] abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
     def numPartitions: Int = self.numPartitions
 
     def apply(plan: LogicalPlan): Seq[SparkPlan] = plan match {
-      case r: RunnableCommand => ExecutedCommand(r) :: Nil
-
       case logical.Distinct(child) =>
         execution.Distinct(partial = false,
           execution.Distinct(partial = true, planLater(child))) :: Nil
@@ -328,37 +326,6 @@ private[sql] abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
       case e @ EvaluatePython(udf, child, _) =>
         BatchPythonEvaluation(udf, e.output, planLater(child)) :: Nil
       case LogicalRDD(output, rdd) => PhysicalRDD(output, rdd) :: Nil
-      case _ => Nil
-    }
-  }
-
-  object DDLStrategy extends Strategy {
-    def apply(plan: LogicalPlan): Seq[SparkPlan] = plan match {
-      case CreateTableUsing(tableName, userSpecifiedSchema, provider, true, opts, false, _) =>
-        ExecutedCommand(
-          CreateTempTableUsing(
-            tableName, userSpecifiedSchema, provider, opts)) :: Nil
-      case c: CreateTableUsing if !c.temporary =>
-        sys.error("Tables created with SQLContext must be TEMPORARY. Use a HiveContext instead.")
-      case c: CreateTableUsing if c.temporary && c.allowExisting =>
-        sys.error("allowExisting should be set to false when creating a temporary table.")
-
-      case CreateTableUsingAsSelect(tableName, provider, true, partitionsCols, mode, opts, query)
-          if partitionsCols.nonEmpty =>
-        sys.error("Cannot create temporary partitioned table.")
-
-      case CreateTableUsingAsSelect(tableName, provider, true, _, mode, opts, query) =>
-        val cmd = CreateTempTableUsingAsSelect(
-          tableName, provider, Array.empty[String], mode, opts, query)
-        ExecutedCommand(cmd) :: Nil
-      case c: CreateTableUsingAsSelect if !c.temporary =>
-        sys.error("Tables created with SQLContext must be TEMPORARY. Use a HiveContext instead.")
-
-      case describe @ LogicalDescribeCommand(table, isExtended) =>
-        val resultPlan = self.sqlContext.executePlan(table).executedPlan
-        ExecutedCommand(
-          RunnableDescribeCommand(resultPlan, describe.output, isExtended)) :: Nil
-
       case _ => Nil
     }
   }

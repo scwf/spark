@@ -793,7 +793,7 @@ class Analyzer(
 }
 
 /**
- * Removes [[catalyst.plans.logical.Subquery Subquery]] operators from the plan.  Subqueries are
+ * Removes [[org.apache.spark.sql.catalyst.plans.logical.Subquery Subquery]] operators from the plan.  Subqueries are
  * only required to provide scoping information for attributes and can be removed once analysis is
  * complete.
  */

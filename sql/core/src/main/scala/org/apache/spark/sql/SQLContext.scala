@@ -130,6 +130,8 @@ class SQLContext(@transient val sparkContext: SparkContext)
       override val extendedResolutionRules =
         ExtractPythonUdfs ::
         sources.PreInsertCastAndRename ::
+        ResolveDataSourceCommand(self) ::
+        ResolveRunnableCommand(self) ::
         Nil
 
       override val extendedCheckRules = Seq(
@@ -798,7 +800,6 @@ class SQLContext(@transient val sparkContext: SparkContext)
     def strategies: Seq[Strategy] =
       experimental.extraStrategies ++ (
       DataSourceStrategy ::
-      DDLStrategy ::
       TakeOrdered ::
       HashAggregation ::
       LeftSemiJoin ::

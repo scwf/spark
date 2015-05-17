@@ -28,10 +28,8 @@ import org.apache.spark.sql.catalyst.expressions.{Row, _}
 import org.apache.spark.sql.catalyst.planning._
 import org.apache.spark.sql.catalyst.plans._
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
-import org.apache.spark.sql.execution.{DescribeCommand => RunnableDescribeCommand, _}
 import org.apache.spark.sql.hive.execution._
 import org.apache.spark.sql.parquet.ParquetRelation
-import org.apache.spark.sql.sources.{CreateTableUsing, CreateTableUsingAsSelect, DescribeCommand}
 import org.apache.spark.sql.types.StringType
 
 
@@ -215,42 +213,6 @@ private[hive] trait HiveStrategies {
           HiveTableScan(_, relation, pruningPredicates.reduceLeftOption(And))(hiveContext)) :: Nil
       case _ =>
         Nil
-    }
-  }
-
-  object HiveDDLStrategy extends Strategy {
-    def apply(plan: LogicalPlan): Seq[SparkPlan] = plan match {
-      case CreateTableUsing(
-          tableName, userSpecifiedSchema, provider, false, opts, allowExisting, managedIfNoPath) =>
-        ExecutedCommand(
-          CreateMetastoreDataSource(
-            tableName, userSpecifiedSchema, provider, opts, allowExisting, managedIfNoPath)) :: Nil
-
-      case CreateTableUsingAsSelect(tableName, provider, false, partitionCols, mode, opts, query) =>
-        val cmd =
-          CreateMetastoreDataSourceAsSelect(tableName, provider, partitionCols, mode, opts, query)
-        ExecutedCommand(cmd) :: Nil
-
-      case _ => Nil
-    }
-  }
-
-  case class HiveCommandStrategy(context: HiveContext) extends Strategy {
-    def apply(plan: LogicalPlan): Seq[SparkPlan] = plan match {
-      case describe: DescribeCommand =>
-        val resolvedTable = context.executePlan(describe.table).analyzed
-        resolvedTable match {
-          case t: MetastoreRelation =>
-            ExecutedCommand(
-              DescribeHiveTableCommand(t, describe.output, describe.isExtended)) :: Nil
-
-          case o: LogicalPlan =>
-            val resultPlan = context.executePlan(o).executedPlan
-            ExecutedCommand(RunnableDescribeCommand(
-              resultPlan, describe.output, describe.isExtended)) :: Nil
-        }
-
-      case _ => Nil
     }
   }
 }

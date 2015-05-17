@@ -100,15 +100,6 @@ private[sql] object DataSourceStrategy extends Strategy with Logging {
     case l @ LogicalRelation(t: TableScan) =>
       createPhysicalRDD(l.relation, l.output, t.buildScan()) :: Nil
 
-    case i @ logical.InsertIntoTable(
-      l @ LogicalRelation(t: InsertableRelation), part, query, overwrite, false) if part.isEmpty =>
-      execution.ExecutedCommand(InsertIntoDataSource(l, query, overwrite)) :: Nil
-
-    case i @ logical.InsertIntoTable(
-      l @ LogicalRelation(t: HadoopFsRelation), part, query, overwrite, false) =>
-      val mode = if (overwrite) SaveMode.Overwrite else SaveMode.Append
-      execution.ExecutedCommand(InsertIntoHadoopFsRelation(t, query, mode)) :: Nil
-
     case _ => Nil
   }
 

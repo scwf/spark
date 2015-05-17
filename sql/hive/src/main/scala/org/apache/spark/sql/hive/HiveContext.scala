@@ -43,10 +43,10 @@ import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.analysis.{Analyzer, EliminateSubQueries, OverrideCatalog, OverrideFunctionRegistry}
 import org.apache.spark.sql.catalyst.plans.logical._
-import org.apache.spark.sql.execution.{ExecutedCommand, ExtractPythonUdfs, QueryExecutionException, SetCommand}
+import org.apache.spark.sql.execution._
 import org.apache.spark.sql.hive.client._
 import org.apache.spark.sql.hive.execution.{DescribeHiveTableCommand, HiveNativeCommand}
-import org.apache.spark.sql.sources.{DDLParser, DataSourceStrategy}
+import org.apache.spark.sql.sources.{ResolveDataSourceCommand, DDLParser, DataSourceStrategy}
 import org.apache.spark.sql.catalyst.CatalystConf
 import org.apache.spark.sql.types._
 import org.apache.spark.util.Utils
@@ -372,6 +372,9 @@ class HiveContext(sc: SparkContext) extends SQLContext(sc) {
         ExtractPythonUdfs ::
         ResolveHiveWindowFunction ::
         sources.PreInsertCastAndRename ::
+        ResolveHiveCommand(self) ::
+        ResolveDataSourceCommand(self) ::
+        ResolveRunnableCommand(self) ::
         Nil
 
       override val extendedCheckRules = Seq(
@@ -428,9 +431,6 @@ class HiveContext(sc: SparkContext) extends SQLContext(sc) {
 
     override def strategies: Seq[Strategy] = experimental.extraStrategies ++ Seq(
       DataSourceStrategy,
-      HiveCommandStrategy(self),
-      HiveDDLStrategy,
-      DDLStrategy,
       TakeOrdered,
       ParquetOperations,
       InMemoryScans,
