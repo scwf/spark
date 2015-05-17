@@ -139,8 +139,7 @@ class ParquetIOSuiteBase extends QueryTest with ParquetTest {
   test("date type") {
     def makeDateRDD(): DataFrame =
       sparkContext
-        .parallelize(0 to 1000)
-        .map(i => Tuple1(DateUtils.toJavaDate(i)))
+        .parallelize((0 to 1000).map(i => Tuple1(DateUtils.toJavaDate(i))))
         .toDF()
         .select($"_1")
 

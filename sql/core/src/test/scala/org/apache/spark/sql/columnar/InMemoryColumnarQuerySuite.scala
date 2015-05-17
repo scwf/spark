@@ -154,27 +154,27 @@ class InMemoryColumnarQuerySuite extends QueryTest {
     val schema = StructType(fields)
 
     // Create a RDD for the schema
-    val rdd =
-      sparkContext.parallelize((1 to 100), 10).map { i =>
-        Row(
-          s"str${i}: test cache.",
-          s"binary${i}: test cache.".getBytes("UTF-8"),
-          null,
-          i % 2 == 0,
-          i.toByte,
-          i.toShort,
-          i,
-          Long.MaxValue - i.toLong,
-          (i + 0.25).toFloat,
-          (i + 0.75),
-          BigDecimal(Long.MaxValue.toString + ".12345"),
-          new java.math.BigDecimal(s"${i % 9 + 1}" + ".23456"),
-          new Date(i),
-          new Timestamp(i),
-          (1 to i).toSeq,
-          (0 to i).map(j => s"map_key_$j" -> (Long.MaxValue - j)).toMap,
-          Row((i - 0.25).toFloat, (1 to i).toSeq))
-      }
+    val data = (1 to 100).map { i =>
+      Row(
+        s"str${i}: test cache.",
+        s"binary${i}: test cache.".getBytes("UTF-8"),
+        null,
+        i % 2 == 0,
+        i.toByte,
+        i.toShort,
+        i,
+        Long.MaxValue - i.toLong,
+        (i + 0.25).toFloat,
+        (i + 0.75),
+        BigDecimal(Long.MaxValue.toString + ".12345"),
+        new java.math.BigDecimal(s"${i % 9 + 1}" + ".23456"),
+        new Date(i),
+        new Timestamp(i),
+        (1 to i).toSeq,
+        (0 to i).map(j => s"map_key_$j" -> (Long.MaxValue - j)).toMap,
+        Row((i - 0.25).toFloat, (1 to i).toSeq))
+    }
+    val rdd = sparkContext.parallelize(data, 10)
     createDataFrame(rdd, schema).registerTempTable("InMemoryCache_different_data_types")
     // Cache the table.
     sql("cache table InMemoryCache_different_data_types")

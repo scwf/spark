@@ -17,6 +17,8 @@
 
 package org.apache.spark.sql.hive
 
+import org.apache.spark.sql.execution.{PhysicalRDD, OutputFaker, SparkPlan}
+
 import scala.collection.JavaConversions._
 
 import org.apache.spark.annotation.Experimental

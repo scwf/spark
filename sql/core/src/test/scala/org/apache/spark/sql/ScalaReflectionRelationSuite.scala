@@ -74,7 +74,7 @@ case class ComplexReflectData(
     mapFieldContainsNull: Map[Int, Option[Long]],
     dataField: Data)
 
-class ScalaReflectionRelationSuite extends FunSuite {
+class ScalaReflectionRelationSuite extends QueryTest {
 
   import org.apache.spark.sql.test.TestSQLContext.implicits._
 

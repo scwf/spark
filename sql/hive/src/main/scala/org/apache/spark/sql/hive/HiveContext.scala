@@ -470,18 +470,8 @@ class HiveContext(sc: SparkContext) extends SQLContext(sc) {
      * execution is simply passed back to Hive.
      */
     def stringResult(): Seq[String] = executedPlan match {
-      case ExecutedCommand(desc: DescribeHiveTableCommand) =>
-        // If it is a describe command for a Hive table, we want to have the output format
-        // be similar with Hive.
-        desc.run(self).map {
-          case Row(name: String, dataType: String, comment) =>
-            Seq(name, dataType,
-              Option(comment.asInstanceOf[String]).getOrElse(""))
-              .map(s => String.format(s"%-20s", s))
-              .mkString("\t")
-        }
-      case command: ExecutedCommand =>
-        command.executeCollect().map(_(0).toString)
+      case localScan: LocalTableScan =>
+        localScan.rows.map(_.mkString("\t"))
 
       case other =>
         val result: Seq[Seq[Any]] = other.executeCollect().map(_.toSeq).toSeq

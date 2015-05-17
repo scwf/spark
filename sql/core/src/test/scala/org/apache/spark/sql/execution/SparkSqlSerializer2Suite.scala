@@ -93,8 +93,8 @@ abstract class SparkSqlSerializer2Suite extends QueryTest with BeforeAndAfterAll
     val schema = StructType(fields)
 
     // Create a RDD with all data types supported by SparkSqlSerializer2.
-    val rdd =
-      sparkContext.parallelize((1 to 1000), 10).map { i =>
+    val data = (1 to 1000).map {
+      i =>
         Row(
           s"str${i}: test serializer2.",
           s"binary${i}: test serializer2.".getBytes("UTF-8"),
@@ -110,7 +110,8 @@ abstract class SparkSqlSerializer2Suite extends QueryTest with BeforeAndAfterAll
           new java.math.BigDecimal(s"${i % 9 + 1}" + ".23456"),
           new Date(i),
           new Timestamp(i))
-      }
+    }
+    val rdd = sparkContext.parallelize(data, 10)
 
     createDataFrame(rdd, schema).registerTempTable("shuffle")
 
