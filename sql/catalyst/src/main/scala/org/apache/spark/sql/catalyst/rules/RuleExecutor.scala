@@ -90,14 +90,16 @@ abstract class RuleExecutor[TreeType <: TreeNode[_]] {
         lastPlan = curPlan
       }
 
-      if (!batchStartPlan.fastEquals(curPlan) && catalystConf.traceRuleExecutor) {
-        println(
-          s"""
-          |=== Result of Batch ${batch.name} ===
-          |${sideBySide(plan.treeString, curPlan.treeString).mkString("\n")}
+      if (catalystConf.traceRuleExecutor) {
+        if (!batchStartPlan.fastEquals(curPlan)) {
+          println(
+            s"""
+               |=== Result of Batch ${batch.name} ===
+               |${sideBySide(plan.treeString, curPlan.treeString).mkString("\n")}
         """.stripMargin)
-      } else {
-        println(s"Batch ${batch.name} has no effect.")
+        } else {
+          println(s"Batch ${batch.name} has no effect.")
+        }
       }
     }
 
