@@ -81,10 +81,10 @@ abstract class RuleExecutor[TreeType <: TreeNode[_]] {
         }
 
         if (curPlan.fastEquals(lastPlan)) {
-          if (catalystConf.traceRuleExecutor) {
+//          if (catalystConf.traceRuleExecutor) {
             println(
               s"Fixed point reached for batch ${batch.name} after ${iteration - 1} iterations.")
-          }
+//          }
           continue = false
         }
         lastPlan = curPlan

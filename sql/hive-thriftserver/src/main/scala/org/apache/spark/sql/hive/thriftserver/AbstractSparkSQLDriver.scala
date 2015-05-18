@@ -54,7 +54,7 @@ private[hive] abstract class AbstractSparkSQLDriver(
     // TODO unify the error code
     try {
       context.sparkContext.setJobDescription(command)
-      val execution = context.executePlan(context.sql(command).logicalPlan)
+      val execution = context.sql(command).queryExecution.asInstanceOf[context.QueryExecution]
       hiveResponse = execution.stringResult()
       tableSchema = getResultSetSchema(execution)
       new CommandProcessorResponse(0)
