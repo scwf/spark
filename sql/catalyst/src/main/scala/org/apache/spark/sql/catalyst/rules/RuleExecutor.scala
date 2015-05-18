@@ -17,12 +17,11 @@
 
 package org.apache.spark.sql.catalyst.rules
 
-import org.apache.spark.Logging
 import org.apache.spark.sql.catalyst.CatalystConf
 import org.apache.spark.sql.catalyst.trees.TreeNode
 import org.apache.spark.sql.catalyst.util.sideBySide
 
-abstract class RuleExecutor[TreeType <: TreeNode[_]] extends Logging {
+abstract class RuleExecutor[TreeType <: TreeNode[_]] {
 
   /**
    * An execution strategy for rules that indicates the maximum number of executions. If the
@@ -63,7 +62,7 @@ abstract class RuleExecutor[TreeType <: TreeNode[_]] extends Logging {
           case (plan, rule) =>
             val result = rule(plan)
             if (!result.fastEquals(plan) && catalystConf.traceRuleExecutor) {
-              logInfo(
+              println(
                 s"""
                   |=== Applying Rule ${rule.ruleName}, Iteration: $iteration ===
                   |${sideBySide(plan.treeString, result.treeString).mkString("\n")}
@@ -74,29 +73,31 @@ abstract class RuleExecutor[TreeType <: TreeNode[_]] extends Logging {
         }
         iteration += 1
         if (iteration > batch.strategy.maxIterations) {
-          // Only log if this is a rule that is supposed to run more than once.
-          if (iteration != 2) {
-            logInfo(s"Max iterations (${iteration - 1}) reached for batch ${batch.name}")
+          // Only print the max iterations if this rule have run more than once.
+          if (iteration != 2 && catalystConf.traceRuleExecutor) {
+            println(s"Max iterations (${iteration - 1}) reached for batch ${batch.name}")
           }
           continue = false
         }
 
         if (curPlan.fastEquals(lastPlan)) {
-          logTrace(
-            s"Fixed point reached for batch ${batch.name} after ${iteration - 1} iterations.")
+          if (catalystConf.traceRuleExecutor) {
+            println(
+              s"Fixed point reached for batch ${batch.name} after ${iteration - 1} iterations.")
+          }
           continue = false
         }
         lastPlan = curPlan
       }
 
-      if (!batchStartPlan.fastEquals(curPlan)) {
-        logDebug(
+      if (!batchStartPlan.fastEquals(curPlan) && catalystConf.traceRuleExecutor) {
+        println(
           s"""
           |=== Result of Batch ${batch.name} ===
           |${sideBySide(plan.treeString, curPlan.treeString).mkString("\n")}
         """.stripMargin)
       } else {
-        logTrace(s"Batch ${batch.name} has no effect.")
+        println(s"Batch ${batch.name} has no effect.")
       }
     }
 
