@@ -35,6 +35,8 @@ private[spark] object SQLConf {
   val UNSAFE_ENABLED = "spark.sql.unsafe.enabled"
   val DIALECT = "spark.sql.dialect"
   val CASE_SENSITIVE = "spark.sql.caseSensitive"
+  val TRACE_RULE_EXECUTOR = "spark.sql.traceRuleExecutor"
+
 
   val PARQUET_BINARY_AS_STRING = "spark.sql.parquet.binaryAsString"
   val PARQUET_INT96_AS_TIMESTAMP = "spark.sql.parquet.int96AsTimestamp"
@@ -172,6 +174,8 @@ private[sql] class SQLConf extends Serializable with CatalystConf {
    * caseSensitive analysis true by default
    */
   def caseSensitiveAnalysis: Boolean = getConf(SQLConf.CASE_SENSITIVE, "true").toBoolean
+
+  override def traceRuleExecutor: Boolean = getConf(SQLConf.TRACE_RULE_EXECUTOR, "false").toBoolean
 
   /**
    * When set to true, Spark SQL will use managed memory for certain operations.  This option only
