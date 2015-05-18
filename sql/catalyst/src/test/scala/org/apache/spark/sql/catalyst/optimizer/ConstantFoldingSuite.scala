@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.catalyst.optimizer
 
+import org.apache.spark.sql.catalyst.{EmptyConf, CatalystConf}
 import org.apache.spark.sql.catalyst.analysis.{UnresolvedExtractValue, EliminateSubQueries}
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, LogicalPlan}
@@ -31,6 +32,8 @@ import org.apache.spark.sql.catalyst.dsl.expressions._
 class ConstantFoldingSuite extends PlanTest {
 
   object Optimize extends RuleExecutor[LogicalPlan] {
+    override def catalystConf: CatalystConf = EmptyConf
+
     val batches =
       Batch("AnalysisNodes", Once,
         EliminateSubQueries) ::

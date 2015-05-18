@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.catalyst.optimizer
 
+import org.apache.spark.sql.catalyst.EmptyConf
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.plans.logical._
 
@@ -30,7 +31,7 @@ class ExpressionOptimizationSuite extends ExpressionEvaluationSuite {
       expected: Any,
       inputRow: Row = EmptyRow): Unit = {
     val plan = Project(Alias(expression, s"Optimized($expression)")() :: Nil, OneRowRelation)
-    val optimizedPlan = DefaultOptimizer.execute(plan)
+    val optimizedPlan = new DefaultOptimizer(EmptyConf).execute(plan)
     super.checkEvaluation(optimizedPlan.expressions.head, expected, inputRow)
   }
 }

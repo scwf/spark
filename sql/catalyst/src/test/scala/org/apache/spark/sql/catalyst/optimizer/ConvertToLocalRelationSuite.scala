@@ -18,6 +18,7 @@
 package org.apache.spark.sql.catalyst.optimizer
 
 import org.apache.spark.sql.Row
+import org.apache.spark.sql.catalyst.{EmptyConf, CatalystConf}
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.dsl.plans._
 import org.apache.spark.sql.catalyst.dsl.expressions._
@@ -29,6 +30,8 @@ import org.apache.spark.sql.catalyst.rules.RuleExecutor
 class ConvertToLocalRelationSuite extends PlanTest {
 
   object Optimize extends RuleExecutor[LogicalPlan] {
+    override def catalystConf: CatalystConf = EmptyConf
+
     val batches =
       Batch("LocalRelation", FixedPoint(100),
         ConvertToLocalRelation) :: Nil

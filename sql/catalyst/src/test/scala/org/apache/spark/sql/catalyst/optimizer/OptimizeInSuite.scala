@@ -17,6 +17,8 @@
 
 package org.apache.spark.sql.catalyst.optimizer
 
+import org.apache.spark.sql.catalyst.{EmptyConf, CatalystConf}
+
 import scala.collection.immutable.HashSet
 import org.apache.spark.sql.catalyst.analysis.{EliminateSubQueries, UnresolvedAttribute}
 import org.apache.spark.sql.catalyst.expressions._
@@ -32,6 +34,8 @@ import org.apache.spark.sql.catalyst.dsl.expressions._
 class OptimizeInSuite extends PlanTest {
 
   object Optimize extends RuleExecutor[LogicalPlan] {
+    override def catalystConf: CatalystConf = EmptyConf
+
     val batches =
       Batch("AnalysisNodes", Once,
         EliminateSubQueries) ::

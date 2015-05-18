@@ -17,6 +17,8 @@
 
 package org.apache.spark.sql.catalyst.optimizer
 
+import org.apache.spark.sql.catalyst.CatalystConf
+
 import scala.collection.immutable.HashSet
 import org.apache.spark.sql.catalyst.analysis.EliminateSubQueries
 import org.apache.spark.sql.catalyst.expressions._
@@ -31,7 +33,8 @@ import org.apache.spark.sql.types._
 
 abstract class Optimizer extends RuleExecutor[LogicalPlan]
 
-object DefaultOptimizer extends Optimizer {
+class DefaultOptimizer(conf: CatalystConf) extends Optimizer {
+  override def catalystConf: CatalystConf = conf
   val batches =
     // SubQueries are only needed for analysis and can be removed before execution.
     Batch("Remove SubQueries", FixedPoint(100),

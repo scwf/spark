@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.catalyst.optimizer
 
+import org.apache.spark.sql.catalyst.{EmptyConf, CatalystConf}
 import org.apache.spark.sql.catalyst.analysis.EliminateSubQueries
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.plans.logical._
@@ -28,6 +29,8 @@ import org.apache.spark.sql.catalyst.dsl.expressions._
 class BooleanSimplificationSuite extends PlanTest with PredicateHelper {
 
   object Optimize extends RuleExecutor[LogicalPlan] {
+    override def catalystConf: CatalystConf = EmptyConf
+
     val batches =
       Batch("AnalysisNodes", Once,
         EliminateSubQueries) ::

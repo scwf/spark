@@ -18,6 +18,7 @@
 package org.apache.spark.sql.catalyst.rules
 
 import org.apache.spark.Logging
+import org.apache.spark.sql.catalyst.CatalystConf
 import org.apache.spark.sql.catalyst.trees.TreeNode
 import org.apache.spark.sql.catalyst.util.sideBySide
 
@@ -41,6 +42,8 @@ abstract class RuleExecutor[TreeType <: TreeNode[_]] extends Logging {
   /** Defines a sequence of rule batches, to be overridden by the implementation. */
   protected val batches: Seq[Batch]
 
+  def catalystConf: CatalystConf
+
   /**
    * Executes the batches of rules defined by the subclass. The batches are executed serially
    * using the defined execution strategy. Within each batch, rules are also executed serially.
@@ -59,10 +62,10 @@ abstract class RuleExecutor[TreeType <: TreeNode[_]] extends Logging {
         curPlan = batch.rules.foldLeft(curPlan) {
           case (plan, rule) =>
             val result = rule(plan)
-            if (!result.fastEquals(plan)) {
-              logTrace(
+            if (!result.fastEquals(plan) && catalystConf.traceRuleExecutor) {
+              logInfo(
                 s"""
-                  |=== Applying Rule ${rule.ruleName} ===
+                  |=== Applying Rule ${rule.ruleName}, Iteration: $iteration ===
                   |${sideBySide(plan.treeString, result.treeString).mkString("\n")}
                 """.stripMargin)
             }

@@ -19,6 +19,8 @@ package org.apache.spark.sql.catalyst
 
 private[spark] trait CatalystConf {
   def caseSensitiveAnalysis: Boolean
+
+  def traceRuleExecutor: Boolean = false
 }
 
 /**

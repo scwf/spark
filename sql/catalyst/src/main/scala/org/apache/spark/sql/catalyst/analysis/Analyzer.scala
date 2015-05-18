@@ -47,6 +47,8 @@ class Analyzer(
     maxIterations: Int = 100)
   extends RuleExecutor[LogicalPlan] with HiveTypeCoercion with CheckAnalysis {
 
+  override def catalystConf: CatalystConf = conf
+
   def resolver: Resolver = {
     if (conf.caseSensitiveAnalysis) {
       caseSensitiveResolution

@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.catalyst.optimizer
 
-import org.apache.spark.sql.catalyst.analysis
+import org.apache.spark.sql.catalyst.{EmptyConf, CatalystConf, analysis}
 import org.apache.spark.sql.catalyst.analysis.EliminateSubQueries
 import org.apache.spark.sql.catalyst.expressions.{SortOrder, Ascending, Count, Explode}
 import org.apache.spark.sql.catalyst.plans.logical._
@@ -30,6 +30,8 @@ import org.apache.spark.sql.types.IntegerType
 class FilterPushdownSuite extends PlanTest {
 
   object Optimize extends RuleExecutor[LogicalPlan] {
+    override def catalystConf: CatalystConf = EmptyConf
+
     val batches =
       Batch("Subqueries", Once,
         EliminateSubQueries) ::

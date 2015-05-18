@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.catalyst.trees
 
+import org.apache.spark.sql.catalyst.{EmptyConf, CatalystConf}
 import org.scalatest.FunSuite
 
 import org.apache.spark.sql.catalyst.expressions.{Expression, IntegerLiteral, Literal}
@@ -31,6 +32,7 @@ class RuleExecutorSuite extends FunSuite {
 
   test("only once") {
     object ApplyOnce extends RuleExecutor[Expression] {
+      override def catalystConf: CatalystConf = EmptyConf
       val batches = Batch("once", Once, DecrementLiterals) :: Nil
     }
 
@@ -39,6 +41,8 @@ class RuleExecutorSuite extends FunSuite {
 
   test("to fixed point") {
     object ToFixedPoint extends RuleExecutor[Expression] {
+      override def catalystConf: CatalystConf = EmptyConf
+
       val batches = Batch("fixedPoint", FixedPoint(100), DecrementLiterals) :: Nil
     }
 
@@ -47,6 +51,8 @@ class RuleExecutorSuite extends FunSuite {
 
   test("to maxIterations") {
     object ToFixedPoint extends RuleExecutor[Expression] {
+      override def catalystConf: CatalystConf = EmptyConf
+
       val batches = Batch("fixedPoint", FixedPoint(10), DecrementLiterals) :: Nil
     }
 

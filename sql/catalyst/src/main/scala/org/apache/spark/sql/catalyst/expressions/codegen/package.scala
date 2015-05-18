@@ -18,7 +18,7 @@
 package org.apache.spark.sql.catalyst.expressions
 
 import org.apache.spark.annotation.DeveloperApi
-import org.apache.spark.sql.catalyst.rules
+import org.apache.spark.sql.catalyst.{EmptyConf, CatalystConf, rules}
 import org.apache.spark.util.Utils
 
 /**
@@ -35,6 +35,8 @@ package object codegen {
 
   /** Canonicalizes an expression so those that differ only by names can reuse the same code. */
   object ExpressionCanonicalizer extends rules.RuleExecutor[Expression] {
+    override def catalystConf: CatalystConf = EmptyConf
+
     val batches =
       Batch("CleanExpressions", FixedPoint(20), CleanExpressions) :: Nil
 
