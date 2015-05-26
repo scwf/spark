@@ -506,6 +506,16 @@ class SQLQuerySuite extends QueryTest with BeforeAndAfterAll {
 
   }
 
+  test("cte in subquery") {
+    checkAnswer(
+      sql(
+        """
+          |select count(1) from
+          |(with q1 as (select * from testData limit 10) select key from q1) x
+        """.stripMargin),
+      Row(10))
+  }
+
   test("Allow only a single WITH clause per query") {
     intercept[RuntimeException] {
       sql("with q1 as (select * from testData) with q2 as (select * from q1) select * from q2")
