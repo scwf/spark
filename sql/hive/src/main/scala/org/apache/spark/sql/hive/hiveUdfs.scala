@@ -182,6 +182,8 @@ private[hive] case class HiveGenericUdf(funcWrapper: HiveFunctionWrapper, childr
 
   override def isThreadSafe: Boolean = false
 
+  lazy val unwrapFun = unwrapFor(returnInspector)
+
   override def eval(input: InternalRow): Any = {
     returnInspector // Make sure initialized.
 
@@ -194,7 +196,7 @@ private[hive] case class HiveGenericUdf(funcWrapper: HiveFunctionWrapper, childr
         })
       i += 1
     }
-    unwrap(function.evaluate(deferedObjects), returnInspector)
+    unwrapFun(function.evaluate(deferedObjects))
   }
 
   override def toString: String = {
