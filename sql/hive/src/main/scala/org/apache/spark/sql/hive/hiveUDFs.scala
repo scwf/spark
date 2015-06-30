@@ -126,9 +126,10 @@ private[hive] case class HiveSimpleUDF(funcWrapper: HiveFunctionWrapper, childre
 
   // TODO: Finish input output types.
   override def eval(input: InternalRow): Any = {
-    unwrapFun(
+    val data =
       FunctionRegistry.invoke(method, function, conversionHelper
-        .convertIfNecessary(wrap(children.map(c => c.eval(input)), arguments, cached): _*): _*))
+      .convertIfNecessary(wrap(children.map(c => c.eval(input)), arguments, cached): _*): _*)
+    if (data == null) null else unwrapFun(data)
 //    unwrap(
 //      FunctionRegistry.invoke(method, function, conversionHelper
 //        .convertIfNecessary(wrap(children.map(c => c.eval(input)), arguments, cached): _*): _*),
@@ -201,7 +202,12 @@ private[hive] case class HiveGenericUDF(funcWrapper: HiveFunctionWrapper, childr
         })
       i += 1
     }
-    unwrapFun(function.evaluate(deferedObjects))
+    val data = function.evaluate(deferedObjects)
+    if (data == null) {
+      null
+    } else {
+      unwrapFun(data)
+    }
   }
 
   override def toString: String = {
@@ -399,7 +405,8 @@ private[hive] case class HiveWindowFunction(
   lazy val unwrapFun = unwrapFor(returnInspector)
 
   override def evaluate(): Unit = {
-    outputBuffer = unwrapFun(evaluator.evaluate(hiveEvaluatorBuffer))
+    val data = evaluator.evaluate(hiveEvaluatorBuffer)
+    outputBuffer = if (data == null) null else unwrapFun(data)
   }
 
   override def get(index: Int): Any = {
@@ -595,7 +602,10 @@ private[hive] case class HiveUDAFFunction(
 
   lazy val unwrapFun = unwrapFor(returnInspector)
 
-  override def eval(input: InternalRow): Any = unwrapFun(function.evaluate(buffer))
+  override def eval(input: InternalRow): Any = {
+    val data = function.evaluate(buffer)
+    if (data == null) null else unwrapFun(data)
+  }
 
   @transient
   val inputProjection = new InterpretedProjection(exprs)
