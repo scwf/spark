@@ -402,7 +402,7 @@ private[hive] trait HiveInspectors {
         temp
     case poi: WritableConstantDateObjectInspector =>
       (data: Any) =>
-        DateUtils.fromJavaDate(poi.getWritableConstantValue.get())
+        DateTimeUtils.fromJavaDate(poi.getWritableConstantValue.get())
     case mi: StandardConstantMapObjectInspector =>
       val keyUnwrapFun = unwrapFor(mi.getMapKeyObjectInspector)
       val valueUnwrapFun = unwrapFor(mi.getMapValueObjectInspector)
@@ -472,16 +472,16 @@ private[hive] trait HiveInspectors {
           result
       case x: DateObjectInspector if x.preferWritable() =>
         (data: Any) =>
-          DateUtils.fromJavaDate(x.getPrimitiveWritableObject(data).get())
+          DateTimeUtils.fromJavaDate(x.getPrimitiveWritableObject(data).get())
       case x: DateObjectInspector =>
-        (data: Any) => DateUtils.fromJavaDate(x.getPrimitiveJavaObject(data))
+        (data: Any) => DateTimeUtils.fromJavaDate(x.getPrimitiveJavaObject(data))
       case x: TimestampObjectInspector if x.preferWritable() =>
         (data: Any) =>
           val t = x.getPrimitiveWritableObject(data)
           t.getSeconds * 10000000L + t.getNanos / 100
       case ti: TimestampObjectInspector =>
         (data: Any) =>
-          DateUtils.fromJavaTimestamp(ti.getPrimitiveJavaObject(data))
+          DateTimeUtils.fromJavaTimestamp(ti.getPrimitiveJavaObject(data))
       case _ =>
         (data: Any) => pi.getPrimitiveJavaObject(data)
     }
@@ -506,11 +506,12 @@ private[hive] trait HiveInspectors {
       val unwrapFuns = si.getAllStructFieldRefs.map(ref => unwrapFor(ref.getFieldObjectInspector))
       (data: Any) =>
         val allRefs = si.getAllStructFieldRefs
-        new GenericRow(
+        InternalRow.fromSeq((
           allRefs.zip(unwrapFuns).map {
             case (field, unwrapFun) =>
               unwrapFun(si.getStructFieldData(data, field))
-          }.toArray)
+          })
+        )
   }
 
 
