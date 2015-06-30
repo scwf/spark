@@ -102,16 +102,30 @@ case class ScriptTransformation(
             val raw = outputSerde.deserialize(writable)
             val dataList = outputSoi.getStructFieldsDataAsList(raw)
             val fieldList = outputSoi.getAllStructFieldRefs()
+            /**
+             * Builds specific unwrappers ahead of time according to object inspector
+             * types to avoid pattern matching and branching costs per row.
+             */
+            val unwrappers: Seq[(Any, MutableRow, Int) => Unit] = fieldList.map(unwrapperFor)
 
             var i = 0
-            dataList.foreach( element => {
-              if (element == null) {
+            while (i < dataList.length) {
+              val fieldValue = dataList(i)
+              if (fieldValue == null) {
                 mutableRow.setNullAt(i)
               } else {
-                mutableRow(i) = unwrap(element, fieldList(i).getFieldObjectInspector)
+                unwrappers(i)(fieldValue, mutableRow, i)
               }
               i += 1
-            })
+            }
+//            dataList.foreach( element => {
+//              if (element == null) {
+//                mutableRow.setNullAt(i)
+//              } else {
+//                mutableRow(i) = unwrap(element, fieldList(i).getFieldObjectInspector)
+//              }
+//              i += 1
+//            })
             return mutableRow
           } catch {
             case e: EOFException =>

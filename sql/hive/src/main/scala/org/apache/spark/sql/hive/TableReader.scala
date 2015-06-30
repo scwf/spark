@@ -339,41 +339,7 @@ private[hive] object HadoopTableReader extends HiveInspectors with Logging {
      * Builds specific unwrappers ahead of time according to object inspector
      * types to avoid pattern matching and branching costs per row.
      */
-    val unwrappers: Seq[(Any, MutableRow, Int) => Unit] = fieldRefs.map {
-      _.getFieldObjectInspector match {
-        case oi: BooleanObjectInspector =>
-          (value: Any, row: MutableRow, ordinal: Int) => row.setBoolean(ordinal, oi.get(value))
-        case oi: ByteObjectInspector =>
-          (value: Any, row: MutableRow, ordinal: Int) => row.setByte(ordinal, oi.get(value))
-        case oi: ShortObjectInspector =>
-          (value: Any, row: MutableRow, ordinal: Int) => row.setShort(ordinal, oi.get(value))
-        case oi: IntObjectInspector =>
-          (value: Any, row: MutableRow, ordinal: Int) => row.setInt(ordinal, oi.get(value))
-        case oi: LongObjectInspector =>
-          (value: Any, row: MutableRow, ordinal: Int) => row.setLong(ordinal, oi.get(value))
-        case oi: FloatObjectInspector =>
-          (value: Any, row: MutableRow, ordinal: Int) => row.setFloat(ordinal, oi.get(value))
-        case oi: DoubleObjectInspector =>
-          (value: Any, row: MutableRow, ordinal: Int) => row.setDouble(ordinal, oi.get(value))
-        case oi: HiveVarcharObjectInspector =>
-          (value: Any, row: MutableRow, ordinal: Int) =>
-            row.setString(ordinal, oi.getPrimitiveJavaObject(value).getValue)
-        case oi: HiveDecimalObjectInspector =>
-          (value: Any, row: MutableRow, ordinal: Int) =>
-            row.update(ordinal, HiveShim.toCatalystDecimal(oi, value))
-        case oi: TimestampObjectInspector =>
-          (value: Any, row: MutableRow, ordinal: Int) =>
-            row.setLong(ordinal, DateUtils.fromJavaTimestamp(oi.getPrimitiveJavaObject(value)))
-        case oi: DateObjectInspector =>
-          (value: Any, row: MutableRow, ordinal: Int) =>
-            row.setInt(ordinal, DateUtils.fromJavaDate(oi.getPrimitiveJavaObject(value)))
-        case oi: BinaryObjectInspector =>
-          (value: Any, row: MutableRow, ordinal: Int) =>
-            row.update(ordinal, oi.getPrimitiveJavaObject(value))
-        case oi =>
-          (value: Any, row: MutableRow, ordinal: Int) => row(ordinal) = unwrap(value, oi)
-      }
-    }
+    val unwrappers: Seq[(Any, MutableRow, Int) => Unit] = fieldRefs.map(unwrapperFor)
 
     val converter = ObjectInspectorConverters.getConverter(rawDeser.getObjectInspector, soi)
 

@@ -122,12 +122,17 @@ private[hive] case class HiveSimpleUdf(funcWrapper: HiveFunctionWrapper, childre
 
   override def isThreadSafe: Boolean = false
 
+  lazy val unwrapFun = unwrapFor(returnInspector)
+
   // TODO: Finish input output types.
   override def eval(input: InternalRow): Any = {
-    unwrap(
+    unwrapFun(
       FunctionRegistry.invoke(method, function, conversionHelper
-        .convertIfNecessary(wrap(children.map(c => c.eval(input)), arguments, cached): _*): _*),
-      returnInspector)
+        .convertIfNecessary(wrap(children.map(c => c.eval(input)), arguments, cached): _*): _*))
+//    unwrap(
+//      FunctionRegistry.invoke(method, function, conversionHelper
+//        .convertIfNecessary(wrap(children.map(c => c.eval(input)), arguments, cached): _*): _*),
+//      returnInspector)
   }
 
   override def toString: String = {
@@ -391,8 +396,10 @@ private[hive] case class HiveWindowFunction(
     }
   }
 
+  lazy val unwrapFun = unwrapFor(returnInspector)
+
   override def evaluate(): Unit = {
-    outputBuffer = unwrap(evaluator.evaluate(hiveEvaluatorBuffer), returnInspector)
+    outputBuffer = unwrapFun(evaluator.evaluate(hiveEvaluatorBuffer))
   }
 
   override def get(index: Int): Any = {
@@ -527,6 +534,8 @@ private[hive] case class HiveGenericUdtf(
     collector.collectRows()
   }
 
+  lazy val unwrapFun = unwrapFor(outputInspector)
+
   protected class UDTFCollector extends Collector {
     var collected = new ArrayBuffer[InternalRow]
 
@@ -534,7 +543,7 @@ private[hive] case class HiveGenericUdtf(
       // We need to clone the input here because implementations of
       // GenericUDTF reuse the same object. Luckily they are always an array, so
       // it is easy to clone.
-      collected += unwrap(input, outputInspector).asInstanceOf[InternalRow]
+      collected += unwrapFun(input).asInstanceOf[InternalRow]
     }
 
     def collectRows(): Seq[InternalRow] = {
@@ -584,7 +593,9 @@ private[hive] case class HiveUdafFunction(
   private val buffer =
     function.getNewAggregationBuffer
 
-  override def eval(input: InternalRow): Any = unwrap(function.evaluate(buffer), returnInspector)
+  lazy val unwrapFun = unwrapFor(returnInspector)
+
+  override def eval(input: InternalRow): Any = unwrapFun(function.evaluate(buffer))
 
   @transient
   val inputProjection = new InterpretedProjection(exprs)
