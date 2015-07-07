@@ -435,31 +435,20 @@ private[hive] trait HiveInspectors {
         (data: Any) =>
           UTF8String.fromString(x.getPrimitiveJavaObject(data))
       case x: IntObjectInspector if x.preferWritable() => (data: Any) => x.get(data)
+      case x: IntObjectInspector => (data: Any) => x.get(data)
       case x: BooleanObjectInspector if x.preferWritable() => (data: Any) => x.get(data)
+      case x: BooleanObjectInspector => (data: Any) => x.get(data)
       case x: FloatObjectInspector if x.preferWritable() => (data: Any) => x.get(data)
+      case x: FloatObjectInspector => (data: Any) => x.get(data)
       case x: DoubleObjectInspector if x.preferWritable() => (data: Any) => x.get(data)
+      case x: DoubleObjectInspector => (data: Any) => x.get(data)
       case x: LongObjectInspector if x.preferWritable() => (data: Any) => x.get(data)
+      case x: LongObjectInspector => (data: Any) => x.get(data)
       case x: ShortObjectInspector if x.preferWritable() => (data: Any) => x.get(data)
+      case x: ShortObjectInspector => (data: Any) => x.get(data)
       case x: ByteObjectInspector if x.preferWritable() => (data: Any) => x.get(data)
+      case x: ByteObjectInspector => (data: Any) => x.get(data)
       case x: HiveDecimalObjectInspector => (data: Any) => HiveShim.toCatalystDecimal(x, data)
-
-//      case x: BooleanObjectInspector => (data: Any) => x.get(data)
-//      case x: ByteObjectInspector => (data: Any) => x.get(data)
-//      case x: ShortObjectInspector => (data: Any) => x.get(data)
-//      case x: IntObjectInspector => (data: Any) => x.get(data)
-//      case x: LongObjectInspector => (data: Any) => x.get(data)
-//      case x: FloatObjectInspector => (data: Any) => x.get(data)
-//      case x: DoubleObjectInspector => (data: Any) => x.get(data)
-//      case x: HiveVarcharObjectInspector => (data: Any) => x.getPrimitiveJavaObject(data).getValue
-//      case x: HiveDecimalObjectInspector => (data: Any) => HiveShim.toCatalystDecimal(x, data)
-//      case x: TimestampObjectInspector =>
-//        (data: Any) =>
-//          DateUtils.fromJavaTimestamp(x.getPrimitiveJavaObject(data))
-//      case x: DateObjectInspector =>
-//        (data: Any) =>
-//          DateUtils.fromJavaDate(x.getPrimitiveJavaObject(data))
-//      case x: BinaryObjectInspector => (data: Any) => x.getPrimitiveJavaObject(data)
-
 
       case x: BinaryObjectInspector if x.preferWritable() =>
         (data: Any) =>
@@ -470,6 +459,7 @@ private[hive] trait HiveInspectors {
           val result = new Array[Byte](bw.getLength())
           System.arraycopy(bw.getBytes(), 0, result, 0, bw.getLength())
           result
+      case x: BinaryObjectInspector => (data: Any) => x.getPrimitiveJavaObject(data)
       case x: DateObjectInspector if x.preferWritable() =>
         (data: Any) =>
           DateTimeUtils.fromJavaDate(x.getPrimitiveWritableObject(data).get())

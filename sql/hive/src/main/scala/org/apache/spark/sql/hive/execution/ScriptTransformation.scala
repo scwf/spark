@@ -116,14 +116,6 @@ case class ScriptTransformation(
               }
               i += 1
             }
-//            dataList.foreach( element => {
-//              if (element == null) {
-//                mutableRow.setNullAt(i)
-//              } else {
-//                mutableRow(i) = unwrap(element, fieldList(i).getFieldObjectInspector)
-//              }
-//              i += 1
-//            })
             return mutableRow
           } catch {
             case e: EOFException =>

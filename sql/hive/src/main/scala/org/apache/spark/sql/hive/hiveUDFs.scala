@@ -130,10 +130,6 @@ private[hive] case class HiveSimpleUDF(funcWrapper: HiveFunctionWrapper, childre
       FunctionRegistry.invoke(method, function, conversionHelper
       .convertIfNecessary(wrap(children.map(c => c.eval(input)), arguments, cached): _*): _*)
     if (data == null) null else unwrapFun(data)
-//    unwrap(
-//      FunctionRegistry.invoke(method, function, conversionHelper
-//        .convertIfNecessary(wrap(children.map(c => c.eval(input)), arguments, cached): _*): _*),
-//      returnInspector)
   }
 
   override def toString: String = {
