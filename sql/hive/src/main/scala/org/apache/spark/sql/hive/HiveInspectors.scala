@@ -240,7 +240,7 @@ private[hive] trait HiveInspectors {
    *
    *  NOTICE: the complex data type requires recursive unwrapping.
    */
-  def unwrap(data: Any, oi: ObjectInspector): Any = oi match {
+  private def unwrap(data: Any, oi: ObjectInspector): Any = oi match {
     case coi: ConstantObjectInspector if coi.getWritableConstantValue == null => null
     case poi: WritableConstantStringObjectInspector =>
       UTF8String.fromString(poi.getWritableConstantValue.toString)

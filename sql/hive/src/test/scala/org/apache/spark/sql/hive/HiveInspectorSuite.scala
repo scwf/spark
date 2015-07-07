@@ -46,7 +46,7 @@ class HiveInspectorSuite extends SparkFunSuite with HiveInspectors {
       classOf[UDAFPercentile.State],
       ObjectInspectorOptions.JAVA).asInstanceOf[StructObjectInspector]
 
-    val a = unwrap(state, soi).asInstanceOf[InternalRow]
+    val a = unwrapFor(soi)(state).asInstanceOf[InternalRow]
     val b = wrap(a, soi).asInstanceOf[UDAFPercentile.State]
 
     val sfCounts = soi.getStructFieldRef("counts")
@@ -158,7 +158,7 @@ class HiveInspectorSuite extends SparkFunSuite with HiveInspectors {
     val nullRow = data.map(d => null)
 
     checkValues(nullRow, nullRow.zip(writableOIs).map {
-      case (d, oi) => unwrap(wrap(d, oi), oi)
+      case (d, oi) => unwrapFor(oi)(wrap(d, oi))
     })
 
     // struct couldn't be constant, sweep it out
@@ -170,15 +170,15 @@ class HiveInspectorSuite extends SparkFunSuite with HiveInspectors {
       constantExprs.map(e => toInspector(Literal.create(null, e.dataType)))
 
     checkValues(constantData, constantData.zip(constantWritableOIs).map {
-      case (d, oi) => unwrap(wrap(d, oi), oi)
+      case (d, oi) => unwrapFor(oi)(wrap(d, oi))
     })
 
     checkValues(constantNullData, constantData.zip(constantNullWritableOIs).map {
-      case (d, oi) => unwrap(wrap(d, oi), oi)
+      case (d, oi) => unwrapFor(oi)(wrap(d, oi))
     })
 
     checkValues(constantNullData, constantNullData.zip(constantWritableOIs).map {
-      case (d, oi) => unwrap(wrap(d, oi), oi)
+      case (d, oi) => unwrapFor(oi)(wrap(d, oi))
     })
   }
 
@@ -186,7 +186,7 @@ class HiveInspectorSuite extends SparkFunSuite with HiveInspectors {
     val writableOIs = dataTypes.map(toWritableInspector)
 
     checkValues(row, row.zip(writableOIs).map {
-      case (data, oi) => unwrap(wrap(data, oi), oi)
+      case (data, oi) => unwrapFor(oi)(wrap(data, oi))
     })
   }
 
@@ -194,7 +194,7 @@ class HiveInspectorSuite extends SparkFunSuite with HiveInspectors {
     val ois = dataTypes.map(toInspector)
 
     checkValues(row, row.zip(ois).map {
-      case (data, oi) => unwrap(wrap(data, oi), oi)
+      case (data, oi) => unwrapFor(oi)(wrap(data, oi))
     })
   }
 
@@ -204,16 +204,16 @@ class HiveInspectorSuite extends SparkFunSuite with HiveInspectors {
     })
     val inspector = toInspector(dt)
     checkValues(row,
-      unwrap(wrap(InternalRow.fromSeq(row), inspector), inspector).asInstanceOf[InternalRow])
-    checkValue(null, unwrap(wrap(null, toInspector(dt)), toInspector(dt)))
+      unwrapFor(inspector)(wrap(InternalRow.fromSeq(row), inspector)).asInstanceOf[InternalRow])
+    checkValue(null, unwrapFor(toInspector(dt))(wrap(null, toInspector(dt))))
   }
 
   test("wrap / unwrap Array Type") {
     val dt = ArrayType(dataTypes(0))
 
     val d = row(0) :: row(0) :: Nil
-    checkValue(d, unwrap(wrap(d, toInspector(dt)), toInspector(dt)))
-    checkValue(null, unwrap(wrap(null, toInspector(dt)), toInspector(dt)))
+    checkValue(d, unwrapFor(toInspector(dt))(wrap(d, toInspector(dt))))
+    checkValue(null, unwrapFor(toInspector(dt))(wrap(null, toInspector(dt))))
     checkValue(d,
       unwrap(wrap(d, toInspector(Literal.create(d, dt))), toInspector(Literal.create(d, dt))))
     checkValue(d,
