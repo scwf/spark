@@ -356,6 +356,17 @@ case class FileSourceScanExec(
     val columnVectorClz = "org.apache.spark.sql.execution.vectorized.ColumnVector"
     val idx = ctx.freshName("batchIdx")
     ctx.addMutableState("int", idx, s"$idx = 0;")
+
+    val firstFetch = ctx.freshName("firstFetch")
+    ctx.addMutableState("boolean", firstFetch, s"$firstFetch = true;")
+
+    val linkListClz =
+      "java.util.LinkedList<org.apache.spark.sql.execution.vectorized.ColumnarBatch>"
+    val arrayBatch = ctx.freshName("array_batch")
+    ctx.addMutableState(linkListClz,
+      arrayBatch,
+      s"$arrayBatch = new LinkedList<org.apache.spark.sql.execution.vectorized.ColumnarBatch>();")
+
     val colVars = output.indices.map(i => ctx.freshName("colInstance" + i))
     val columnAssigns = colVars.zipWithIndex.map { case (name, i) =>
       ctx.addMutableState(columnVectorClz, name, s"$name = null;")
@@ -367,13 +378,19 @@ case class FileSourceScanExec(
       s"""
          |private void $nextBatch() throws java.io.IOException {
          |  long getBatchStart = System.nanoTime();
-         |  if ($input.hasNext()) {
-         |    $batch = ($columnarBatchClz)$input.next();
-         |    $numOutputRows.add($batch.numRows());
-         |    $idx = 0;
-         |    ${columnAssigns.mkString("", "\n", "\n")}
+         |  if ($firstFetch) {
+         |    $firstFetch = false;
+         |    while($input.hasNext()) {
+         |      $batch = ($columnarBatchClz)$input.next();
+         |      $arrayBatch.add(scan_batch);
+         |     }
+         |   $scanTimeTotalNs += System.nanoTime() - getBatchStart;
          |  }
-         |  $scanTimeTotalNs += System.nanoTime() - getBatchStart;
+         |  $batch = $arrayBatch.remove();
+         |  $numOutputRows.add($batch.numRows());
+         |  $idx = 0;
+         |  ${columnAssigns.mkString("", "\n", "\n")};
+         |
          |}""".stripMargin)
 
     ctx.currentVars = null
