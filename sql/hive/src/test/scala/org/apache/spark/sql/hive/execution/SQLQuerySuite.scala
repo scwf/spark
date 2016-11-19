@@ -120,6 +120,11 @@ class SQLQuerySuite extends QueryTest with SQLTestUtils with TestHiveSingleton {
     }
   }
 
+  test("parquet") {
+    sql("create table wf(key int, value int) stored as parquet")
+    sql("select key, sum(value) from wf group by key").collect()
+  }
+
   test("permanent UDTF") {
     withUserDefinedFunction("udtf_count_temp" -> false) {
       sql(
