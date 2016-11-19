@@ -93,7 +93,11 @@ private[spark] class ShuffleMapTask(
     try {
       val manager = SparkEnv.get.shuffleManager
       writer = manager.getWriter[Any, Any](dep.shuffleHandle, partitionId, context)
-      writer.write(rdd.iterator(partition, context).asInstanceOf[Iterator[_ <: Product2[Any, Any]]])
+      val array = rdd.iterator(partition, context).asInstanceOf[
+        Iterator[_ <: Product2[Any, Any]]].toArray
+      // scalastyle:off
+      println(s"shuffle map task finished: ${System.nanoTime()/1000000}")
+      writer.write(array.iterator)
       writer.stop(success = true).get
     } catch {
       case e: Exception =>

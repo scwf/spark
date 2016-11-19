@@ -365,7 +365,8 @@ case class FileSourceScanExec(
     val arrayBatch = ctx.freshName("array_batch")
     ctx.addMutableState(linkListClz,
       arrayBatch,
-      s"$arrayBatch = new java.util.LinkedList<org.apache.spark.sql.execution.vectorized.ColumnarBatch>();")
+      s"$arrayBatch = new java.util.LinkedList<" +
+        s"org.apache.spark.sql.execution.vectorized.ColumnarBatch>();")
 
     val colVars = output.indices.map(i => ctx.freshName("colInstance" + i))
     val columnAssigns = colVars.zipWithIndex.map { case (name, i) =>
@@ -385,6 +386,7 @@ case class FileSourceScanExec(
          |      $arrayBatch.add(scan_batch);
          |     }
          |   $scanTimeTotalNs += System.nanoTime() - getBatchStart;
+         |   System.out.println("data read finished: " + System.nanoTime()/1000000);
          |  }
          |  $batch = ($columnarBatchClz)$arrayBatch.remove();
          |  $numOutputRows.add($batch.numRows());

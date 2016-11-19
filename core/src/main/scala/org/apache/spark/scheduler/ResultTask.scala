@@ -84,7 +84,10 @@ private[spark] class ResultTask[T, U](
       threadMXBean.getCurrentThreadCpuTime - deserializeStartCpuTime
     } else 0L
 
-    func(context, rdd.iterator(partition, context))
+    val res = func(context, rdd.iterator(partition, context))
+    // scalastyle:off
+    println(s"result task finished: ${System.nanoTime()/1000000}")
+    res
   }
 
   // This is only callable on the driver side.

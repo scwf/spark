@@ -167,6 +167,8 @@ class ShuffledRowRDD(
         shuffledRowPartition.endPreShufflePartitionIndex,
         context)
     val array = reader.read().asInstanceOf[Iterator[Product2[Int, InternalRow]]].map(_._2).toArray
+    // scalastyle:off
+    println(s"shuffle data read finished: ${System.nanoTime()/1000000}")
     array.iterator
   }
 
