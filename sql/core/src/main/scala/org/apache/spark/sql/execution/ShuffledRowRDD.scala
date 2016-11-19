@@ -166,7 +166,8 @@ class ShuffledRowRDD(
         shuffledRowPartition.startPreShufflePartitionIndex,
         shuffledRowPartition.endPreShufflePartitionIndex,
         context)
-    reader.read().asInstanceOf[Iterator[Product2[Int, InternalRow]]].map(_._2)
+    val array = reader.read().asInstanceOf[Iterator[Product2[Int, InternalRow]]].map(_._2).toArray
+    array.iterator
   }
 
   override def clearDependencies() {
