@@ -220,7 +220,8 @@ public class VectorizedParquetRecordReader extends SpecificParquetRecordReaderBa
    * Advances to the next batch of rows. Returns false if there are no more.
    */
   public boolean nextBatch() throws IOException {
-    columnarBatch.reset();
+    // columnarBatch.reset();
+    initBatch();
     if (rowsReturned >= totalRowCount) return false;
     checkEndOfRowGroup();
 

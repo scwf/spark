@@ -383,7 +383,9 @@ case class FileSourceScanExec(
          |    $firstFetch = false;
          |    while($input.hasNext()) {
          |      $batch = ($columnarBatchClz)$input.next();
-         |      $arrayBatch.add(scan_batch);
+         |      System.out.println("num of rows1: " + $batch + $batch.numRows());
+         |
+         |      $arrayBatch.add($batch);
          |     }
          |   $scanTimeTotalNs += System.nanoTime() - getBatchStart;
          |   System.out.println("data read finished: " + System.nanoTime()/1000000);
@@ -391,6 +393,7 @@ case class FileSourceScanExec(
          |  if ($arrayBatch.size() > 0) {
          |    System.out.println("num of batches: " + $arrayBatch.size());
          |    $batch = ($columnarBatchClz)$arrayBatch.remove();
+         |    System.out.println("num of rows: " + $batch + $batch.numRows());
          |    $numOutputRows.add($batch.numRows());
          |    $idx = 0;
          |    ${columnAssigns.mkString("", "\n", "\n")};
@@ -414,6 +417,8 @@ case class FileSourceScanExec(
        |    ${consume(ctx, columnsBatchInput).trim}
        |    if (shouldStop()) return;
        |  }
+       |  $batch.reset();
+       |  $batch.close();
        |  $batch = null;
        |  $nextBatch();
        |}
