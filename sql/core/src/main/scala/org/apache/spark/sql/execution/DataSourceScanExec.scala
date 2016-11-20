@@ -388,10 +388,13 @@ case class FileSourceScanExec(
          |   $scanTimeTotalNs += System.nanoTime() - getBatchStart;
          |   System.out.println("data read finished: " + System.nanoTime()/1000000);
          |  }
-         |  $batch = ($columnarBatchClz)$arrayBatch.remove();
-         |  $numOutputRows.add($batch.numRows());
-         |  $idx = 0;
-         |  ${columnAssigns.mkString("", "\n", "\n")};
+         |  if ($arrayBatch.size() > 0) {
+         |    System.out.println("num of batches: " + $arrayBatch.size());
+         |    $batch = ($columnarBatchClz)$arrayBatch.remove();
+         |    $numOutputRows.add($batch.numRows());
+         |    $idx = 0;
+         |    ${columnAssigns.mkString("", "\n", "\n")};
+         |  }
          |
          |}""".stripMargin)
 
