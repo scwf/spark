@@ -383,8 +383,6 @@ case class FileSourceScanExec(
          |    $firstFetch = false;
          |    while($input.hasNext()) {
          |      $batch = ($columnarBatchClz)$input.next();
-         |      System.out.println("num of rows1: " + $batch + $batch.numRows());
-         |
          |      $arrayBatch.add($batch);
          |     }
          |   $scanTimeTotalNs += System.nanoTime() - getBatchStart;
