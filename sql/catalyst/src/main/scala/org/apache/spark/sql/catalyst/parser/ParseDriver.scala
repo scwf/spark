@@ -52,7 +52,9 @@ abstract class AbstractSqlParser extends ParserInterface with Logging {
   /** Creates LogicalPlan for a given SQL string. */
   override def parsePlan(sqlText: String): LogicalPlan = parse(sqlText) { parser =>
     astBuilder.visitSingleStatement(parser.singleStatement()) match {
-      case plan: LogicalPlan => plan
+      case plan: LogicalPlan =>
+        println(plan)
+        plan
       case _ =>
         val position = Origin(None, None)
         throw new ParseException(Option(sqlText), "Unsupported SQL statement", position, position)

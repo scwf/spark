@@ -84,6 +84,11 @@ class SQLQuerySuite extends QueryTest with SQLTestUtils with TestHiveSingleton {
     assert(message.contains("Table or view not found"))
   }
 
+  test("create table") {
+    sql("create table wf(key decimal(6,0))")
+    sql("desc formatted wf").show()
+  }
+
   test("script") {
     val scriptFilePath = getTestResourcePath("test_script.sh")
     if (testCommandAvailable("bash") && testCommandAvailable("echo | sed")) {

@@ -1448,7 +1448,14 @@ class AstBuilder extends SqlBaseBaseVisitor[AnyRef] with Logging {
    * Create top level table schema.
    */
   protected def createSchema(ctx: ColTypeListContext): StructType = {
-    StructType(Option(ctx).toSeq.flatMap(visitColTypeList))
+    val originTypeFileds = Option(ctx).toSeq.flatMap(visitColTypeList)
+    val optimizedFileds = originTypeFileds.map { field =>
+      field.dataType match {
+        case dct: DecimalType => field.copy(dataType = DecimalType.optimizedType(dct))
+        case _ => field
+      }
+    }
+    StructType(optimizedFileds)
   }
 
   /**

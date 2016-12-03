@@ -135,6 +135,25 @@ object DecimalType extends AbstractDataType {
     case DoubleType => DoubleDecimal
   }
 
+
+  private[sql] def optimizedType(dct: DecimalType): DataType = {
+    val (precision, scale) = (dct.precision, dct.scale)
+    if (scale == 0) {
+      precision match {
+        case p if p < 5 => ShortType
+        case p if p < 10 => IntegerType
+        case p if p < 20 => LongType
+        case _ => dct
+      }
+    } else if (precision < 14 && scale < 7) {
+      FloatType
+    } else if (precision < 30 && scale < 15) {
+      DoubleType
+    } else {
+      dct
+    }
+  }
+
   private[sql] def bounded(precision: Int, scale: Int): DecimalType = {
     DecimalType(min(precision, MAX_PRECISION), min(scale, MAX_SCALE))
   }
