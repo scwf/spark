@@ -145,10 +145,6 @@ object DecimalType extends AbstractDataType {
         case p if p < 20 => LongType
         case _ => dct
       }
-    } else if (precision < 14 && scale < 7) {
-      FloatType
-    } else if (precision < 30 && scale < 15) {
-      DoubleType
     } else {
       dct
     }
