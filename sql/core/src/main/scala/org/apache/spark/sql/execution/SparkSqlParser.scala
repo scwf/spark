@@ -330,6 +330,15 @@ class SparkSqlAstBuilder(conf: SQLConf) extends AstBuilder {
     (visitTableIdentifier(ctx.tableIdentifier), temporary, ifNotExists, ctx.EXTERNAL != null)
   }
 
+  private def optimizeDecimal(sty: StructType): StructType = {
+    StructType(sty.fields.map { field =>
+      field.dataType match {
+        case dct: DecimalType => field.copy(dataType = DecimalType.optimizedType(dct))
+        case _ => field
+      }
+    })
+  }
+
   /**
    * Create a data source table, returning a [[CreateTable]] logical plan.
    *
@@ -356,7 +365,13 @@ class SparkSqlAstBuilder(conf: SQLConf) extends AstBuilder {
     if (provider.toLowerCase == DDLUtils.HIVE_PROVIDER) {
       throw new AnalysisException("Cannot create hive serde table with CREATE TABLE USING")
     }
-    val schema = Option(ctx.colTypeList()).map(createSchema)
+    val schema = Option(ctx.colTypeList()).map(createSchema).map { sch =>
+      if (conf.getConfString("spark.sql.decimal.optimize", "true").toBoolean) {
+        optimizeDecimal(sch)
+      } else {
+        sch
+      }
+    }
     val partitionColumnNames =
       Option(ctx.partitionColumnNames)
         .map(visitIdentifierList(_).toArray)
@@ -422,7 +437,13 @@ class SparkSqlAstBuilder(conf: SQLConf) extends AstBuilder {
       ctx: CreateTempViewUsingContext): LogicalPlan = withOrigin(ctx) {
     CreateTempViewUsing(
       tableIdent = visitTableIdentifier(ctx.tableIdentifier()),
-      userSpecifiedSchema = Option(ctx.colTypeList()).map(createSchema),
+      userSpecifiedSchema = Option(ctx.colTypeList()).map(createSchema).map { sch =>
+        if (conf.getConfString("spark.sql.decimal.optimize", "true").toBoolean) {
+          optimizeDecimal(sch)
+        } else {
+          sch
+        }
+      },
       replace = ctx.REPLACE != null,
       global = ctx.GLOBAL != null,
       provider = ctx.tableProvider.qualifiedName.getText,
@@ -1015,14 +1036,12 @@ class SparkSqlAstBuilder(conf: SQLConf) extends AstBuilder {
 
     // Note: Hive requires partition columns to be distinct from the schema, so we need
     // to include the partition columns here explicitly
-    val originTypeFileds = dataCols ++ partitionCols
-    val optimizedFileds = originTypeFileds.map { field =>
-      field.dataType match {
-        case dct: DecimalType => field.copy(dataType = DecimalType.optimizedType(dct))
-        case _ => field
-      }
+    val originSchema = StructType(dataCols ++ partitionCols)
+    val schema = if (conf.getConfString("spark.sql.decimal.optimize", "true").toBoolean) {
+      optimizeDecimal(originSchema)
+    } else {
+      originSchema
     }
-    val schema = StructType(optimizedFileds)
 
     // Storage format
     val defaultStorage: CatalogStorageFormat = {
