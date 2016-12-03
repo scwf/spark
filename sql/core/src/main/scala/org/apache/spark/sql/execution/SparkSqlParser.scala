@@ -21,7 +21,6 @@ import scala.collection.JavaConverters._
 
 import org.antlr.v4.runtime.{ParserRuleContext, Token}
 import org.antlr.v4.runtime.tree.TerminalNode
-
 import org.apache.spark.sql.{AnalysisException, SaveMode}
 import org.apache.spark.sql.catalyst.{FunctionIdentifier, TableIdentifier}
 import org.apache.spark.sql.catalyst.catalog._
@@ -31,7 +30,7 @@ import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, OneRowRelation,
 import org.apache.spark.sql.execution.command._
 import org.apache.spark.sql.execution.datasources.{CreateTable, _}
 import org.apache.spark.sql.internal.{HiveSerDe, SQLConf, VariableSubstitution}
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{DecimalType, StructType}
 
 /**
  * Concrete parser for Spark SQL statements.
@@ -1016,7 +1015,14 @@ class SparkSqlAstBuilder(conf: SQLConf) extends AstBuilder {
 
     // Note: Hive requires partition columns to be distinct from the schema, so we need
     // to include the partition columns here explicitly
-    val schema = StructType(dataCols ++ partitionCols)
+    val originTypeFileds = dataCols ++ partitionCols
+    val optimizedFileds = originTypeFileds.map { field =>
+      field.dataType match {
+        case dct: DecimalType => field.copy(dataType = DecimalType.optimizedType(dct))
+        case _ => field
+      }
+    }
+    val schema = StructType(optimizedFileds)
 
     // Storage format
     val defaultStorage: CatalogStorageFormat = {
