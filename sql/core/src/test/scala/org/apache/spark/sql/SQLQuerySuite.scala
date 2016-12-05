@@ -451,6 +451,22 @@ class SQLQuerySuite extends QueryTest with SharedSQLContext {
     }
   }
 
+  test("inner join reorder-1") {
+    sql("create table t1(key1 int, value1 int ) using parquet")
+    sql("create table t2(key2 int, value2 int, b1 int, b2 int) using parquet")
+    sql("create table t3(key3 int, value3 int) using parquet")
+
+    sql(
+      """
+        |select * from
+        |t1, t2, t3
+        |where key1 between b1 and b2
+        |and key1 = key3
+        |and value2 = value3
+      """.stripMargin).explain(true)
+
+  }
+
   test("left semi greater than predicate and equal operator") {
     checkAnswer(
       sql("SELECT * FROM testData2 x LEFT SEMI JOIN testData2 y ON x.b = y.b and x.a >= y.a + 2"),

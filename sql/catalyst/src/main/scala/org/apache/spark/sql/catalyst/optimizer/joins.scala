@@ -62,6 +62,11 @@ object ReorderJoin extends Rule[LogicalPlan] with PredicateHelper {
         conditions
           .filterNot(l => l.references.nonEmpty && canEvaluate(l, left))
           .filterNot(r => r.references.nonEmpty && canEvaluate(r, plan))
+          .filter {
+            case eq: EqualTo => true
+            case eqn: EqualNullSafe => true
+            case _ => false
+          }
           .exists(_.references.subsetOf(refs))
       }
       // pick the next one if no condition left
