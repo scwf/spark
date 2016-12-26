@@ -594,7 +594,7 @@ case class DescribeTableCommand(
  */
 case class DescribeColumnsCommand(
     table: TableIdentifier,
-    column: String, // todo: handle complex types
+    columns: Seq[String],
     isExtended: Boolean,
     isFormatted: Boolean)
   extends RunnableCommand {
@@ -629,38 +629,43 @@ case class DescribeColumnsCommand(
     val metadata = catalog.getTableMetadata(table)
     val fields = metadata.schema.fields
     val colStats = metadata.stats.map(_.colStats).getOrElse(Map.empty)
-    assert(fields.map(_.name).toSet.contains(column),
-      s"can not find $column from $fields")
+    columns.foreach(c => assert(fields.map(_.name).toSet.contains(c),
+      s"can not find $c from $fields"))
     if (isExtended || isFormatted) {
-      val field = fields.find(_.name == column).get
-      val fcolStats = colStats.get(column)
-      append(
-        result,
-        column,
-        field.dataType.simpleString,
-        fcolStats.map(_.min).getOrElse(None).map(_.toString).orNull,
-        fcolStats.map(_.max).getOrElse(None).map(_.toString).orNull,
-        fcolStats.map(_.nullCount).map(_.toString).orNull,
-        fcolStats.map(_.distinctCount).map(_.toString).orNull,
-        fcolStats.map(_.avgLen).map(_.toString).orNull,
-        fcolStats.map(_.maxLen).map(_.toString).orNull,
-        field.getComment().orNull
-      )
+      columns.foreach { f =>
+        val field = fields.find(_.name == f).get
+        val fcolStats = colStats.get(f)
+        append(
+          result,
+          f,
+          field.dataType.simpleString,
+          fcolStats.map(_.min).getOrElse(None).map(_.toString).orNull,
+          fcolStats.map(_.max).getOrElse(None).map(_.toString).orNull,
+          fcolStats.map(_.nullCount).map(_.toString).orNull,
+          fcolStats.map(_.distinctCount).map(_.toString).orNull,
+          fcolStats.map(_.avgLen).map(_.toString).orNull,
+          fcolStats.map(_.maxLen).map(_.toString).orNull,
+          field.getComment().orNull
+        )
+      }
     } else {
-      val field = fields.find(_.name == column).get
-      append(
-        result,
-        column,
-        field.dataType.simpleString,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        field.getComment().orNull
-      )
+      columns.foreach { f =>
+        val field = fields.find(_.name == f).get
+        append(
+          result,
+          f,
+          field.dataType.simpleString,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          field.getComment().orNull
+        )
+      }
     }
+
     result
   }
 

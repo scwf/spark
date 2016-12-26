@@ -305,7 +305,7 @@ class SparkSqlAstBuilder(conf: SQLConf) extends AstBuilder {
       val columns = descColNameContext.identifier().asScala.map(_.getText)
       DescribeColumnsCommand(
         visitTableIdentifier(ctx.tableIdentifier),
-        columns.head,
+        columns,
         ctx.EXTENDED != null,
         ctx.FORMATTED != null)
     } else {
