@@ -120,6 +120,17 @@ class SQLQuerySuite extends QueryTest with SQLTestUtils with TestHiveSingleton {
     }
   }
 
+  test("describe table columns") {
+    sql("create table wftest(key int, value string, m1 bigint, m2 decimal(8, 3))")
+    sql("desc wftest").show()
+    sql("desc formatted wftest").show()
+    sql("desc wftest key").show()
+    sql("desc wftest value").show()
+    sql("desc wftest m1").show()
+    sql("desc wftest m2").show()
+
+  }
+
   test("permanent UDTF") {
     withUserDefinedFunction("udtf_count_temp" -> false) {
       sql(

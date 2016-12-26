@@ -586,6 +586,100 @@ case class DescribeTableCommand(
   }
 }
 
+/**
+ * Command that looks like
+ * {{{
+ *   DESCRIBE [EXTENDED|FORMATTED] table_name partitionSpec?;
+ * }}}
+ */
+case class DescribeColumnsCommand(
+    table: TableIdentifier,
+    column: String, // todo: handle complex types
+    isExtended: Boolean,
+    isFormatted: Boolean)
+  extends RunnableCommand {
+
+  override val output: Seq[Attribute] = Seq(
+    // Column names are based on Hive.
+    AttributeReference("col_name", StringType, nullable = false,
+      new MetadataBuilder().putString("comment", "name of the column").build())(),
+    AttributeReference("data_type", StringType, nullable = false,
+      new MetadataBuilder().putString("comment", "data type of the column").build())(),
+    AttributeReference("min", StringType, nullable = true,
+      new MetadataBuilder().putString("comment", "min value of the column").build())(),
+    AttributeReference("max", StringType, nullable = true,
+      new MetadataBuilder().putString("comment", "max value of the column").build())(),
+    AttributeReference("num_nulls", StringType, nullable = true,
+      new MetadataBuilder().putString("comment", "number of nulls of the column").build())(),
+    AttributeReference("distinct_count", StringType, nullable = true,
+      new MetadataBuilder().putString("comment", "distinct count of the column").build())(),
+    AttributeReference("avg_col_len", StringType, nullable = true,
+      new MetadataBuilder().putString("comment",
+        "average length of the values of the column").build())(),
+    AttributeReference("max_col_len", StringType, nullable = true,
+      new MetadataBuilder().putString("comment",
+        "max length of the values of the column").build())(),
+    AttributeReference("comment", StringType, nullable = true,
+      new MetadataBuilder().putString("comment", "comment of the column").build())()
+  )
+
+  override def run(sparkSession: SparkSession): Seq[Row] = {
+    val result = new ArrayBuffer[Row]
+    val catalog = sparkSession.sessionState.catalog
+    val metadata = catalog.getTableMetadata(table)
+    val fields = metadata.schema.fields
+    val colStats = metadata.stats.map(_.colStats).getOrElse(Map.empty)
+    assert(fields.map(_.name).toSet.contains(column),
+      s"can not find $column from $fields")
+    if (isExtended || isFormatted) {
+      val field = fields.find(_.name == column).get
+      val fcolStats = colStats.get(column)
+      append(
+        result,
+        column,
+        field.dataType.simpleString,
+        fcolStats.map(_.min).getOrElse(None).map(_.toString).orNull,
+        fcolStats.map(_.max).getOrElse(None).map(_.toString).orNull,
+        fcolStats.map(_.nullCount).map(_.toString).orNull,
+        fcolStats.map(_.distinctCount).map(_.toString).orNull,
+        fcolStats.map(_.avgLen).map(_.toString).orNull,
+        fcolStats.map(_.maxLen).map(_.toString).orNull,
+        field.getComment().orNull
+      )
+    } else {
+      val field = fields.find(_.name == column).get
+      append(
+        result,
+        column,
+        field.dataType.simpleString,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        field.getComment().orNull
+      )
+    }
+    result
+  }
+
+  private def append(
+      buffer: ArrayBuffer[Row],
+      column: String,
+      dataType: String,
+      min: String,
+      max: String,
+      numNulls: String,
+      distinctCount: String,
+      avgColLen: String,
+      maxColLen: String,
+      comment: String): Unit = {
+    buffer += Row(column, dataType, min, max, numNulls,
+      distinctCount, avgColLen, maxColLen, comment)
+  }
+
+}
 
 /**
  * A command for users to get tables in the given database.
