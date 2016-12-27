@@ -129,6 +129,11 @@ class SQLQuerySuite extends QueryTest with SQLTestUtils with TestHiveSingleton {
     sql("desc wftest m1").show()
     sql("desc wftest m2").show()
 
+    sql("desc formatted wftest key").show()
+    sql("desc formatted wftest value").show()
+    sql("desc formatted wftest m1").show()
+    sql("desc formatted wftest m2").show()
+
   }
 
   test("permanent UDTF") {

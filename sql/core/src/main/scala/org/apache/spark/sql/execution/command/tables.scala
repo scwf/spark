@@ -599,29 +599,39 @@ case class DescribeColumnsCommand(
     isFormatted: Boolean)
   extends RunnableCommand {
 
-  override val output: Seq[Attribute] = Seq(
+  override val output: Seq[Attribute] =
     // Column names are based on Hive.
-    AttributeReference("col_name", StringType, nullable = false,
-      new MetadataBuilder().putString("comment", "name of the column").build())(),
-    AttributeReference("data_type", StringType, nullable = false,
-      new MetadataBuilder().putString("comment", "data type of the column").build())(),
-    AttributeReference("min", StringType, nullable = true,
-      new MetadataBuilder().putString("comment", "min value of the column").build())(),
-    AttributeReference("max", StringType, nullable = true,
-      new MetadataBuilder().putString("comment", "max value of the column").build())(),
-    AttributeReference("num_nulls", StringType, nullable = true,
-      new MetadataBuilder().putString("comment", "number of nulls of the column").build())(),
-    AttributeReference("distinct_count", StringType, nullable = true,
-      new MetadataBuilder().putString("comment", "distinct count of the column").build())(),
-    AttributeReference("avg_col_len", StringType, nullable = true,
-      new MetadataBuilder().putString("comment",
-        "average length of the values of the column").build())(),
-    AttributeReference("max_col_len", StringType, nullable = true,
-      new MetadataBuilder().putString("comment",
-        "max length of the values of the column").build())(),
-    AttributeReference("comment", StringType, nullable = true,
-      new MetadataBuilder().putString("comment", "comment of the column").build())()
-  )
+    if (isFormatted) {
+      Seq(
+        AttributeReference("col_name", StringType, nullable = false,
+          new MetadataBuilder().putString("comment", "name of the column").build())(),
+        AttributeReference("data_type", StringType, nullable = false,
+          new MetadataBuilder().putString("comment", "data type of the column").build())(),
+        AttributeReference("min", StringType, nullable = true,
+          new MetadataBuilder().putString("comment", "min value of the column").build())(),
+        AttributeReference("max", StringType, nullable = true,
+          new MetadataBuilder().putString("comment", "max value of the column").build())(),
+        AttributeReference("num_nulls", StringType, nullable = true,
+          new MetadataBuilder().putString("comment", "number of nulls of the column").build())(),
+        AttributeReference("distinct_count", StringType, nullable = true,
+          new MetadataBuilder().putString("comment", "distinct count of the column").build())(),
+        AttributeReference("avg_col_len", StringType, nullable = true,
+          new MetadataBuilder().putString("comment",
+            "average length of the values of the column").build())(),
+        AttributeReference("max_col_len", StringType, nullable = true,
+          new MetadataBuilder().putString("comment",
+            "max length of the values of the column").build())(),
+        AttributeReference("comment", StringType, nullable = true,
+          new MetadataBuilder().putString("comment", "comment of the column").build())())
+    } else {
+      Seq(
+        AttributeReference("col_name", StringType, nullable = false,
+          new MetadataBuilder().putString("comment", "name of the column").build())(),
+        AttributeReference("data_type", StringType, nullable = false,
+          new MetadataBuilder().putString("comment", "data type of the column").build())(),
+        AttributeReference("comment", StringType, nullable = true,
+          new MetadataBuilder().putString("comment", "comment of the column").build())())
+    }
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     val result = new ArrayBuffer[Row]
@@ -631,7 +641,7 @@ case class DescribeColumnsCommand(
     val colStats = metadata.stats.map(_.colStats).getOrElse(Map.empty)
     columns.foreach(c => assert(fields.map(_.name).toSet.contains(c),
       s"can not find $c from $fields"))
-    if (isExtended || isFormatted) {
+    if (isFormatted) {
       columns.foreach { f =>
         val field = fields.find(_.name == f).get
         val fcolStats = colStats.get(f)
@@ -655,12 +665,6 @@ case class DescribeColumnsCommand(
           result,
           f,
           field.dataType.simpleString,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
           field.getComment().orNull
         )
       }
@@ -684,6 +688,13 @@ case class DescribeColumnsCommand(
       distinctCount, avgColLen, maxColLen, comment)
   }
 
+  private def append(
+      buffer: ArrayBuffer[Row],
+      column: String,
+      dataType: String,
+      comment: String): Unit = {
+    buffer += Row(column, dataType, comment)
+  }
 }
 
 /**
