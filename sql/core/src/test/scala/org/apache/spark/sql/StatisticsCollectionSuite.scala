@@ -155,6 +155,7 @@ class StatisticsCollectionSuite extends StatisticsCollectionTestBase with Shared
       sql(s"ANALYZE TABLE stats_table COMPUTE STATISTICS FOR COLUMNS ${columns.mkString(",")}")
       stats.zip(df.schema).foreach { case(sta, sch) =>
         val columnStat = sta._2
+        sql(s"desc formatted stats_table ${sch.name}").show()
         checkAnswer(sql(s"desc formatted stats_table ${sch.name}"),
           Row(sta._1, sch.dataType.simpleString,
             columnStat.min.map(_.toString).orNull,

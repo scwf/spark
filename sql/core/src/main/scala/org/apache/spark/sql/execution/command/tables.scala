@@ -27,6 +27,7 @@ import scala.util.control.NonFatal
 import scala.util.Try
 
 import org.apache.hadoop.fs.Path
+
 import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.{NoSuchPartitionException, UnresolvedAttribute}
@@ -592,7 +593,7 @@ case class DescribeTableCommand(
  *   DESCRIBE [EXTENDED|FORMATTED] table_name column_name;
  * }}}
  */
-case class DescribeColumnsCommand(
+case class DescribeColumnCommand(
     table: TableIdentifier,
     column: Seq[String],
     isExtended: Boolean,
