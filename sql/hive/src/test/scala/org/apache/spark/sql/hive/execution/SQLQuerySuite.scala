@@ -121,19 +121,22 @@ class SQLQuerySuite extends QueryTest with SQLTestUtils with TestHiveSingleton {
   }
 
   test("describe table column") {
-    // test temp table column
-    sql("create temp table temp_table_desc_column(d1 string, d2 int) using parquet")
-    sql("desc temp_table_desc_column d1").show()
-    sql("desc extended temp_table_desc_column d1").show()
-    sql("desc formatted temp_table_desc_column d1").show()
+    val df = (1 to 99).map(x => (x, s"$x")).toDF("key", "value")
+    // test for the temp table
+    df.createOrReplaceTempView("table1")
+    checkAnswer(sql("desc table1 key"), Row("key", "int", null))
+    checkAnswer(sql("desc extended table1 key"), Row("key", "int", null))
+    checkAnswer(sql("desc formatted table1 key"),
+      Row("key", "int", null, null, null, null, null, null, null))
 
-
-    // test persist table column
-    sql("create table table_desc_column(d1 string, d2 int) using parquet")
-    sql("desc table_desc_column d1").show()
-    sql("desc extended table_desc_column d1").show()
-    sql("desc formatted table_desc_column d1").show()
-
+    withTable("table2") {
+      // test for the persist table
+      df.write.saveAsTable("table2")
+      checkAnswer(sql("desc table2 key"), Row("key", "int", null))
+      checkAnswer(sql("desc extended table2 key"), Row("key", "int", null))
+      checkAnswer(sql("desc formatted table2 key"),
+        Row("key", "int", null, null, null, null, null, null, null))
+    }
   }
 
   test("permanent UDTF") {

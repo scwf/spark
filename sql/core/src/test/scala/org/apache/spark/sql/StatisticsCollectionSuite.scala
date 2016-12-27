@@ -147,6 +147,30 @@ class StatisticsCollectionSuite extends StatisticsCollectionTestBase with Shared
     }
   }
 
+  test("desc column with stats") {
+    withTable("stats_table") {
+      val columns = stats.keys.toSeq
+      val df = data.toDF(columns :+ "carray" : _*)
+      df.write.saveAsTable("stats_table")
+      sql(s"ANALYZE TABLE stats_table COMPUTE STATISTICS FOR COLUMNS ${columns.mkString(",")}")
+      stats.zip(df.schema).foreach { case(sta, sch) =>
+        val columnStat = sta._2
+        checkAnswer(sql(s"desc formatted stats_table ${sch.name}"),
+          Row(sta._1, sch.dataType.simpleString,
+            columnStat.min.map(_.toString).orNull,
+            columnStat.max.map(_.toString).orNull,
+            columnStat.nullCount.toString,
+            columnStat.distinctCount.toString,
+            columnStat.avgLen.toString,
+            columnStat.maxLen.toString,
+            sch.getComment().orNull))
+      }
+      columns.foreach { cl =>
+        sql(s"desc formatted stats_table $cl").show()
+      }
+    }
+  }
+
   test("analyze column command - result verification") {
     // (data.head.productArity - 1) because the last column does not support stats collection.
     assert(stats.size == data.head.productArity - 1)
