@@ -120,19 +120,19 @@ class SQLQuerySuite extends QueryTest with SQLTestUtils with TestHiveSingleton {
     }
   }
 
-  test("describe table columns") {
-    sql("create table wftest(key int, value string, m1 bigint, m2 decimal(8, 3))")
-    sql("desc wftest").show()
-    sql("desc formatted wftest").show()
-    sql("desc wftest key").show()
-    sql("desc wftest value").show()
-    sql("desc wftest m1").show()
-    sql("desc wftest m2").show()
+  test("describe table column") {
+    // test temp table column
+    sql("create temp table temp_table_desc_column(d1 string, d2 int) using parquet")
+    sql("desc temp_table_desc_column d1").show()
+    sql("desc extended temp_table_desc_column d1").show()
+    sql("desc formatted temp_table_desc_column d1").show()
 
-    sql("desc formatted wftest key").show()
-    sql("desc formatted wftest value").show()
-    sql("desc formatted wftest m1").show()
-    sql("desc formatted wftest m2").show()
+
+    // test persist table column
+    sql("create table table_desc_column(d1 string, d2 int) using parquet")
+    sql("desc table_desc_column d1").show()
+    sql("desc extended table_desc_column d1").show()
+    sql("desc formatted table_desc_column d1").show()
 
   }
 

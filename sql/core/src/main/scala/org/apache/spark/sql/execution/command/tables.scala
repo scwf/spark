@@ -27,7 +27,6 @@ import scala.util.control.NonFatal
 import scala.util.Try
 
 import org.apache.hadoop.fs.Path
-
 import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.NoSuchPartitionException
@@ -35,6 +34,7 @@ import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.catalyst.catalog.CatalogTableType._
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
+import org.apache.spark.sql.catalyst.plans.logical.ColumnStat
 import org.apache.spark.sql.catalyst.util.quoteIdentifier
 import org.apache.spark.sql.execution.datasources.PartitioningUtils
 import org.apache.spark.sql.types._
@@ -636,11 +636,16 @@ case class DescribeColumnsCommand(
   override def run(sparkSession: SparkSession): Seq[Row] = {
     val result = new ArrayBuffer[Row]
     val catalog = sparkSession.sessionState.catalog
-    val metadata = catalog.getTableMetadata(table)
-    val fields = metadata.schema.fields
-    val colStats = metadata.stats.map(_.colStats).getOrElse(Map.empty)
-    columns.foreach(c => assert(fields.map(_.name).toSet.contains(c),
-      s"can not find $c from $fields"))
+
+    val isTemporary = catalog.isTemporaryTable(table)
+    val fields = catalog.lookupRelation(table).schema.fields
+    val colStats = if (isTemporary) {
+      Map.empty[String, ColumnStat]
+    } else {
+      catalog.getTableMetadata(table).stats.map(_.colStats).getOrElse(Map.empty)
+    }
+    columns.foreach(c => require(fields.map(_.name).toSet.contains(c),
+      s"can not find $c from [${fields.map(_.name).mkString(",")}]"))
     if (isFormatted) {
       columns.foreach { f =>
         val field = fields.find(_.name == f).get
