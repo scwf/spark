@@ -637,14 +637,12 @@ case class DescribeColumnCommand(
   override def run(sparkSession: SparkSession): Seq[Row] = {
     val result = new ArrayBuffer[Row]
     val catalog = sparkSession.sessionState.catalog
-    val project = Project(Seq(UnresolvedAttribute(column)), catalog.lookupRelation(table))
     val queryExecution = sparkSession.sessionState.executePlan(
       Project(Seq(UnresolvedAttribute(column)), catalog.lookupRelation(table)))
     val analyzed = queryExecution.analyzed
     queryExecution.assertAnalyzed()
 
     val isTemporary = catalog.isTemporaryTable(table)
-    val fields = analyzed.schema.fields
     val colStats = if (isTemporary) {
       AttributeMap(Nil)
     } else {
