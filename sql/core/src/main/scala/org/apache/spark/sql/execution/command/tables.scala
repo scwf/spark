@@ -30,11 +30,12 @@ import org.apache.hadoop.fs.Path
 
 import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.analysis.NoSuchPartitionException
+import org.apache.spark.sql.catalyst.analysis.{NoSuchPartitionException, UnresolvedAttribute}
 import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.catalyst.catalog.CatalogTableType._
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
-import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeMap, AttributeReference}
+import org.apache.spark.sql.catalyst.plans.logical.{ColumnStat, Project}
 import org.apache.spark.sql.catalyst.util.quoteIdentifier
 import org.apache.spark.sql.execution.datasources.PartitioningUtils
 import org.apache.spark.sql.types._
@@ -586,6 +587,131 @@ case class DescribeTableCommand(
   }
 }
 
+/**
+ * Command that looks like
+ * {{{
+ *   DESCRIBE [EXTENDED|FORMATTED] table_name column_name;
+ * }}}
+ */
+case class DescribeColumnCommand(
+    table: TableIdentifier,
+    column: Seq[String],
+    isExtended: Boolean,
+    isFormatted: Boolean)
+  extends RunnableCommand {
+
+  override val output: Seq[Attribute] =
+    // Column names are based on Hive.
+    if (isFormatted) {
+      Seq(
+        AttributeReference("col_name", StringType, nullable = false,
+          new MetadataBuilder().putString("comment", "name of the column").build())(),
+        AttributeReference("data_type", StringType, nullable = false,
+          new MetadataBuilder().putString("comment", "data type of the column").build())(),
+        AttributeReference("min", StringType, nullable = true,
+          new MetadataBuilder().putString("comment", "min value of the column").build())(),
+        AttributeReference("max", StringType, nullable = true,
+          new MetadataBuilder().putString("comment", "max value of the column").build())(),
+        AttributeReference("num_nulls", StringType, nullable = true,
+          new MetadataBuilder().putString("comment", "number of nulls of the column").build())(),
+        AttributeReference("distinct_count", StringType, nullable = true,
+          new MetadataBuilder().putString("comment", "distinct count of the column").build())(),
+        AttributeReference("avg_col_len", StringType, nullable = true,
+          new MetadataBuilder().putString("comment",
+            "average length of the values of the column").build())(),
+        AttributeReference("max_col_len", StringType, nullable = true,
+          new MetadataBuilder().putString("comment",
+            "max length of the values of the column").build())(),
+        AttributeReference("comment", StringType, nullable = true,
+          new MetadataBuilder().putString("comment", "comment of the column").build())())
+    } else {
+      Seq(
+        AttributeReference("col_name", StringType, nullable = false,
+          new MetadataBuilder().putString("comment", "name of the column").build())(),
+        AttributeReference("data_type", StringType, nullable = false,
+          new MetadataBuilder().putString("comment", "data type of the column").build())(),
+        AttributeReference("comment", StringType, nullable = true,
+          new MetadataBuilder().putString("comment", "comment of the column").build())())
+    }
+
+  override def run(sparkSession: SparkSession): Seq[Row] = {
+    val result = new ArrayBuffer[Row]
+    val catalog = sparkSession.sessionState.catalog
+    val queryExecution = sparkSession.sessionState.executePlan(
+      Project(Seq(UnresolvedAttribute(column)), catalog.lookupRelation(table)))
+    val analyzed = queryExecution.analyzed
+    queryExecution.assertAnalyzed()
+
+    val isTemporary = catalog.isTemporaryTable(table)
+    val colStats = if (isTemporary) {
+      AttributeMap(Nil)
+    } else {
+      analyzed.statistics.attributeStats
+    }
+
+    if (isFormatted) {
+      analyzed.output.foreach { f =>
+        val fcolStats = colStats.get(f)
+        val comment = if (f.metadata.contains("comment")) {
+          Option(f.metadata.getString("comment"))
+        } else {
+          None
+        }
+        append(
+          result,
+          f.name,
+          f.dataType.simpleString,
+          fcolStats.map(_.min).getOrElse(None).map(_.toString).orNull,
+          fcolStats.map(_.max).getOrElse(None).map(_.toString).orNull,
+          fcolStats.map(_.nullCount.toString).orNull,
+          fcolStats.map(_.distinctCount.toString).orNull,
+          fcolStats.map(_.avgLen.toString).orNull,
+          fcolStats.map(_.maxLen.toString).orNull,
+          comment.orNull
+        )
+      }
+    } else {
+      analyzed.output.foreach { f =>
+        val comment = if (f.metadata.contains("comment")) {
+          Option(f.metadata.getString("comment"))
+        } else {
+          None
+        }
+        append(
+          result,
+          f.name,
+          f.dataType.simpleString,
+          comment.orNull
+        )
+      }
+    }
+
+    result
+  }
+
+  private def append(
+      buffer: ArrayBuffer[Row],
+      column: String,
+      dataType: String,
+      min: String,
+      max: String,
+      numNulls: String,
+      distinctCount: String,
+      avgColLen: String,
+      maxColLen: String,
+      comment: String): Unit = {
+    buffer += Row(column, dataType, min, max, numNulls,
+      distinctCount, avgColLen, maxColLen, comment)
+  }
+
+  private def append(
+      buffer: ArrayBuffer[Row],
+      column: String,
+      dataType: String,
+      comment: String): Unit = {
+    buffer += Row(column, dataType, comment)
+  }
+}
 
 /**
  * A command for users to get tables in the given database.

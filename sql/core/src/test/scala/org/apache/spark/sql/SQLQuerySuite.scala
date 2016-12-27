@@ -208,6 +208,33 @@ class SQLQuerySuite extends QueryTest with SharedSQLContext {
     assert(d1.map(_(1)) === d2.map(_(1)))
   }
 
+
+  test("describe table column") {
+    val df = (1 to 99).map(x => (x, s"$x")).toDF("key", "value")
+    // test for the temp table
+    df.createOrReplaceTempView("tempTable")
+    checkAnswer(sql("desc tempTable key"), Row("key", "int", null))
+    checkAnswer(sql("desc extended tempTable key"), Row("key", "int", null))
+    checkAnswer(sql("desc formatted tempTable key"),
+      Row("key", "int", null, null, null, null, null, null, null))
+
+    withTable("persistTable") {
+      // test for the persist table
+      df.write.saveAsTable("persistTable")
+      checkAnswer(sql("desc persistTable key"), Row("key", "int", null))
+      checkAnswer(sql("desc extended persistTable key"), Row("key", "int", null))
+      checkAnswer(sql("desc formatted persistTable key"),
+        Row("key", "int", null, null, null, null, null, null, null))
+    }
+
+    withTable("complexTable") {
+      complexData.write.saveAsTable("complexTable")
+      checkAnswer(sql("desc complexTable s.key"), Row("key", "int", null))
+      checkAnswer(sql("desc formatted complexTable s.key"),
+        Row("key", "int", null, null, null, null, null, null, null))
+    }
+  }
+
   test("grouping on nested fields") {
     spark.read.json(sparkContext.parallelize(
       """{"nested": {"attribute": 1}, "value": 2}""" :: Nil))
