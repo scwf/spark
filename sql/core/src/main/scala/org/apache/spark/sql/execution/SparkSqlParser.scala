@@ -302,10 +302,10 @@ class SparkSqlAstBuilder(conf: SQLConf) extends AstBuilder {
   override def visitDescribeTable(ctx: DescribeTableContext): LogicalPlan = withOrigin(ctx) {
     val descColNameContext = ctx.describeColName
     if (descColNameContext != null) {
-      val columns = descColNameContext.identifier().asScala.map(_.getText)
+      val column = descColNameContext.identifier().asScala.map(_.getText)
       DescribeColumnsCommand(
         visitTableIdentifier(ctx.tableIdentifier),
-        columns,
+        column,
         ctx.EXTENDED != null,
         ctx.FORMATTED != null)
     } else {

@@ -165,9 +165,6 @@ class StatisticsCollectionSuite extends StatisticsCollectionTestBase with Shared
             columnStat.maxLen.toString,
             sch.getComment().orNull))
       }
-      columns.foreach { cl =>
-        sql(s"desc formatted stats_table $cl").show()
-      }
     }
   }
 

@@ -29,12 +29,12 @@ import scala.util.Try
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.analysis.NoSuchPartitionException
+import org.apache.spark.sql.catalyst.analysis.{NoSuchPartitionException, UnresolvedAttribute}
 import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.catalyst.catalog.CatalogTableType._
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
-import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
-import org.apache.spark.sql.catalyst.plans.logical.ColumnStat
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeMap, AttributeReference}
+import org.apache.spark.sql.catalyst.plans.logical.{ColumnStat, Project}
 import org.apache.spark.sql.catalyst.util.quoteIdentifier
 import org.apache.spark.sql.execution.datasources.PartitioningUtils
 import org.apache.spark.sql.types._
@@ -589,12 +589,12 @@ case class DescribeTableCommand(
 /**
  * Command that looks like
  * {{{
- *   DESCRIBE [EXTENDED|FORMATTED] table_name partitionSpec?;
+ *   DESCRIBE [EXTENDED|FORMATTED] table_name column_name;
  * }}}
  */
 case class DescribeColumnsCommand(
     table: TableIdentifier,
-    columns: Seq[String],
+    column: Seq[String],
     isExtended: Boolean,
     isFormatted: Boolean)
   extends RunnableCommand {
@@ -636,41 +636,53 @@ case class DescribeColumnsCommand(
   override def run(sparkSession: SparkSession): Seq[Row] = {
     val result = new ArrayBuffer[Row]
     val catalog = sparkSession.sessionState.catalog
+    val project = Project(Seq(UnresolvedAttribute(column)), catalog.lookupRelation(table))
+    val queryExecution = sparkSession.sessionState.executePlan(
+      Project(Seq(UnresolvedAttribute(column)), catalog.lookupRelation(table)))
+    val analyzed = queryExecution.analyzed
+    queryExecution.assertAnalyzed()
 
     val isTemporary = catalog.isTemporaryTable(table)
-    val fields = catalog.lookupRelation(table).schema.fields
+    val fields = analyzed.schema.fields
     val colStats = if (isTemporary) {
-      Map.empty[String, ColumnStat]
+      AttributeMap(Nil)
     } else {
-      catalog.getTableMetadata(table).stats.map(_.colStats).getOrElse(Map.empty)
+      analyzed.statistics.attributeStats
     }
-    columns.foreach(c => require(fields.map(_.name).toSet.contains(c),
-      s"can not find $c from [${fields.map(_.name).mkString(",")}]"))
+
     if (isFormatted) {
-      columns.foreach { f =>
-        val field = fields.find(_.name == f).get
+      analyzed.output.foreach { f =>
         val fcolStats = colStats.get(f)
+        val comment = if (f.metadata.contains("comment")) {
+          Option(f.metadata.getString("comment"))
+        } else {
+          None
+        }
         append(
           result,
-          f,
-          field.dataType.simpleString,
+          f.name,
+          f.dataType.simpleString,
           fcolStats.map(_.min).getOrElse(None).map(_.toString).orNull,
           fcolStats.map(_.max).getOrElse(None).map(_.toString).orNull,
-          fcolStats.map(_.nullCount).map(_.toString).orNull,
-          fcolStats.map(_.distinctCount).map(_.toString).orNull,
-          fcolStats.map(_.avgLen).map(_.toString).orNull,
-          fcolStats.map(_.maxLen).map(_.toString).orNull,
-          field.getComment().orNull
+          fcolStats.map(_.nullCount.toString).orNull,
+          fcolStats.map(_.distinctCount.toString).orNull,
+          fcolStats.map(_.avgLen.toString).orNull,
+          fcolStats.map(_.maxLen.toString).orNull,
+          comment.orNull
         )
       }
     } else {
-      columns.foreach { f =>
-        val field = fields.find(_.name == f).get
+      analyzed.output.foreach { f =>
+        val comment = if (f.metadata.contains("comment")) {
+          Option(f.metadata.getString("comment"))
+        } else {
+          None
+        }
         append(
           result,
-          f,
-          field.dataType.simpleString,
-          field.getComment().orNull
+          f.name,
+          f.dataType.simpleString,
+          comment.orNull
         )
       }
     }
